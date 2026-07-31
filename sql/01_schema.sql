@@ -1,0 +1,983 @@
+-- =============================================================================
+-- AI Supply Chain Digital Twin
+-- File: sql/01_schema.sql
+-- Description: Complete DDL for all core tables, constraints, and relationships
+-- Database: PostgreSQL 16
+-- Version: 1.0
+-- Based on: Database Design Document (DDD) v1.0
+-- =============================================================================
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "vector";    -- pgvector for semantic memory
+
+-- =============================================================================
+-- ENUMERATIONS
+-- =============================================================================
+
+CREATE TYPE order_status AS ENUM (
+    'pending', 'validated', 'processing', 'warehouse_assigned',
+    'procurement_triggered', 'in_transit', 'delivered', 'cancelled', 'failed'
+);
+
+CREATE TYPE order_priority AS ENUM ('low', 'standard', 'high', 'critical');
+
+CREATE TYPE shipment_status AS ENUM (
+    'pending', 'assigned', 'dispatched', 'in_transit', 'delivered',
+    'delayed', 'failed', 'returned'
+);
+
+CREATE TYPE supplier_status AS ENUM ('active', 'inactive', 'blacklisted', 'under_review');
+
+CREATE TYPE warehouse_status AS ENUM ('active', 'inactive', 'maintenance', 'full');
+
+CREATE TYPE manufacturing_status AS ENUM (
+    'planned', 'in_progress', 'completed', 'paused', 'cancelled', 'failed'
+);
+
+CREATE TYPE risk_mitigation_status AS ENUM (
+    'detected', 'under_review', 'mitigated', 'escalated', 'resolved', 'ignored'
+);
+
+CREATE TYPE transaction_type AS ENUM (
+    'procurement', 'shipping', 'refund', 'adjustment', 'penalty', 'revenue'
+);
+
+CREATE TYPE agent_status AS ENUM ('idle', 'processing', 'error', 'offline', 'maintenance');
+
+CREATE TYPE event_priority AS ENUM ('low', 'medium', 'high', 'critical');
+
+CREATE TYPE inspection_result AS ENUM ('pass', 'fail', 'partial_pass', 'pending');
+
+CREATE TYPE workflow_status AS ENUM (
+    'received', 'validated', 'planned', 'operational',
+    'business', 'negotiated', 'approved', 'reported', 'completed', 'failed'
+);
+
+
+-- =============================================================================
+-- DOMAIN: CUSTOMERS
+-- =============================================================================
+
+CREATE TABLE customers (
+    customer_id     UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name            TEXT            NOT NULL,
+    email           TEXT            NOT NULL,
+    phone           TEXT,
+    address         TEXT,
+    city            TEXT,
+    country         TEXT,
+    customer_tier   TEXT            NOT NULL DEFAULT 'standard'
+                                    CHECK (customer_tier IN ('standard', 'premium', 'enterprise')),
+    is_active       BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT customers_email_unique UNIQUE (email)
+);
+
+COMMENT ON TABLE customers IS 'Enterprise customer master data';
+COMMENT ON COLUMN customers.customer_tier IS 'Affects order priority: standard < premium < enterprise';
+
+
+-- =============================================================================
+-- DOMAIN: PRODUCTS
+-- =============================================================================
+
+CREATE TABLE products (
+    product_id      UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sku             TEXT            NOT NULL,
+    name            TEXT            NOT NULL,
+    category        TEXT,
+    subcategory     TEXT,
+    unit_price      NUMERIC(12, 2)  NOT NULL CHECK (unit_price >= 0),
+    unit_of_measure TEXT            NOT NULL DEFAULT 'unit',
+    weight_kg       NUMERIC(8, 3),
+    volume_m3       NUMERIC(8, 4),
+    active          BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT products_sku_unique UNIQUE (sku)
+);
+
+COMMENT ON TABLE products IS 'Product master catalogue. SKU is the unique business key.';
+
+
+-- =============================================================================
+-- DOMAIN: WAREHOUSES
+-- =============================================================================
+
+CREATE TABLE warehouses (
+    warehouse_id    UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name            TEXT            NOT NULL,
+    location        TEXT            NOT NULL,
+    city            TEXT,
+    country         TEXT,
+    latitude        NUMERIC(10, 7),
+    longitude       NUMERIC(10, 7),
+    capacity_units  INTEGER         NOT NULL CHECK (capacity_units > 0),
+    current_load    INTEGER         NOT NULL DEFAULT 0 CHECK (current_load >= 0),
+    status          warehouse_status NOT NULL DEFAULT 'active',
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT warehouses_load_not_exceed_capacity
+        CHECK (current_load <= capacity_units)
+);
+
+COMMENT ON TABLE warehouses IS 'Warehouse master data including coordinates for proximity calculations';
+
+
+-- =============================================================================
+-- DOMAIN: SUPPLIERS
+-- =============================================================================
+
+CREATE TABLE suppliers (
+    supplier_id         UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name                TEXT            NOT NULL,
+    contact_email       TEXT,
+    contact_phone       TEXT,
+    country             TEXT,
+    rating              NUMERIC(3, 2)   NOT NULL DEFAULT 3.0
+                                        CHECK (rating BETWEEN 1.0 AND 5.0),
+    reliability_score   NUMERIC(5, 2)   NOT NULL DEFAULT 80.0
+                                        CHECK (reliability_score BETWEEN 0 AND 100),
+    lead_time_days      INTEGER         NOT NULL CHECK (lead_time_days >= 0),
+    payment_terms_days  INTEGER         NOT NULL DEFAULT 30,
+    status              supplier_status NOT NULL DEFAULT 'active',
+    blacklist_reason    TEXT,           -- Populated when status = 'blacklisted'
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE suppliers IS 'Supplier master data. Blacklisted suppliers cannot receive POs.';
+COMMENT ON COLUMN suppliers.reliability_score IS 'Score 0-100 used by Supplier Agent for weighted selection';
+
+
+-- =============================================================================
+-- DOMAIN: SUPPLIER–PRODUCT BRIDGE
+-- =============================================================================
+
+CREATE TABLE supplier_products (
+    supplier_id         UUID            NOT NULL REFERENCES suppliers(supplier_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    product_id          UUID            NOT NULL REFERENCES products(product_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    contract_price      NUMERIC(12, 2)  NOT NULL CHECK (contract_price >= 0),
+    minimum_order_qty   INTEGER         NOT NULL DEFAULT 1 CHECK (minimum_order_qty >= 1),
+    max_order_qty       INTEGER         CHECK (max_order_qty IS NULL OR max_order_qty >= minimum_order_qty),
+    lead_time_override  INTEGER,        -- NULL = use supplier default lead_time_days
+    contract_start      DATE,
+    contract_end        DATE,
+    is_preferred        BOOLEAN         NOT NULL DEFAULT FALSE,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT supplier_products_pk PRIMARY KEY (supplier_id, product_id),
+    CONSTRAINT supplier_products_contract_dates
+        CHECK (contract_end IS NULL OR contract_start IS NULL OR contract_end >= contract_start)
+);
+
+COMMENT ON TABLE supplier_products IS 'Many-to-many bridge: which supplier supplies which product at what price';
+
+
+-- =============================================================================
+-- DOMAIN: ORDERS
+-- =============================================================================
+
+CREATE TABLE orders (
+    order_id        UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id     UUID            NOT NULL REFERENCES customers(customer_id)
+                                    ON UPDATE CASCADE ON DELETE RESTRICT,
+    status          order_status    NOT NULL DEFAULT 'pending',
+    priority        order_priority  NOT NULL DEFAULT 'standard',
+    total_amount    NUMERIC(14, 2)  NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    currency        TEXT            NOT NULL DEFAULT 'USD',
+    notes           TEXT,
+    workflow_id     UUID,           -- Links to LangGraph workflow
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE orders IS 'Customer order header. workflow_id links to LangGraph execution.';
+
+
+-- =============================================================================
+-- DOMAIN: ORDER ITEMS
+-- =============================================================================
+
+CREATE TABLE order_items (
+    order_item_id   UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id        UUID            NOT NULL REFERENCES orders(order_id)
+                                    ON UPDATE CASCADE ON DELETE CASCADE,
+    product_id      UUID            NOT NULL REFERENCES products(product_id)
+                                    ON UPDATE CASCADE ON DELETE RESTRICT,
+    quantity        INTEGER         NOT NULL CHECK (quantity > 0),
+    unit_price      NUMERIC(12, 2)  NOT NULL CHECK (unit_price >= 0),
+    line_total      NUMERIC(14, 2)  GENERATED ALWAYS AS (quantity * unit_price) STORED,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE order_items IS 'Line items for each order. Line total is computed automatically.';
+
+
+-- =============================================================================
+-- DOMAIN: INVENTORY
+-- =============================================================================
+
+CREATE TABLE inventory (
+    inventory_id    UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id      UUID            NOT NULL REFERENCES products(product_id)
+                                    ON UPDATE CASCADE ON DELETE RESTRICT,
+    warehouse_id    UUID            NOT NULL REFERENCES warehouses(warehouse_id)
+                                    ON UPDATE CASCADE ON DELETE RESTRICT,
+    available_qty   INTEGER         NOT NULL DEFAULT 0 CHECK (available_qty >= 0),
+    reserved_qty    INTEGER         NOT NULL DEFAULT 0 CHECK (reserved_qty >= 0),
+    safety_stock    INTEGER         NOT NULL DEFAULT 0 CHECK (safety_stock >= 0),
+    reorder_point   INTEGER         NOT NULL DEFAULT 0 CHECK (reorder_point >= 0),
+    reorder_qty     INTEGER         NOT NULL DEFAULT 0 CHECK (reorder_qty >= 0),
+    last_counted_at TIMESTAMP WITH TIME ZONE,
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT inventory_product_warehouse_unique UNIQUE (product_id, warehouse_id),
+    CONSTRAINT inventory_reserved_not_exceed_available
+        CHECK (reserved_qty <= available_qty)
+);
+
+COMMENT ON TABLE inventory IS 'Real-time inventory per product per warehouse. Stock never goes negative (constraint enforced here and in Inventory Agent).';
+
+
+-- =============================================================================
+-- DOMAIN: MANUFACTURING ORDERS
+-- =============================================================================
+
+CREATE TABLE manufacturing_orders (
+    mo_id               UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id          UUID                NOT NULL REFERENCES products(product_id)
+                                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    warehouse_id        UUID                NOT NULL REFERENCES warehouses(warehouse_id)
+                                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    -- ^ AUD-20 FIX: manufacturing must target a receiving warehouse
+    planned_qty         INTEGER             NOT NULL CHECK (planned_qty > 0),
+    completed_qty       INTEGER             NOT NULL DEFAULT 0 CHECK (completed_qty >= 0),
+    status              manufacturing_status NOT NULL DEFAULT 'planned',
+    scheduled_start     TIMESTAMP WITH TIME ZONE,
+    scheduled_end       TIMESTAMP WITH TIME ZONE,
+    actual_start        TIMESTAMP WITH TIME ZONE,
+    actual_end          TIMESTAMP WITH TIME ZONE,
+    triggered_by        TEXT,               -- 'demand_forecast' | 'inventory_agent' | 'manual'
+    workflow_id         UUID,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT mo_completed_not_exceed_planned
+        CHECK (completed_qty <= planned_qty),
+    CONSTRAINT mo_schedule_dates_valid
+        CHECK (scheduled_end IS NULL OR scheduled_start IS NULL
+               OR scheduled_end >= scheduled_start)
+);
+
+COMMENT ON TABLE manufacturing_orders IS 'Production orders. AUD-20 resolved: warehouse_id FK added.';
+
+
+-- =============================================================================
+-- DOMAIN: SHIPMENTS
+-- =============================================================================
+
+CREATE TABLE shipments (
+    shipment_id     UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id        UUID            NOT NULL REFERENCES orders(order_id)
+                                    ON UPDATE CASCADE ON DELETE RESTRICT,
+    warehouse_id    UUID            REFERENCES warehouses(warehouse_id)
+                                    ON UPDATE CASCADE ON DELETE RESTRICT,
+    carrier         TEXT,
+    carrier_tracking_id TEXT,
+    route           TEXT,
+    freight_mode    TEXT            CHECK (freight_mode IN ('air', 'sea', 'road', 'rail', 'multimodal')),
+    eta             TIMESTAMP WITH TIME ZONE,
+    actual_delivery TIMESTAMP WITH TIME ZONE,
+    status          shipment_status NOT NULL DEFAULT 'pending',
+    delay_reason    TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE shipments IS 'Shipment records. Relationship orders→shipments allows multi-leg shipments (relaxed from 1:1 per AUD-19 review).';
+
+
+-- =============================================================================
+-- DOMAIN: FINANCE TRANSACTIONS
+-- =============================================================================
+
+CREATE TABLE finance_transactions (
+    txn_id              UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id            UUID            REFERENCES orders(order_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    supplier_id         UUID            REFERENCES suppliers(supplier_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    transaction_type    transaction_type NOT NULL,
+    amount              NUMERIC(14, 2)  NOT NULL,
+    currency            TEXT            NOT NULL DEFAULT 'USD',
+    description         TEXT,
+    approved_by_agent   TEXT,           -- Agent ID that approved
+    approved_at         TIMESTAMP WITH TIME ZONE,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT finance_txn_has_order_or_supplier
+        CHECK (order_id IS NOT NULL OR supplier_id IS NOT NULL)
+);
+
+COMMENT ON TABLE finance_transactions IS 'Immutable financial ledger. Records all procurement, shipping, and revenue transactions.';
+
+
+-- =============================================================================
+-- DOMAIN: RISK ASSESSMENTS
+-- =============================================================================
+
+CREATE TYPE risk_entity_type AS ENUM (
+    'order', 'supplier', 'warehouse', 'shipment',
+    'manufacturing_order', 'route', 'product'
+);
+-- ^ AUD-22 FIX: entity_type is now a strict enum, not free-form text
+
+CREATE TABLE risk_assessments (
+    risk_id             UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type         risk_entity_type    NOT NULL,
+    -- ^ AUD-22 FIX: was TEXT, now strongly typed enum
+    entity_id           UUID                NOT NULL,
+    risk_score          NUMERIC(5, 2)       NOT NULL
+                                            CHECK (risk_score BETWEEN 0 AND 100),
+    risk_category       TEXT                NOT NULL
+                                            CHECK (risk_category IN (
+                                                'supplier', 'weather', 'geopolitical',
+                                                'logistics', 'financial', 'quality', 'demand'
+                                            )),
+    description         TEXT,
+    mitigation_plan     TEXT,
+    mitigation_status   risk_mitigation_status NOT NULL DEFAULT 'detected',
+    assessed_by_agent   TEXT,
+    workflow_id         UUID,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    resolved_at         TIMESTAMP WITH TIME ZONE
+);
+
+COMMENT ON TABLE risk_assessments IS 'Risk scores per entity. AUD-22 resolved: entity_type is now a typed enum.';
+
+
+-- =============================================================================
+-- DOMAIN: SUSTAINABILITY METRICS
+-- =============================================================================
+
+CREATE TABLE sustainability_metrics (
+    metric_id           UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    shipment_id         UUID            NOT NULL REFERENCES shipments(shipment_id)
+                                        ON UPDATE CASCADE ON DELETE CASCADE,
+    co2_emission_kg     NUMERIC(10, 4)  NOT NULL DEFAULT 0 CHECK (co2_emission_kg >= 0),
+    fuel_consumption_l  NUMERIC(10, 4)  CHECK (fuel_consumption_l >= 0),
+    distance_km         NUMERIC(10, 2),
+    freight_mode        TEXT,
+    sustainability_score NUMERIC(5, 2)  CHECK (sustainability_score BETWEEN 0 AND 100),
+    green_alternatives  JSONB,          -- LLM-generated alternative routes
+    calculated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE sustainability_metrics IS 'Carbon footprint per shipment, calculated by the Sustainability Agent.';
+
+
+-- =============================================================================
+-- DOMAIN: QUALITY INSPECTIONS
+-- =============================================================================
+
+CREATE TABLE quality_inspections (
+    inspection_id           UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id              UUID                NOT NULL REFERENCES products(product_id)
+                                                ON UPDATE CASCADE ON DELETE RESTRICT,
+    manufacturing_order_id  UUID                REFERENCES manufacturing_orders(mo_id)
+                                                ON UPDATE CASCADE ON DELETE SET NULL,
+    -- ^ AUD-21 FIX: FK to manufacturing_orders
+    supplier_id             UUID                REFERENCES suppliers(supplier_id)
+                                                ON UPDATE CASCADE ON DELETE SET NULL,
+    -- ^ AUD-21 FIX: FK to suppliers
+    inspection_result       inspection_result   NOT NULL DEFAULT 'pending',
+    defect_count            INTEGER             NOT NULL DEFAULT 0 CHECK (defect_count >= 0),
+    defect_rate             NUMERIC(5, 2)       CHECK (defect_rate BETWEEN 0 AND 100),
+    sample_size             INTEGER             CHECK (sample_size > 0),
+    corrective_action       TEXT,
+    inspector_agent         TEXT,               -- Agent that ran the inspection
+    inspected_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_at              TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE quality_inspections IS 'QA inspection records. AUD-21 resolved: FKs to manufacturing_orders and suppliers added.';
+
+
+-- =============================================================================
+-- DOMAIN: DEMAND FORECASTS
+-- =============================================================================
+
+CREATE TABLE demand_forecasts (
+    forecast_id         UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id          UUID            NOT NULL REFERENCES products(product_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    warehouse_id        UUID            REFERENCES warehouses(warehouse_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    forecast_period     DATE            NOT NULL,               -- First day of forecast period
+    forecast_qty        NUMERIC(12, 2)  NOT NULL CHECK (forecast_qty >= 0),
+    confidence          NUMERIC(5, 4)   NOT NULL
+                                        CHECK (confidence BETWEEN 0 AND 1),
+    lower_bound         NUMERIC(12, 2),
+    upper_bound         NUMERIC(12, 2),
+    model_used          TEXT,                                   -- e.g., 'holt_winters', 'prophet'
+    mape                NUMERIC(6, 4),                          -- Mean Absolute Percentage Error
+    is_anomaly          BOOLEAN         NOT NULL DEFAULT FALSE,
+    anomaly_description TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE demand_forecasts IS 'Demand forecasts per product per warehouse per period, produced by Demand Forecast Agent.';
+
+
+-- =============================================================================
+-- DOMAIN: AGENT RUNTIME
+-- =============================================================================
+
+CREATE TABLE agent_runtime (
+    agent_id            UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    agent_name          TEXT            NOT NULL,
+    agent_code          TEXT            NOT NULL UNIQUE,    -- e.g., 'ADS-01', 'ADS-03'
+    status              agent_status    NOT NULL DEFAULT 'idle',
+    current_workflow_id UUID,
+    last_heartbeat      TIMESTAMP WITH TIME ZONE,
+    version             TEXT            NOT NULL DEFAULT '1.0.0',
+    host                TEXT,
+    started_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE agent_runtime IS 'Live registry of all 18 agents with health status and current workflow.';
+
+
+-- =============================================================================
+-- DOMAIN: EVENTS (Append-Only Event Store)
+-- =============================================================================
+
+CREATE TABLE events (
+    event_id        UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    correlation_id  UUID            NOT NULL,
+    workflow_id     UUID,
+    event_type      TEXT            NOT NULL,
+    source_agent    TEXT            NOT NULL,
+    target_agent    TEXT,
+    priority        event_priority  NOT NULL DEFAULT 'medium',
+    version         TEXT            NOT NULL DEFAULT '1.0',   -- AUD-09: event versioning
+    payload         JSONB           NOT NULL DEFAULT '{}',
+    metadata        JSONB           NOT NULL DEFAULT '{}',
+    simulation_id   UUID,           -- NULL = production event; set = simulation event
+    -- ^ AUD-29: simulation isolation via simulation_id tag
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    -- Events are NEVER updated or deleted (append-only)
+);
+
+COMMENT ON TABLE events IS 'Immutable event store. AUD-09: version field added. AUD-29: simulation_id for isolation.';
+
+
+-- =============================================================================
+-- DOMAIN: AUDIT LOGS (Immutable)
+-- =============================================================================
+
+CREATE TABLE audit_logs (
+    log_id          UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    agent_id        TEXT            NOT NULL,               -- Agent code e.g. 'ADS-03'
+    agent_name      TEXT,
+    action          TEXT            NOT NULL,
+    entity          TEXT            NOT NULL,               -- Table/entity name
+    entity_id       UUID,
+    workflow_id     UUID,
+    correlation_id  UUID,
+    payload         JSONB           NOT NULL DEFAULT '{}',  -- AUD-23 FIX: before/after state
+    -- ^ AUD-23 FIX: was missing, now captures before/after state change
+    decision        JSONB,          -- Structured decision object (reason, confidence, alternatives)
+    severity        TEXT            NOT NULL DEFAULT 'INFO'
+                                    CHECK (severity IN ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')),
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    -- Audit logs are NEVER updated or deleted (append-only)
+);
+
+COMMENT ON TABLE audit_logs IS 'Immutable audit trail. AUD-23 resolved: payload JSONB captures before/after state.';
+
+
+-- =============================================================================
+-- DOMAIN: PGVECTOR — SEMANTIC MEMORY (Optional)
+-- =============================================================================
+
+CREATE TABLE semantic_documents (
+    doc_id          UUID            PRIMARY KEY DEFAULT uuid_generate_v4(),
+    doc_type        TEXT            NOT NULL
+                                    CHECK (doc_type IN (
+                                        'policy', 'sop', 'contract', 'supplier_document',
+                                        'negotiation_history', 'domain_knowledge'
+                                    )),
+    title           TEXT            NOT NULL,
+    content         TEXT            NOT NULL,
+    source          TEXT,
+    embedding       VECTOR(768),    -- pgvector embedding (HNSW / IVFFlat index)
+    metadata        JSONB           NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE semantic_documents IS 'pgvector semantic memory store for SOPs, contracts, policies. Used by Negotiation and Procurement Strategy agents.';
+
+
+-- =============================================================================
+-- TRIGGERS: auto-update updated_at timestamps
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_customers_updated_at
+    BEFORE UPDATE ON customers
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_warehouses_updated_at
+    BEFORE UPDATE ON warehouses
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_suppliers_updated_at
+    BEFORE UPDATE ON suppliers
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_supplier_products_updated_at
+    BEFORE UPDATE ON supplier_products
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_orders_updated_at
+    BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_inventory_updated_at
+    BEFORE UPDATE ON inventory
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_manufacturing_orders_updated_at
+    BEFORE UPDATE ON manufacturing_orders
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_shipments_updated_at
+    BEFORE UPDATE ON shipments
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_agent_runtime_updated_at
+    BEFORE UPDATE ON agent_runtime
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_semantic_documents_updated_at
+    BEFORE UPDATE ON semantic_documents
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- =============================================================================
+-- SUPPLEMENTARY TABLES (Added per AIS cross-reference audit — AUD-39 to AUD-46)
+-- Version: 1.1 — 2026-07-28
+-- =============================================================================
+
+
+-- =============================================================================
+-- AUD-40 FIX: DOMAIN: PURCHASE ORDERS (referenced by AIS-05 Supplier Agent)
+-- =============================================================================
+
+CREATE TYPE purchase_order_status AS ENUM (
+    'draft', 'submitted', 'acknowledged', 'in_production',
+    'shipped', 'received', 'cancelled', 'disputed'
+);
+
+CREATE TABLE purchase_orders (
+    po_id               UUID                    PRIMARY KEY DEFAULT uuid_generate_v4(),
+    supplier_id         UUID                    NOT NULL REFERENCES suppliers(supplier_id)
+                                                ON UPDATE CASCADE ON DELETE RESTRICT,
+    product_id          UUID                    NOT NULL REFERENCES products(product_id)
+                                                ON UPDATE CASCADE ON DELETE RESTRICT,
+    warehouse_id        UUID                    NOT NULL REFERENCES warehouses(warehouse_id)
+                                                ON UPDATE CASCADE ON DELETE RESTRICT,
+    -- ^ Receiving warehouse
+    quantity            INTEGER                 NOT NULL CHECK (quantity > 0),
+    unit_cost           NUMERIC(12, 2)          NOT NULL CHECK (unit_cost >= 0),
+    total_cost          NUMERIC(14, 2)          GENERATED ALWAYS AS (quantity * unit_cost) STORED,
+    currency            TEXT                    NOT NULL DEFAULT 'USD',
+    status              purchase_order_status   NOT NULL DEFAULT 'draft',
+    requested_delivery  DATE,
+    confirmed_delivery  DATE,
+    workflow_id         UUID,
+    triggered_by_agent  TEXT,                   -- e.g. 'ADS-05'
+    notes               TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE purchase_orders IS 'AUD-40 FIX: Purchase orders issued to suppliers by the Supplier Agent (AIS-05). Tracks procurement lifecycle from draft to received.';
+
+CREATE TRIGGER trg_purchase_orders_updated_at
+    BEFORE UPDATE ON purchase_orders
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- =============================================================================
+-- AUD-41 FIX: DOMAIN: SUPPORT TICKETS (referenced by AIS-08 Customer Service Agent)
+-- =============================================================================
+
+CREATE TYPE ticket_status AS ENUM (
+    'open', 'in_progress', 'pending_customer', 'escalated', 'resolved', 'closed'
+);
+
+CREATE TYPE ticket_category AS ENUM (
+    'order_inquiry', 'delivery_delay', 'shipment_tracking',
+    'return_request', 'billing_issue', 'product_quality', 'other'
+);
+
+CREATE TABLE support_tickets (
+    ticket_id           UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id         UUID                NOT NULL REFERENCES customers(customer_id)
+                                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    order_id            UUID                REFERENCES orders(order_id)
+                                            ON UPDATE CASCADE ON DELETE SET NULL,
+    shipment_id         UUID                REFERENCES shipments(shipment_id)
+                                            ON UPDATE CASCADE ON DELETE SET NULL,
+    category            ticket_category     NOT NULL DEFAULT 'other',
+    status              ticket_status       NOT NULL DEFAULT 'open',
+    subject             TEXT                NOT NULL,
+    description         TEXT,
+    resolution          TEXT,
+    assigned_agent      TEXT,               -- Agent code e.g. 'ADS-08'
+    sla_deadline        TIMESTAMP WITH TIME ZONE,
+    escalated_at        TIMESTAMP WITH TIME ZONE,
+    resolved_at         TIMESTAMP WITH TIME ZONE,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE support_tickets IS 'AUD-41 FIX: Customer support tickets managed by Customer Service Agent (AIS-08). Supports escalation and SLA tracking.';
+
+CREATE TRIGGER trg_support_tickets_updated_at
+    BEFORE UPDATE ON support_tickets
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- =============================================================================
+-- AUD-39 FIX: DOMAIN: PRICING HISTORY (referenced by AIS-11 Pricing Agent)
+-- =============================================================================
+
+CREATE TYPE pricing_trigger AS ENUM (
+    'demand_spike', 'low_inventory', 'promotion', 'cost_change',
+    'competitor_price', 'manual', 'risk_adjustment', 'scheduled'
+);
+
+CREATE TABLE pricing_history (
+    price_id            UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id          UUID                NOT NULL REFERENCES products(product_id)
+                                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    previous_price      NUMERIC(12, 2)      NOT NULL CHECK (previous_price >= 0),
+    recommended_price   NUMERIC(12, 2)      NOT NULL CHECK (recommended_price >= 0),
+    approved_price      NUMERIC(12, 2),     -- NULL = recommendation not yet applied
+    confidence          NUMERIC(5, 4)       CHECK (confidence BETWEEN 0 AND 1),
+    trigger_type        pricing_trigger     NOT NULL DEFAULT 'manual',
+    trigger_event_id    UUID,               -- FK to events table (optional)
+    reasoning           TEXT,               -- LLM-generated explanation
+    margin_impact       NUMERIC(6, 2),      -- Estimated % impact on margin
+    demand_signal       NUMERIC(12, 2),     -- Forecast quantity at time of recommendation
+    approved_by_agent   TEXT,               -- 'ADS-11' or 'ADS-17' (CEO approval)
+    applied_at          TIMESTAMP WITH TIME ZONE,  -- NULL = not yet applied
+    workflow_id         UUID,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    -- Pricing history is append-only — no updates, no deletes
+);
+
+COMMENT ON TABLE pricing_history IS 'AUD-39 FIX: Immutable pricing recommendation and approval history, maintained by Pricing Agent (AIS-11). approved_price = NULL means pending.';
+
+
+-- =============================================================================
+-- AUD-43 FIX: DOMAIN: CONTRACTS (referenced by AIS-12 Procurement Strategy Agent)
+-- =============================================================================
+
+CREATE TYPE contract_status AS ENUM (
+    'draft', 'active', 'expiring_soon', 'expired', 'terminated', 'under_review'
+);
+
+CREATE TABLE contracts (
+    contract_id         UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    supplier_id         UUID                NOT NULL REFERENCES suppliers(supplier_id)
+                                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    contract_reference  TEXT                NOT NULL,    -- External contract number
+    title               TEXT                NOT NULL,
+    status              contract_status     NOT NULL DEFAULT 'draft',
+    contract_type       TEXT                CHECK (contract_type IN (
+                                                'framework', 'spot', 'long_term', 'emergency'
+                                            )),
+    total_value         NUMERIC(16, 2),
+    currency            TEXT                NOT NULL DEFAULT 'USD',
+    start_date          DATE                NOT NULL,
+    end_date            DATE                NOT NULL,
+    auto_renew          BOOLEAN             NOT NULL DEFAULT FALSE,
+    notice_period_days  INTEGER             NOT NULL DEFAULT 30,
+    payment_terms_days  INTEGER             NOT NULL DEFAULT 30,
+    terms               TEXT,
+    document_url        TEXT,               -- Link to contract PDF in object storage
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT contracts_reference_unique UNIQUE (contract_reference),
+    CONSTRAINT contracts_dates_valid CHECK (end_date > start_date)
+);
+
+COMMENT ON TABLE contracts IS 'AUD-43 FIX: Supplier contracts tracked for Procurement Strategy Agent (AIS-12). ContractExpiring events are triggered when days_to_expiry < notice_period_days.';
+
+CREATE TRIGGER trg_contracts_updated_at
+    BEFORE UPDATE ON contracts
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Contract line items: which products are covered under each contract
+CREATE TABLE contract_products (
+    contract_id         UUID            NOT NULL REFERENCES contracts(contract_id)
+                                        ON UPDATE CASCADE ON DELETE CASCADE,
+    product_id          UUID            NOT NULL REFERENCES products(product_id)
+                                        ON UPDATE CASCADE ON DELETE RESTRICT,
+    contracted_price    NUMERIC(12, 2)  NOT NULL CHECK (contracted_price >= 0),
+    min_volume          INTEGER         CHECK (min_volume >= 0),
+    max_volume          INTEGER,
+    PRIMARY KEY (contract_id, product_id)
+);
+
+COMMENT ON TABLE contract_products IS 'Products covered under each supplier contract with negotiated pricing.';
+
+
+-- =============================================================================
+-- AUD-44 FIX: DOMAIN: PURCHASE HISTORY (VIEW over purchase_orders)
+-- AIS-12 reads 'purchase_history' — this is a materialized view over purchase_orders
+-- rather than a raw table, to avoid data duplication.
+-- =============================================================================
+
+CREATE VIEW purchase_history AS
+SELECT
+    po.po_id,
+    po.supplier_id,
+    s.name                  AS supplier_name,
+    po.product_id,
+    p.name                  AS product_name,
+    p.sku,
+    po.warehouse_id,
+    po.quantity,
+    po.unit_cost,
+    po.total_cost,
+    po.currency,
+    po.status,
+    po.requested_delivery,
+    po.confirmed_delivery,
+    po.triggered_by_agent,
+    po.created_at           AS ordered_at
+FROM purchase_orders po
+JOIN suppliers  s ON s.supplier_id = po.supplier_id
+JOIN products   p ON p.product_id  = po.product_id;
+
+COMMENT ON VIEW purchase_history IS 'AUD-44 FIX: Readable procurement history view over purchase_orders, used by Procurement Strategy Agent (AIS-12) for supplier evaluation.';
+
+
+-- =============================================================================
+-- AUD-45 FIX: DOMAIN: CARRIERS & TRANSPORTATION ROUTES
+-- Referenced by AIS-06 Transportation Agent
+-- =============================================================================
+
+CREATE TYPE carrier_status AS ENUM ('active', 'inactive', 'blacklisted');
+CREATE TYPE freight_mode_type AS ENUM ('air', 'sea', 'road', 'rail', 'multimodal');
+
+CREATE TABLE carriers (
+    carrier_id          UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name                TEXT                NOT NULL,
+    code                TEXT                NOT NULL,       -- e.g. 'FEDEX', 'DHL', 'MAERSK'
+    freight_modes       freight_mode_type[] NOT NULL,       -- Supported modes (array)
+    tracking_url        TEXT,                               -- {tracking_id} placeholder
+    api_endpoint        TEXT,
+    reliability_score   NUMERIC(5, 2)       NOT NULL DEFAULT 80.0
+                                            CHECK (reliability_score BETWEEN 0 AND 100),
+    avg_delay_days      NUMERIC(4, 2)       NOT NULL DEFAULT 0,
+    status              carrier_status      NOT NULL DEFAULT 'active',
+    blacklist_reason    TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT carriers_code_unique UNIQUE (code)
+);
+
+COMMENT ON TABLE carriers IS 'AUD-45 FIX: Carrier master data used by Transportation Agent (AIS-06) for carrier selection. Supports blacklisting (same policy as suppliers).';
+
+CREATE TRIGGER trg_carriers_updated_at
+    BEFORE UPDATE ON carriers
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE transportation_routes (
+    route_id            UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    carrier_id          UUID                NOT NULL REFERENCES carriers(carrier_id)
+                                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    origin_warehouse_id UUID                REFERENCES warehouses(warehouse_id)
+                                            ON UPDATE CASCADE ON DELETE SET NULL,
+    origin_location     TEXT                NOT NULL,       -- e.g. 'Newark, US'
+    destination         TEXT                NOT NULL,       -- e.g. 'London, GB'
+    freight_mode        freight_mode_type   NOT NULL,
+    transit_days        INTEGER             NOT NULL CHECK (transit_days > 0),
+    base_cost           NUMERIC(10, 2)      NOT NULL CHECK (base_cost >= 0),
+    cost_per_kg         NUMERIC(8, 4)       NOT NULL DEFAULT 0,
+    cost_per_m3         NUMERIC(8, 4)       NOT NULL DEFAULT 0,
+    co2_per_tonne_km    NUMERIC(8, 4),      -- Used by Sustainability Agent
+    is_active           BOOLEAN             NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE transportation_routes IS 'AUD-45 FIX: Available shipping routes per carrier. Transportation Agent selects routes by cost, transit time, and sustainability score.';
+
+CREATE TRIGGER trg_transportation_routes_updated_at
+    BEFORE UPDATE ON transportation_routes
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Update shipments to FK to carriers table
+ALTER TABLE shipments
+    ADD COLUMN carrier_id UUID REFERENCES carriers(carrier_id)
+        ON UPDATE CASCADE ON DELETE SET NULL;
+
+COMMENT ON COLUMN shipments.carrier_id IS 'AUD-45 FIX: FK to carriers table. The carrier TEXT field is kept for backwards compat.';
+
+-- Update sustainability_metrics to also link to routes
+ALTER TABLE transportation_routes
+    ADD COLUMN -- intentionally no FK to avoid circular dep
+    route_hash TEXT; -- SHA256 of (carrier_id + origin + destination + mode) for deduplication
+
+
+-- =============================================================================
+-- AUD-46 FIX: DOMAIN: PROMOTIONS (referenced by AIS-02 Demand Forecast Agent)
+-- =============================================================================
+
+CREATE TYPE promotion_status AS ENUM ('scheduled', 'active', 'completed', 'cancelled');
+
+CREATE TABLE promotions (
+    promotion_id        UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name                TEXT                NOT NULL,
+    description         TEXT,
+    status              promotion_status    NOT NULL DEFAULT 'scheduled',
+    discount_percent    NUMERIC(5, 2)       CHECK (discount_percent BETWEEN 0 AND 100),
+    discount_amount     NUMERIC(12, 2)      CHECK (discount_amount >= 0),
+    -- Only one discount type should be set
+    starts_at           TIMESTAMP WITH TIME ZONE NOT NULL,
+    ends_at             TIMESTAMP WITH TIME ZONE NOT NULL,
+    target_segment      TEXT,               -- e.g. 'enterprise', 'all', 'premium'
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT promotions_dates_valid CHECK (ends_at > starts_at),
+    CONSTRAINT promotions_discount_type
+        CHECK (discount_percent IS NOT NULL OR discount_amount IS NOT NULL)
+);
+
+COMMENT ON TABLE promotions IS 'AUD-46 FIX: Promotion schedule used by Demand Forecast Agent (AIS-02) to adjust forecasts. Active promotions trigger PromotionScheduled events.';
+
+-- Promotion-product bridge: which products are in a promotion
+CREATE TABLE promotion_products (
+    promotion_id    UUID    NOT NULL REFERENCES promotions(promotion_id)
+                            ON UPDATE CASCADE ON DELETE CASCADE,
+    product_id      UUID    NOT NULL REFERENCES products(product_id)
+                            ON UPDATE CASCADE ON DELETE RESTRICT,
+    PRIMARY KEY (promotion_id, product_id)
+);
+
+CREATE TRIGGER trg_promotions_updated_at
+    BEFORE UPDATE ON promotions
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- =============================================================================
+-- AUD-42 FIX: DOMAIN: REPORTS (referenced by AIS-18 Reporting Agent)
+-- =============================================================================
+
+CREATE TYPE report_type AS ENUM (
+    'executive_summary', 'operational_kpi', 'financial', 'risk',
+    'sustainability', 'quality', 'audit', 'workflow', 'custom'
+);
+
+CREATE TYPE report_status AS ENUM ('generating', 'ready', 'failed', 'archived');
+
+CREATE TABLE reports (
+    report_id           UUID                PRIMARY KEY DEFAULT uuid_generate_v4(),
+    report_type         report_type         NOT NULL,
+    title               TEXT                NOT NULL,
+    status              report_status       NOT NULL DEFAULT 'generating',
+    workflow_id         UUID,               -- The workflow this report covers
+    correlation_id      UUID,
+    period_start        TIMESTAMP WITH TIME ZONE,
+    period_end          TIMESTAMP WITH TIME ZONE,
+    generated_by_agent  TEXT                NOT NULL DEFAULT 'ADS-18',
+    storage_url         TEXT,               -- Object storage URL (S3 / GCS / Minio)
+    payload_summary     JSONB               NOT NULL DEFAULT '{}',
+    -- ^ Key KPI values captured at report generation time (immutable snapshot)
+    file_size_bytes     BIGINT,
+    error_message       TEXT,               -- Populated on failure
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    -- Reports are NEVER updated once status = 'ready' (immutable after publication)
+);
+
+COMMENT ON TABLE reports IS 'AUD-42 FIX: Immutable report records generated by Reporting Agent (AIS-18). payload_summary captures key KPI values at generation time.';
+
+-- =============================================================================
+-- INDEXES for supplementary tables
+-- =============================================================================
+
+-- Purchase orders
+CREATE INDEX idx_po_supplier_status ON purchase_orders (supplier_id, status);
+CREATE INDEX idx_po_product_id      ON purchase_orders (product_id);
+CREATE INDEX idx_po_workflow_id     ON purchase_orders (workflow_id) WHERE workflow_id IS NOT NULL;
+CREATE INDEX idx_po_created_at      ON purchase_orders (created_at DESC);
+
+-- Support tickets
+CREATE INDEX idx_tickets_customer_status  ON support_tickets (customer_id, status);
+CREATE INDEX idx_tickets_order_id         ON support_tickets (order_id)     WHERE order_id IS NOT NULL;
+CREATE INDEX idx_tickets_sla_deadline     ON support_tickets (sla_deadline) WHERE status NOT IN ('resolved', 'closed');
+
+-- Pricing history
+CREATE INDEX idx_pricing_product_created  ON pricing_history (product_id, created_at DESC);
+CREATE INDEX idx_pricing_pending          ON pricing_history (product_id)
+    WHERE approved_price IS NULL;
+
+-- Contracts
+CREATE INDEX idx_contracts_supplier       ON contracts (supplier_id, status);
+CREATE INDEX idx_contracts_end_date       ON contracts (end_date, status)
+    WHERE status IN ('active', 'expiring_soon');
+
+-- Carriers
+CREATE INDEX idx_carriers_status          ON carriers (status, reliability_score DESC);
+
+-- Transportation routes
+CREATE INDEX idx_routes_carrier           ON transportation_routes (carrier_id, is_active);
+CREATE INDEX idx_routes_origin_dest       ON transportation_routes (origin_location, destination, freight_mode)
+    WHERE is_active = TRUE;
+
+-- Promotions
+CREATE INDEX idx_promotions_active        ON promotions (starts_at, ends_at)
+    WHERE status IN ('scheduled', 'active');
+
+-- Reports
+CREATE INDEX idx_reports_type_status      ON reports (report_type, status, created_at DESC);
+CREATE INDEX idx_reports_workflow_id      ON reports (workflow_id) WHERE workflow_id IS NOT NULL;
+
+-- =============================================================================
+-- END OF 01_schema.sql v1.1
+-- Total tables: 27 (18 core + 9 supplementary)
+-- Total views:  1  (purchase_history)
+-- =============================================================================
