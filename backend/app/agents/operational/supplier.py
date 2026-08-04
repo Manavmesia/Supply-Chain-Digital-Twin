@@ -150,7 +150,6 @@ class SupplierAgent(BaseAgent):
                 warehouse_id=uuid.UUID(warehouse_id_str) if warehouse_id_str else uuid.uuid4(),
                 quantity=order_qty,
                 unit_cost=best_sp.contract_price,
-                total_cost=best_sp.contract_price * order_qty,
                 currency="USD",
                 status="draft",
                 requested_delivery=requested_delivery,

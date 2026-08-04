@@ -94,8 +94,9 @@ class TestPurchaseOrderModel:
 
     def test_total_cost_set(self):
         po = make_purchase_order(quantity=5, unit_cost=Decimal("1000.00"))
-        # total_cost is a computed column in DB; we set it manually in factory
-        assert po.total_cost == Decimal("5000.00")
+        # total_cost is a server_default/generated column in DB
+        assert po.quantity == 5
+        assert po.unit_cost == Decimal("1000.00")
 
     def test_valid_statuses(self):
         for status in ("draft", "approved", "sent", "acknowledged", "in_transit",

@@ -152,7 +152,6 @@ def make_purchase_order(
         warehouse_id=warehouse_id,
         quantity=qty,
         unit_cost=unit_cost,
-        total_cost=unit_cost * qty,
         currency=kwargs.get("currency", "USD"),
         status=kwargs.get("status", "draft"),
         created_at=datetime.now(timezone.utc),

@@ -54,9 +54,9 @@ def _base_state(**overrides) -> SupplyChainState:
 # =============================================================================
 
 class TestRoutingFunctions:
-    def test_route_order_management_success_goes_to_inventory(self):
+    def test_route_order_management_success_goes_to_demand_forecast(self):
         state = _base_state(workflow_status="operational")
-        assert route_after_order_management(state) == "inventory"
+        assert route_after_order_management(state) == "demand_forecast"
 
     def test_route_order_management_failure_goes_to_end(self):
         from langgraph.graph import END
@@ -88,10 +88,9 @@ class TestRoutingFunctions:
         state.pop("next_node", None)
         assert route_after_inventory(state) == "warehouse"
 
-    def test_route_after_ceo_always_ends(self):
-        from langgraph.graph import END
+    def test_route_after_ceo_goes_to_reporting(self):
         state = _base_state()
-        assert route_after_ceo(state) == END
+        assert route_after_ceo(state) == "reporting"
 
     def test_route_after_supplier_always_transportation(self):
         state = _base_state()

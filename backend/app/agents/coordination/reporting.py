@@ -1,157 +1,132 @@
 """
 ADS-18 — Reporting Agent
 
-Responsibilities:
-  - Aggregate the entire workflow state into a structured Report
-  - Create a Report record in DB (report_type="operational_kpi",
-    generated_by_agent="ADS-18")
-  - payload_summary contains:
-      workflow_id, order_id, customer_name, total_amount, approval_tier,
-      risk_score, risk_category, active_agents, event_count, decision_count,
-      has_anomaly, completed_at
-  - Publishes NO events (reporting only — no new workflows triggered)
-  - Returns final workflow_status = "completed"
-    (or keeps "failed" if CEO denied)
+Responsibilities (from AIS-18 spec):
+  - Execute post-CEO decision
+  - Consolidate workflow execution metrics (order, shipment, finance, risk, decisions)
+  - Create immutable Report record using ReportRepository
+  - Publish ReportGenerated and DashboardUpdated events
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base_agent import BaseAgent
 from app.graph.state import SupplyChainState
-from app.models.report import Report
+from app.repositories.report import ReportRepository
 
 logger = structlog.get_logger(__name__)
 
 
 class ReportingAgent(BaseAgent):
-    """ADS-18 Reporting Agent — workflow aggregation and KPI reporting."""
-
     agent_code = "ADS-18"
-    agent_name = "Reporting Agent"
+    agent_name = "Reporting & Analytics Agent"
 
     async def _execute(self, state: SupplyChainState) -> dict[str, Any]:
-        """
-        Aggregate workflow state, persist a Report record, and return
-        the final workflow_status.
-
-        Does NOT publish any events.
-        """
-        session: AsyncSession | None = self.session
-
-        # ── Extract key fields ────────────────────────────────────────────────
-        workflow_id_str = state.get("workflow_id") or str(uuid.uuid4())
+        session = self.session
         order: dict = state.get("order") or {}
-        customer: dict = state.get("customer") or {}
+        shipment: dict = state.get("shipment") or {}
         finance: dict = state.get("finance") or {}
         risk: dict = state.get("risk") or {}
-        forecast: dict = state.get("forecast") or {}
-        executive_decision: dict = state.get("executive_decision") or {}
+        ceo: dict = state.get("executive_decision") or {}
+        decisions: list = state.get("decisions") or []
 
-        order_id_str = order.get("order_id", "unknown")
-        customer_name = (
-            customer.get("name")
-            or order.get("customer_name")
-            or "Unknown"
-        )
-        total_amount = order.get("total_amount", "0.00")
-        approval_tier = (
-            finance.get("approval_tier")
-            or executive_decision.get("approval_tier")
-            or "unknown"
-        )
-        risk_score = risk.get("score", 0.0)
-        risk_category = risk.get("category", "unknown")
-        active_agents: list[str] = list(state.get("active_agents") or [])
-        event_history: list[dict] = list(state.get("event_history") or [])
-        decisions: list[dict] = list(state.get("decisions") or [])
+        order_id_str = order.get("order_id", "N/A")
+        workflow_id_str = state.get("workflow_id", str(uuid.uuid4()))
 
-        # Detect demand anomalies
-        forecast_products: list[dict] = forecast.get("products") or []
-        has_anomaly = any(p.get("is_anomaly") for p in forecast_products)
+        # Safely parse correlation & workflow UUIDs
+        corr_id_raw = state.get("correlation_id")
+        corr_id_uuid = None
+        if corr_id_raw:
+            try:
+                corr_id_uuid = uuid.UUID(str(corr_id_raw))
+            except (ValueError, TypeError):
+                corr_id_uuid = None
 
-        # Final status: preserve "failed" if CEO denied, else "completed"
-        current_status = state.get("workflow_status", "completed")
-        final_status = current_status if current_status == "failed" else "completed"
+        wf_id_uuid = None
+        if workflow_id_str:
+            try:
+                wf_id_uuid = uuid.UUID(str(workflow_id_str))
+            except (ValueError, TypeError):
+                wf_id_uuid = None
 
-        completed_at = datetime.now(tz=timezone.utc).isoformat()
-
-        # ── Build payload_summary ─────────────────────────────────────────────
-        payload_summary: dict[str, Any] = {
-            "workflow_id": workflow_id_str,
-            "order_id": order_id_str,
-            "customer_name": customer_name,
-            "total_amount": total_amount,
-            "approval_tier": approval_tier,
-            "risk_score": risk_score,
-            "risk_category": risk_category,
-            "active_agents": active_agents,
-            "event_count": len(event_history),
-            "decision_count": len(decisions),
-            "has_anomaly": has_anomaly,
-            "completed_at": completed_at,
-            "final_status": final_status,
+        # ── 1. Assemble immutable KPI snapshot (JSON serializable) ───────────
+        payload_summary = {
+            "workflow_id": str(workflow_id_str),
+            "order_id": str(order_id_str),
+            "order_status": str(order.get("status")) if order.get("status") else None,
+            "customer_id": str(order.get("customer_id")) if order.get("customer_id") else None,
+            "total_revenue": str(order.get("total_amount")) if order.get("total_amount") is not None else None,
+            "total_cost": str(finance.get("total_cost")) if finance.get("total_cost") is not None else None,
+            "gross_margin_pct": float(finance.get("gross_margin_pct", 0.0)),
+            "risk_score": float(risk.get("score", 0.0)),
+            "risk_level": str(risk.get("level")) if risk.get("level") else "Low",
+            "carrier": str(shipment.get("carrier")) if shipment.get("carrier") else None,
+            "tracking_id": str(shipment.get("tracking_id")) if shipment.get("tracking_id") else None,
+            "eta": str(shipment.get("eta")) if shipment.get("eta") else None,
+            "ceo_approved": bool(ceo.get("approved")),
+            "approval_tier": str(ceo.get("approval_tier")) if ceo.get("approval_tier") else None,
+            "active_agent_count": len(state.get("active_agents") or []),
+            "total_decisions": len(decisions),
         }
 
-        # ── Persist Report record ─────────────────────────────────────────────
-        report_title = (
-            f"Workflow KPI Report — Order {order_id_str[:8] if order_id_str != 'unknown' else 'N/A'} "
-            f"— {completed_at[:10]}"
-        )
-
+        # ── 2. Create immutable Report DB record ──────────────────────────────
+        report_id = uuid.uuid4()
         if session:
             try:
-                report = Report(
-                    report_id=uuid.uuid4(),
-                    report_type="operational_kpi",
-                    title=report_title,
-                    status="ready",
-                    workflow_id=(
-                        uuid.UUID(workflow_id_str)
-                        if workflow_id_str
-                        else None
-                    ),
-                    correlation_id=(
-                        uuid.UUID(state["correlation_id"])
-                        if state.get("correlation_id")
-                        else None
-                    ),
-                    generated_by_agent=self.agent_code,
-                    payload_summary=payload_summary,
-                )
-                session.add(report)
+                repo = ReportRepository(session)
+                await repo.create({
+                    "report_id": report_id,
+                    "report_type": "executive_summary",
+                    "title": f"Order Fulfillment Summary — Order #{str(order_id_str)[:8]}",
+                    "status": "ready",
+                    "workflow_id": wf_id_uuid,
+                    "correlation_id": corr_id_uuid,
+                    "generated_by_agent": self.agent_code,
+                    "payload_summary": payload_summary,
+                })
                 await session.flush()
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Failed to persist Report record",
-                    error=str(exc),
-                    workflow_id=workflow_id_str,
-                )
+                logger.warning("Could not persist report DB record", error=str(exc))
 
-        decisions_updated = self._record_decision(
-            state,
+        event_history = list(state.get("event_history") or [])
+        decisions_list = list(decisions)
+
+        report_event_payload = {
+            "report_id": str(report_id),
+            "report_type": "executive_summary",
+            "workflow_id": workflow_id_str,
+            "order_id": order_id_str,
+        }
+
+        # ── 3. Publish events ─────────────────────────────────────────────────
+        await self._publish(state, "ReportGenerated", report_event_payload)
+        await self._publish(state, "DashboardUpdated", report_event_payload)
+        event_history = self._append_event(event_history, "ReportGenerated", report_event_payload)
+        event_history = self._append_event(event_history, "DashboardUpdated", report_event_payload)
+
+        decisions_list = self._record_decision(
+            decisions_list,
             "report_generated",
-            f"Operational KPI report generated — status={final_status}, "
-            f"agents={len(active_agents)}, events={len(event_history)}",
-            payload_summary,
+            f"Generated executive report {report_id} for order {order_id_str}",
+            report_event_payload,
         )
 
         logger.info(
             "Reporting complete",
+            report_id=str(report_id),
             workflow_id=workflow_id_str,
-            order_id=order_id_str,
-            final_status=final_status,
-            event_count=len(event_history),
-            agent_count=len(active_agents),
         )
 
         return {
-            "workflow_status": final_status,
-            "decisions": decisions_updated,
+            "reports": {
+                "latest_report_id": str(report_id),
+                "summary": payload_summary,
+            },
+            "decisions": decisions_list,
+            "event_history": event_history,
         }

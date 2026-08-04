@@ -98,6 +98,9 @@ async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWor
             compiled = compile_workflow(session_factory=_session_factory)
             final_state = await compiled.ainvoke(initial_state, config=config)
 
+            if not final_state.get("errors") and final_state.get("workflow_status") != "failed":
+                final_state["workflow_status"] = "completed"
+
             await session.commit()
 
         _WORKFLOW_STORE[workflow_id] = final_state

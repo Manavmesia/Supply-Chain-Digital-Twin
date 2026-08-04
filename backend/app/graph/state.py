@@ -59,6 +59,7 @@ class SupplyChainState(TypedDict, total=False):
     # ── Coordination ─────────────────────────────────────────────────────────
     decisions: list[dict[str, Any]]   # Ordered list of agent decisions
     executive_decision: dict[str, Any]  # CEO approval record
+    reports: dict[str, Any]           # Generated report metadata and snapshot
 
     # ── Event / message bus ──────────────────────────────────────────────────
     event_history: list[dict[str, Any]]   # Events published during this workflow

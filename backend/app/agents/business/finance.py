@@ -1,182 +1,128 @@
 """
 ADS-09 — Finance Agent
 
-Responsibilities:
-  - Evaluate the financial impact of the completed workflow
-  - Compute cost breakdown: shipping_cost (route base_cost), procurement_cost
-    (sum of PO total_costs in state), total operational cost
-  - Apply Finance Approval Thresholds from System Rules:
-      ≤ $10,000            → auto
-      $10,001 – $50,000    → finance_review
-      $50,001 – $500,000   → finance_and_ceo
-      > $500,000           → human_required
-  - Check if total_cost > budget_threshold (default $50,000 from settings)
-  - Publish FinancialRecommendationReady always
-  - Publish BudgetExceeded if total_cost > budget_threshold
-  - NO LLM calls — all deterministic arithmetic
+Responsibilities (from AIS-09 spec):
+  - Calculate total operational costs: product procurement + warehousing + shipping
+  - Validate against corporate budget constraints
+  - Calculate estimated gross margin % = (revenue - total_cost) / revenue * 100
+  - Emit FinancialApprovalGranted (margin >= 15%), CostOptimizationSuggested (margin < 15%), or BudgetExceeded
 """
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Any
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base_agent import BaseAgent
-from app.core.config import settings
 from app.graph.state import SupplyChainState
 
 logger = structlog.get_logger(__name__)
 
-# Finance Approval Thresholds — System Rules v2.1
-_AUTO_LIMIT: Decimal = Decimal("10000.00")
-_FINANCE_REVIEW_LIMIT: Decimal = Decimal("50000.00")
-_HUMAN_APPROVAL_LIMIT: Decimal = Decimal("500000.00")
-
 
 class FinanceAgent(BaseAgent):
-    """ADS-09 Finance Agent — deterministic cost analysis and approval tier."""
-
     agent_code = "ADS-09"
     agent_name = "Finance Agent"
 
     async def _execute(self, state: SupplyChainState) -> dict[str, Any]:
-        """
-        Compute cost breakdown and determine financial approval tier.
-
-        Reads shipping cost from state['shipment']['base_cost'] or a fallback,
-        and procurement cost from state['supplier']['purchase_orders'][*]['total_cost'].
-        Returns a 'finance' partial state dict.
-        """
-        session: AsyncSession | None = self.session
         order: dict = state.get("order") or {}
-        shipment: dict = state.get("shipment") or {}
         supplier_state: dict = state.get("supplier") or {}
+        shipment_state: dict = state.get("shipment") or {}
 
-        order_id_str = order.get("order_id", "unknown")
+        order_id_str = order.get("order_id")
+        total_revenue = Decimal(str(order.get("total_amount", "0.00")))
 
-        # ── 1. Compute shipping cost ──────────────────────────────────────────
-        shipping_cost = Decimal(str(shipment.get("base_cost") or "0.00"))
-        # Fallback: if base_cost not in shipment, use total_amount / 20 heuristic
-        # (routes store base_cost, but the agent only sets freight_mode/transit_days)
-        # We accept 0 if not provided — tests can inject it directly.
-        if shipping_cost == Decimal("0.00"):
-            # Try to get a non-zero value from route cost if stored
-            shipping_cost = Decimal(str(shipment.get("route_cost") or "0.00"))
-
-        # ── 2. Compute procurement cost from POs ──────────────────────────────
-        purchase_orders: list[dict] = supplier_state.get("purchase_orders") or []
+        # ── 1. Calculate operational costs ────────────────────────────────────
         procurement_cost = Decimal("0.00")
-        for po in purchase_orders:
-            procurement_cost += Decimal(str(po.get("total_cost") or "0.00"))
+        pos = supplier_state.get("purchase_orders") or []
+        for po in pos:
+            unit_cost = Decimal(str(po.get("unit_cost", "0.00")))
+            qty = Decimal(str(po.get("quantity", 0)))
+            procurement_cost += unit_cost * qty
 
-        # ── 3. Total operational cost ─────────────────────────────────────────
-        total_cost = shipping_cost + procurement_cost
+        # Estimated shipping & handling cost
+        shipping_cost = Decimal("150.00") if shipment_state else Decimal("0.00")
+        if shipment_state.get("freight_mode") == "air":
+            shipping_cost = Decimal("650.00")
 
-        # If both are zero and we have order total_amount, use that as reference
-        # (for workflows that go through inventory-only path with no POs)
-        order_total = Decimal(str(order.get("total_amount") or "0.00"))
-        if total_cost == Decimal("0.00") and order_total > Decimal("0.00"):
-            total_cost = order_total
-            # Estimate split: 5% shipping, 95% procurement
-            shipping_cost = (order_total * Decimal("0.05")).quantize(Decimal("0.01"))
-            procurement_cost = (order_total - shipping_cost).quantize(Decimal("0.01"))
+        # Warehouse handling overhead per item
+        item_count = sum(int(i.get("quantity", 1)) for i in (order.get("items") or []))
+        warehouse_cost = Decimal(str(item_count * 5.00))
 
-        # ── 4. Budget threshold check ─────────────────────────────────────────
-        budget_threshold: Decimal = getattr(
-            settings, "FINANCE_APPROVAL_THRESHOLD", Decimal("50000.00")
-        )
-        within_budget = total_cost <= budget_threshold
-        budget_status = "within_budget" if within_budget else "over_budget"
+        total_cost = procurement_cost + shipping_cost + warehouse_cost
 
-        # ── 5. Approval tier ──────────────────────────────────────────────────
-        if total_cost <= _AUTO_LIMIT:
-            approval_tier = "auto"
-        elif total_cost <= _FINANCE_REVIEW_LIMIT:
-            approval_tier = "finance_review"
-        elif total_cost <= _HUMAN_APPROVAL_LIMIT:
-            approval_tier = "finance_and_ceo"
+        # Default COGS fallback if no purchase orders (in-stock items)
+        if procurement_cost == Decimal("0.00") and total_revenue > Decimal("0.00"):
+            cogs_estimate = total_revenue * Decimal("0.65")  # Assume 65% COGS
+            total_cost += cogs_estimate
+
+        # ── 2. Gross Margin % ─────────────────────────────────────────────────
+        if total_revenue > Decimal("0.00"):
+            gross_margin_amount = total_revenue - total_cost
+            gross_margin_pct = float((gross_margin_amount / total_revenue) * Decimal("100.0"))
         else:
-            approval_tier = "human_required"
+            gross_margin_pct = 0.0
 
-        # ── 6. Build recommendations ──────────────────────────────────────────
-        recommendations: list[str] = []
-        if not within_budget:
-            recommendations.append(
-                f"Total cost ${total_cost:.2f} exceeds budget threshold "
-                f"${budget_threshold:.2f} — escalate for finance review."
-            )
-        if shipping_cost > Decimal("5000.00"):
-            recommendations.append(
-                "Shipping cost is high — consider consolidating shipments or "
-                "negotiating carrier rates."
-            )
-        if procurement_cost > Decimal("100000.00"):
-            recommendations.append(
-                "Procurement cost exceeds $100k — consider long-term supplier "
-                "contracts for better pricing."
-            )
-        if not recommendations:
-            recommendations.append("All costs within acceptable thresholds.")
+        gross_margin_pct = round(gross_margin_pct, 2)
 
-        # ── 7. Publish events ─────────────────────────────────────────────────
-        finance_payload: dict[str, Any] = {
+        # ── 3. Evaluate budget and profitability ──────────────────────────────
+        budget_exceeded = total_cost > Decimal("1000000.00")  # Single-order budget cap $1M
+        is_approved = gross_margin_pct >= 15.0 and not budget_exceeded
+
+        event_history = list(state.get("event_history") or [])
+        decisions = list(state.get("decisions") or [])
+
+        finance_payload = {
             "order_id": order_id_str,
-            "workflow_id": state.get("workflow_id"),
+            "revenue": str(total_revenue),
             "total_cost": str(total_cost),
-            "shipping_cost": str(shipping_cost),
             "procurement_cost": str(procurement_cost),
-            "budget_status": budget_status,
-            "approval_tier": approval_tier,
-            "within_budget": within_budget,
-            "budget_threshold": str(budget_threshold),
+            "shipping_cost": str(shipping_cost),
+            "warehouse_cost": str(warehouse_cost),
+            "gross_margin_pct": gross_margin_pct,
+            "budget_approved": not budget_exceeded,
+            "financial_approval": is_approved,
         }
 
-        await self._publish(state, "FinancialRecommendationReady", finance_payload)
-        event_history = self._append_event(
-            state, "FinancialRecommendationReady", finance_payload
-        )
+        if budget_exceeded:
+            await self._publish(state, "BudgetExceeded", finance_payload)
+            event_history = self._append_event(event_history, "BudgetExceeded", finance_payload)
+            decisions = self._record_decision(
+                decisions, "budget_exceeded",
+                f"Order cost ${total_cost} exceeds single-order budget limit of $1,000,000",
+                finance_payload,
+            )
+            logger.warning("Budget exceeded", cost=str(total_cost))
 
-        if not within_budget:
-            exceeded_payload = {
-                **finance_payload,
-                "overage": str(total_cost - budget_threshold),
-            }
-            await self._publish(state, "BudgetExceeded", exceeded_payload)
-            _tmp = {**state, "event_history": event_history}
-            event_history = self._append_event(_tmp, "BudgetExceeded", exceeded_payload)
-
-        decisions = self._record_decision(
-            state,
-            "finance_assessment",
-            f"Total cost ${total_cost:.2f} — tier={approval_tier}, "
-            f"budget={'OK' if within_budget else 'EXCEEDED'}",
-            finance_payload,
-        )
+        elif is_approved:
+            await self._publish(state, "FinancialApprovalGranted", finance_payload)
+            event_history = self._append_event(event_history, "FinancialApprovalGranted", finance_payload)
+            decisions = self._record_decision(
+                decisions, "financial_approval_granted",
+                f"Financial approval granted with gross margin of {gross_margin_pct}%",
+                finance_payload,
+            )
+        else:
+            await self._publish(state, "CostOptimizationSuggested", finance_payload)
+            event_history = self._append_event(event_history, "CostOptimizationSuggested", finance_payload)
+            decisions = self._record_decision(
+                decisions, "cost_optimization_suggested",
+                f"Low gross margin ({gross_margin_pct}%) — cost optimization suggested",
+                finance_payload,
+            )
 
         logger.info(
-            "Finance assessment complete",
+            "Finance evaluation complete",
+            margin_pct=gross_margin_pct,
             total_cost=str(total_cost),
-            approval_tier=approval_tier,
-            within_budget=within_budget,
-            order_id=order_id_str,
+            approved=is_approved,
             workflow_id=state.get("workflow_id"),
         )
 
-        finance_result: dict[str, Any] = {
-            "total_cost": str(total_cost),
-            "shipping_cost": str(shipping_cost),
-            "procurement_cost": str(procurement_cost),
-            "budget_status": budget_status,
-            "approval_tier": approval_tier,
-            "within_budget": within_budget,
-            "recommendations": recommendations,
-        }
-
         return {
-            "finance": finance_result,
+            "finance": finance_payload,
             "decisions": decisions,
             "event_history": event_history,
         }

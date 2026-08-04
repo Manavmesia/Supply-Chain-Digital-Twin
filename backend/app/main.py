@@ -2,6 +2,8 @@ import logging
 import sys
 
 import structlog
+from app.api.v1 import analytics as analytics_router
+from app.api.v1 import reports as reports_router
 from app.api.v1 import workflows as workflows_router
 from app.core.config import settings
 from fastapi import FastAPI
@@ -50,6 +52,8 @@ app.add_middleware(
 
 # Register API routers
 app.include_router(workflows_router.router, prefix=settings.API_V1_STR)
+app.include_router(reports_router.router, prefix=settings.API_V1_STR)
+app.include_router(analytics_router.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health", tags=["health"])

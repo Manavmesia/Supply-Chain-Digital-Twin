@@ -93,17 +93,17 @@ def route_after_order_management(state: SupplyChainState) -> str:
     """Abort to END if order was rejected."""
     if state.get("workflow_status") == "failed":
         return END
-    return "inventory"
-
-
-def route_after_ceo(state: SupplyChainState) -> str:
-    """Always proceed to reporting after CEO decision (approved or denied)."""
-    return "reporting"
+    return "demand_forecast"
 
 
 def route_after_supplier(state: SupplyChainState) -> str:
     """After supplier node, always proceed to transportation."""
     return "transportation"
+
+
+def route_after_ceo(state: SupplyChainState) -> str:
+    """Always proceed to reporting after CEO decision (approved or denied)."""
+    return "reporting"
 
 
 # ---------------------------------------------------------------------------
@@ -174,12 +174,15 @@ def build_workflow(
     # ── Entry ─────────────────────────────────────────────────────────────────
     graph.add_edge(START, "order_management")
 
-    # ── Conditional: order_management → inventory OR END ─────────────────────
+    # ── Conditional: order_management → demand_forecast OR END ───────────────
     graph.add_conditional_edges(
         "order_management",
         route_after_order_management,
-        {"inventory": "inventory", END: END},
+        {"demand_forecast": "demand_forecast", END: END},
     )
+
+    # ── Demand Forecast → inventory ───────────────────────────────────────────
+    graph.add_edge("demand_forecast", "inventory")
 
     # ── Conditional: inventory → warehouse OR supplier ────────────────────────
     graph.add_conditional_edges(
@@ -201,10 +204,9 @@ def build_workflow(
     # ── Transportation → finance (Phase 4 sequential BI chain) ───────────────
     graph.add_edge("transportation", "finance")
 
-    # ── Finance → risk → demand_forecast → ceo ───────────────────────────────
+    # ── Finance → risk → ceo ──────────────────────────────────────────────────
     graph.add_edge("finance", "risk")
-    graph.add_edge("risk", "demand_forecast")
-    graph.add_edge("demand_forecast", "ceo")
+    graph.add_edge("risk", "ceo")
 
     # ── CEO → reporting (Phase 4) ─────────────────────────────────────────────
     graph.add_conditional_edges(
