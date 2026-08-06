@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supply Chain — Live Order Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117; --surface: #161b22; --surface2: #1c2128; --border: #30363d;
+      --text: #e6edf3; --muted: #7d8590; --accent: #58a6ff; --green: #3fb950;
+      --yellow: #d29922; --red: #f85149; --purple: #bc8cff; --orange: #ffa657; --teal: #39d353;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+    /* HEADER */
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 14px 28px; display: flex; align-items: center; gap: 14px;
+      position: sticky; top: 0; z-index: 200;
+    }
+    .logo { width: 34px; height: 34px; background: linear-gradient(135deg,#1f6feb,#58a6ff); border-radius: 8px; display:flex;align-items:center;justify-content:center;font-size:17px; }
+    header h1 { font-size: 16px; font-weight: 600; }
+    .api-status { margin-left: auto; display:flex;align-items:center;gap:8px;font-size:12px;font-family:'JetBrains Mono',monospace; }
+    .dot { width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite; }
+    .dot.green { background:var(--green); }
+    .dot.red   { background:var(--red); animation:none; }
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
+
+    /* LAYOUT */
+    .layout { display: flex; height: calc(100vh - 61px); }
+
+    /* SIDEBAR */
+    .sidebar { width: 220px; min-width:220px; background:var(--surface); border-right:1px solid var(--border); padding:16px 0; overflow-y:auto; }
+    .nav-group { margin-bottom: 6px; }
+    .nav-label { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:8px 18px 4px; }
+    .nav-item { display:flex;align-items:center;gap:9px;padding:7px 18px;font-size:13px;color:var(--muted);cursor:pointer;border-left:2px solid transparent;transition:all .15s; }
+    .nav-item:hover { background:var(--surface2);color:var(--text); }
+    .nav-item.active { background:rgba(88,166,255,.08);color:var(--accent);border-left-color:var(--accent); }
+    .nav-item .nb { margin-left:auto;font-size:10px;font-family:'JetBrains Mono',monospace;background:var(--surface2);color:var(--muted);padding:1px 6px;border-radius:8px; }
+    .nav-item.active .nb { background:rgba(88,166,255,.2);color:var(--accent); }
+
+    /* MAIN */
+    .main { flex:1; overflow-y:auto; padding:24px 28px; }
+    .page { display:none; }
+    .page.active { display:block; }
+
+    /* PAGE HEADER */
+    .page-hdr { display:flex;align-items:flex-start;gap:14px;margin-bottom:20px; }
+    .page-icon { width:40px;height:40px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0; }
+    .page-hdr h2 { font-size:18px;font-weight:600;margin-bottom:3px; }
+    .page-hdr p  { font-size:12px;color:var(--muted); }
+
+    /* CARDS */
+    .card { background:var(--surface);border:1px solid var(--border);border-radius:10px; }
+    .card-hdr { padding:12px 18px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px; }
+    .card-hdr code { font-family:'JetBrains Mono',monospace;color:var(--text);background:var(--surface2);padding:1px 7px;border-radius:4px;font-size:11px; }
+    .card-hdr .card-count { margin-left:auto;font-family:'JetBrains Mono',monospace;color:var(--accent);font-size:11px; }
+    .card-body { padding:0; }
+
+    /* TABLE */
+    table { width:100%;border-collapse:collapse;font-size:12.5px; }
+    thead th { background:var(--surface2);padding:9px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap; }
+    tbody tr { border-bottom:1px solid rgba(48,54,61,.4);transition:background .1s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:rgba(255,255,255,.02); }
+    td { padding:9px 14px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis; }
+    .mono { font-family:'JetBrains Mono',monospace;font-size:11px; }
+    .uuid { font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted); }
+    .empty-row td { text-align:center;padding:28px;color:var(--muted); }
+
+    /* BADGES */
+    .badge { display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:500; }
+    .badge.green   { background:rgba(63,185,80,.15);color:var(--green); }
+    .badge.blue    { background:rgba(88,166,255,.15);color:var(--accent); }
+    .badge.yellow  { background:rgba(210,153,34,.15);color:var(--yellow); }
+    .badge.red     { background:rgba(248,81,73,.15);color:var(--red); }
+    .badge.purple  { background:rgba(188,140,255,.15);color:var(--purple); }
+    .badge.orange  { background:rgba(255,166,87,.15);color:var(--orange); }
+    .badge.grey    { background:rgba(125,133,144,.15);color:var(--muted); }
+
+    /* PROGRESS */
+    .prog { display:flex;align-items:center;gap:7px; }
+    .prog-bar { height:5px;border-radius:3px;background:var(--surface2);flex:1;min-width:60px;overflow:hidden; }
+    .prog-fill { height:100%;border-radius:3px; }
+    .prog-fill.g { background:var(--green); }
+    .prog-fill.y { background:var(--yellow); }
+    .prog-fill.r { background:var(--red); }
+
+    /* STATS ROW */
+    .stats { display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap; }
+    .stat { background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;min-width:120px; }
+    .stat .lbl { font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px; }
+    .stat .val { font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace; }
+
+    /* ALERT */
+    .alert { display:flex;gap:8px;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px; }
+    .alert.warn { background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.3);color:var(--yellow); }
+    .alert.info { background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.3);color:var(--accent); }
+    .alert.success { background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);color:var(--green); }
+    .alert.error { background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);color:var(--red); }
+
+    /* ══════════════════ ORDER SIMULATOR ══════════════════ */
+    .sim-grid { display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start; }
+
+    .sim-form { background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden; }
+    .sim-form-hdr { padding:14px 20px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px; }
+    .sim-form-body { padding:20px; }
+
+    label { display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px; }
+    select, .qty-input {
+      width:100%; padding:9px 12px; background:var(--surface2); border:1px solid var(--border);
+      border-radius:8px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif;
+      outline:none; transition:border-color .2s;
+    }
+    select:focus, .qty-input:focus { border-color:var(--accent); }
+    .form-row { margin-bottom:14px; }
+
+    /* Item builder */
+    .items-list { display:flex;flex-direction:column;gap:8px;margin-bottom:14px; }
+    .item-row { display:grid;grid-template-columns:1fr 80px 28px;gap:6px;align-items:center; }
+    .item-row select { font-size:12px; }
+    .item-row input { padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;outline:none;width:100%; }
+    .item-row input:focus { border-color:var(--accent); }
+    .btn-remove { background:rgba(248,81,73,.12);border:none;color:var(--red);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .2s; }
+    .btn-remove:hover { background:rgba(248,81,73,.25); }
+    .btn-add-item { width:100%;padding:8px;background:rgba(88,166,255,.06);border:1px dashed rgba(88,166,255,.3);border-radius:8px;color:var(--accent);font-size:12px;cursor:pointer;transition:all .2s; }
+    .btn-add-item:hover { background:rgba(88,166,255,.12);border-color:var(--accent); }
+
+    .btn-submit {
+      width:100%;padding:12px;background:linear-gradient(135deg,#1f6feb,#58a6ff);
+      border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;
+      cursor:pointer;transition:all .2s;margin-top:6px;letter-spacing:.3px;
+    }
+    .btn-submit:hover { filter:brightness(1.1);transform:translateY(-1px); }
+    .btn-submit:disabled { opacity:.4;cursor:not-allowed;transform:none;filter:none; }
+
+    /* PIPELINE TRACKER */
+    .pipeline { background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden; }
+    .pipeline-hdr { padding:14px 20px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px; }
+    .pipeline-body { padding:20px; }
+
+    /* Status bar */
+    .order-status-bar { display:flex;gap:0;margin-bottom:20px; }
+    .status-step { flex:1;text-align:center;padding:8px 4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--surface2);border-right:1px solid var(--border);transition:all .3s; }
+    .status-step:first-child { border-radius:8px 0 0 8px; }
+    .status-step:last-child  { border-radius:0 8px 8px 0;border-right:none; }
+    .status-step.done { background:rgba(63,185,80,.15);color:var(--green); }
+    .status-step.active { background:rgba(88,166,255,.2);color:var(--accent);animation:stepPulse 1.2s infinite; }
+    .status-step.failed { background:rgba(248,81,73,.15);color:var(--red); }
+    @keyframes stepPulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+    /* Agent steps */
+    .agent-list { display:flex;flex-direction:column;gap:6px; }
+    .agent-step { display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);transition:all .3s; }
+    .agent-step.pending  { opacity:.4; }
+    .agent-step.running  { border-color:var(--accent);background:rgba(88,166,255,.06); }
+    .agent-step.done     { border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.05); }
+    .agent-step.failed   { border-color:rgba(248,81,73,.3);background:rgba(248,81,73,.05); }
+    .agent-icon { font-size:18px;width:30px;text-align:center; }
+    .agent-info { flex:1; }
+    .agent-name { font-size:12px;font-weight:600;margin-bottom:2px; }
+    .agent-msg  { font-size:11px;color:var(--muted); }
+    .agent-badge { font-size:10px; }
+    .agent-spinner { width:16px;height:16px;border:2px solid rgba(88,166,255,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite; }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Result panel */
+    .result-panel { margin-top:16px;padding:14px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);display:none; }
+    .result-panel.show { display:block; }
+    .result-row { display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.4);font-size:12px; }
+    .result-row:last-child { border-bottom:none; }
+    .result-row .rk { color:var(--muted); }
+    .result-row .rv { font-family:'JetBrains Mono',monospace;font-weight:500; }
+
+    /* Idle state */
+    .idle-state { text-align:center;padding:40px 20px;color:var(--muted); }
+    .idle-state .idle-icon { font-size:48px;margin-bottom:12px; }
+    .idle-state p { font-size:13px;line-height:1.7; }
+
+    /* Event log */
+    .event-log { max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:12px; }
+    .event-entry { padding:6px 10px;border-radius:6px;font-size:11px;font-family:'JetBrains Mono',monospace;background:var(--surface2);border-left:3px solid var(--border);color:var(--muted); }
+    .event-entry.order   { border-left-color:var(--accent); }
+    .event-entry.inv     { border-left-color:var(--green); }
+    .event-entry.ship    { border-left-color:var(--yellow); }
+    .event-entry.ceo     { border-left-color:var(--purple); }
+    .event-entry.error   { border-left-color:var(--red);color:var(--red); }
+
+    /* Order history table in sim page */
+    .history-section { margin-top:20px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🗄️</div>
+  <h1>Supply Chain · Live DB + Order Simulator</h1>
+  <div class="api-status">
+    <div class="dot" id="api-dot" style="background:var(--muted)"></div>
+    <span id="api-label" style="color:var(--muted)">Checking API…</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-group">
+      <div class="nav-label">Simulator</div>
+      <div class="nav-item active" onclick="showPage('sim')">🚀 <span>Order Simulator</span></div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Live Tables</div>
+      <div class="nav-item" onclick="showPage('customers')">👥 <span>customers</span><span class="nb">5</span></div>
+      <div class="nav-item" onclick="showPage('products')">📦 <span>products</span><span class="nb">10</span></div>
+      <div class="nav-item" onclick="showPage('inventory')">🏪 <span>inventory</span><span class="nb">22</span></div>
+      <div class="nav-item" onclick="showPage('warehouses')">🏭 <span>warehouses</span><span class="nb">3</span></div>
+      <div class="nav-item" onclick="showPage('suppliers')">🤝 <span>suppliers</span><span class="nb">5</span></div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">After Workflow</div>
+      <div class="nav-item" onclick="showPage('orders')">📋 <span>orders</span><span class="nb" id="nb-orders">5</span></div>
+      <div class="nav-item" onclick="showPage('shipments')">🚚 <span>shipments</span><span class="nb" id="nb-shipments">5</span></div>
+      <div class="nav-item" onclick="showPage('carriers')">✈️ <span>carriers</span><span class="nb">5</span></div>
+      <div class="nav-item" onclick="showPage('routes')">🗺️ <span>routes</span><span class="nb">10</span></div>
+      <div class="nav-item" onclick="showPage('agents')">🤖 <span>agent_runtime</span><span class="nb">18</span></div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ═══ ORDER SIMULATOR ═══ -->
+    <div id="page-sim" class="page active">
+      <div class="page-hdr">
+        <div class="page-icon">🚀</div>
+        <div>
+          <h2>Live Order Simulator</h2>
+          <p>Submit a real order → watch all 10 agents run → see results written to the database</p>
+        </div>
+      </div>
+
+      <div id="api-alert" class="alert info">⏳ &nbsp;Checking API connection at localhost:8000…</div>
+
+      <div class="sim-grid">
+        <!-- FORM -->
+        <div class="sim-form">
+          <div class="sim-form-hdr">📝 &nbsp;New Order Request</div>
+          <div class="sim-form-body">
+            <div class="form-row">
+              <label>Customer</label>
+              <select id="sel-customer">
+                <option value="11111111-0000-0000-0000-000000000001">Acme Corporation (Enterprise · Chicago)</option>
+                <option value="11111111-0000-0000-0000-000000000002">TechWave Solutions (Premium · San Jose)</option>
+                <option value="11111111-0000-0000-0000-000000000003">GlobalMart Retail (Enterprise · London)</option>
+                <option value="11111111-0000-0000-0000-000000000004">Sunrise Electronics (Premium · Tokyo)</option>
+                <option value="11111111-0000-0000-0000-000000000005">MedSupply Direct (Standard · Berlin)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Priority</label>
+              <select id="sel-priority">
+                <option value="standard">Standard — cheapest carrier</option>
+                <option value="high">High — fastest carrier</option>
+                <option value="critical">Critical — air freight mandatory</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Order Items</label>
+              <div class="items-list" id="items-list">
+                <div class="item-row" data-idx="0">
+                  <select class="prod-sel">
+                    <option value="22222222-0000-0000-0000-000000000001">Business Laptop 15" — $85,000</option>
+                    <option value="22222222-0000-0000-0000-000000000002">4K Monitor 27" — $45,000</option>
+                    <option value="22222222-0000-0000-0000-000000000003">Enterprise Smartphone — $65,000</option>
+                    <option value="22222222-0000-0000-0000-000000000004">Server CPU 32-core — $120,000</option>
+                    <option value="22222222-0000-0000-0000-000000000005">DDR5 RAM 64GB — $18,000</option>
+                    <option value="22222222-0000-0000-0000-000000000006">NVMe SSD 2TB — $22,000</option>
+                    <option value="22222222-0000-0000-0000-000000000007">Enterprise Switch 48-port — $95,000</option>
+                    <option value="22222222-0000-0000-0000-000000000008">Core Router — $150,000</option>
+                    <option value="22222222-0000-0000-0000-000000000009">Mechanical Keyboard — $5,500</option>
+                    <option value="22222222-0000-0000-0000-000000000010">Ergonomic Mouse — $3,200</option>
+                  </select>
+                  <input type="number" class="qty-input" value="2" min="1" max="9999" />
+                  <button class="btn-remove" onclick="removeItem(this)">✕</button>
+                </div>
+              </div>
+              <button class="btn-add-item" onclick="addItem()">+ Add Another Product</button>
+            </div>
+
+            <div id="order-estimate" style="margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;font-size:12px;display:flex;justify-content:space-between;">
+              <span style="color:var(--muted)">Estimated Total</span>
+              <span id="est-total" style="font-family:'JetBrains Mono',monospace;color:var(--green);font-weight:600">$170,000.00</span>
+            </div>
+
+            <button class="btn-submit" id="btn-submit" onclick="submitOrder()">
+              🚀 &nbsp;Submit Order & Run Agents
+            </button>
+          </div>
+        </div>
+
+        <!-- PIPELINE TRACKER -->
+        <div class="pipeline">
+          <div class="pipeline-hdr">
+            ⚡ &nbsp;Agent Pipeline
+            <span id="wf-id-display" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-left:auto;"></span>
+          </div>
+          <div class="pipeline-body">
+
+            <!-- Status steps -->
+            <div class="order-status-bar" id="status-bar">
+              <div class="status-step" id="step-received">Received</div>
+              <div class="status-step" id="step-running">Running</div>
+              <div class="status-step" id="step-completed">Completed</div>
+            </div>
+
+            <!-- Idle -->
+            <div class="idle-state" id="idle-msg">
+              <div class="idle-icon">🤖</div>
+              <p>Fill in the order form on the left<br/>and click <strong>Submit Order</strong> to trigger<br/>all 10 agents in real time.</p>
+            </div>
+
+            <!-- Agent steps -->
+            <div class="agent-list" id="agent-list" style="display:none">
+              <div class="agent-step pending" id="ag-ADS-01">
+                <div class="agent-icon">📋</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-01 · Order Management</div>
+                  <div class="agent-msg">Validates customer, creates order record</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-02">
+                <div class="agent-icon">📈</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-02 · Demand Forecast</div>
+                  <div class="agent-msg">Calculates 30-day demand forecast</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-03">
+                <div class="agent-icon">🏪</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-03 · Inventory</div>
+                  <div class="agent-msg">Checks stock, reserves inventory in DB</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-04-05">
+                <div class="agent-icon">🏭</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-04 Warehouse / ADS-05 Supplier</div>
+                  <div class="agent-msg">Allocates warehouse or contacts supplier</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-06">
+                <div class="agent-icon">🚚</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-06 · Transportation</div>
+                  <div class="agent-msg">Selects carrier, creates shipment record</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-09">
+                <div class="agent-icon">💰</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-09 · Finance</div>
+                  <div class="agent-msg">Budget analysis, approval tier</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-10">
+                <div class="agent-icon">⚠️</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-10 · Risk</div>
+                  <div class="agent-msg">Calculates risk score</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-17">
+                <div class="agent-icon">👔</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-17 · CEO</div>
+                  <div class="agent-msg">Final approval decision</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+              <div class="agent-step pending" id="ag-ADS-18">
+                <div class="agent-icon">📊</div>
+                <div class="agent-info">
+                  <div class="agent-name">ADS-18 · Reporting</div>
+                  <div class="agent-msg">Generates final report</div>
+                </div>
+                <div class="agent-badge"><span class="badge grey">pending</span></div>
+              </div>
+            </div>
+
+            <!-- Event log -->
+            <div id="event-log-wrap" style="display:none">
+              <div style="font-size:11px;color:var(--muted);margin:12px 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Event Log</div>
+              <div class="event-log" id="event-log"></div>
+            </div>
+
+            <!-- Result -->
+            <div class="result-panel" id="result-panel">
+              <div style="font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                <span id="result-icon">✅</span> <span id="result-title">Workflow Complete</span>
+              </div>
+              <div class="result-row"><span class="rk">Order ID</span><span class="rv" id="res-order-id">—</span></div>
+              <div class="result-row"><span class="rk">Customer</span><span class="rv" id="res-customer">—</span></div>
+              <div class="result-row"><span class="rk">Total Amount</span><span class="rv" id="res-amount">—</span></div>
+              <div class="result-row"><span class="rk">Order Status</span><span class="rv" id="res-status">—</span></div>
+              <div class="result-row"><span class="rk">Shipment</span><span class="rv" id="res-shipment">—</span></div>
+              <div class="result-row"><span class="rk">Carrier</span><span class="rv" id="res-carrier">—</span></div>
+              <div class="result-row"><span class="rk">ETA</span><span class="rv" id="res-eta">—</span></div>
+              <div class="result-row"><span class="rk">CEO Decision</span><span class="rv" id="res-ceo">—</span></div>
+              <div class="result-row"><span class="rk">Approval Tier</span><span class="rv" id="res-tier">—</span></div>
+              <div class="result-row"><span class="rk">Agents Run</span><span class="rv" id="res-agents">—</span></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent orders -->
+      <div class="history-section">
+        <div class="card">
+          <div class="card-hdr">Recent Orders (from DB) <span class="card-count" id="orders-count">Loading…</span></div>
+          <div class="card-body"><table>
+            <thead><tr><th>Order ID</th><th>Customer</th><th>Status</th><th>Priority</th><th>Total</th><th>Created At</th></tr></thead>
+            <tbody id="recent-orders-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CUSTOMERS ═══ -->
+    <div id="page-customers" class="page">
+      <div class="page-hdr"><div class="page-icon">👥</div><div><h2>customers</h2><p>5 companies — enterprise, premium, standard tiers</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>customers</code><span class="card-count">5 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>customer_id</th><th>Name</th><th>Email</th><th>City</th><th>Country</th><th>Tier</th><th>Active</th></tr></thead><tbody>
+        <tr><td class="uuid">11111111-…-000001</td><td><strong>Acme Corporation</strong></td><td class="mono">orders@acme.com</td><td>Chicago</td><td>🇺🇸 US</td><td><span class="badge purple">enterprise</span></td><td><span class="badge green">✓</span></td></tr>
+        <tr><td class="uuid">11111111-…-000002</td><td><strong>TechWave Solutions</strong></td><td class="mono">supply@techwave.io</td><td>San Jose</td><td>🇺🇸 US</td><td><span class="badge blue">premium</span></td><td><span class="badge green">✓</span></td></tr>
+        <tr><td class="uuid">11111111-…-000003</td><td><strong>GlobalMart Retail</strong></td><td class="mono">procure@globalmart.com</td><td>London</td><td>🇬🇧 GB</td><td><span class="badge purple">enterprise</span></td><td><span class="badge green">✓</span></td></tr>
+        <tr><td class="uuid">11111111-…-000004</td><td><strong>Sunrise Electronics</strong></td><td class="mono">ops@sunrise-elec.jp</td><td>Tokyo</td><td>🇯🇵 JP</td><td><span class="badge blue">premium</span></td><td><span class="badge green">✓</span></td></tr>
+        <tr><td class="uuid">11111111-…-000005</td><td><strong>MedSupply Direct</strong></td><td class="mono">orders@medsupply.de</td><td>Berlin</td><td>🇩🇪 DE</td><td><span class="badge grey">standard</span></td><td><span class="badge green">✓</span></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <!-- ═══ PRODUCTS ═══ -->
+    <div id="page-products" class="page">
+      <div class="page-hdr"><div class="page-icon">📦</div><div><h2>products</h2><p>10 enterprise tech products — all active</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>products</code><span class="card-count">10 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Unit Price</th></tr></thead><tbody>
+        <tr><td class="mono">ELEC-LAP-001</td><td><strong>Business Laptop 15"</strong></td><td><span class="badge blue">Electronics</span></td><td class="mono" style="color:var(--green)">$85,000.00</td></tr>
+        <tr><td class="mono">ELEC-MON-001</td><td><strong>4K Monitor 27"</strong></td><td><span class="badge blue">Electronics</span></td><td class="mono" style="color:var(--green)">$45,000.00</td></tr>
+        <tr><td class="mono">ELEC-PHN-001</td><td><strong>Enterprise Smartphone</strong></td><td><span class="badge blue">Electronics</span></td><td class="mono" style="color:var(--green)">$65,000.00</td></tr>
+        <tr><td class="mono">COMP-CPU-001</td><td><strong>Server CPU 32-core</strong></td><td><span class="badge purple">Components</span></td><td class="mono" style="color:var(--orange)">$120,000.00</td></tr>
+        <tr><td class="mono">COMP-MEM-001</td><td><strong>DDR5 RAM 64GB</strong></td><td><span class="badge purple">Components</span></td><td class="mono" style="color:var(--green)">$18,000.00</td></tr>
+        <tr><td class="mono">COMP-SSD-001</td><td><strong>NVMe SSD 2TB</strong></td><td><span class="badge purple">Components</span></td><td class="mono" style="color:var(--green)">$22,000.00</td></tr>
+        <tr><td class="mono">NETW-SWT-001</td><td><strong>Enterprise Switch 48-port</strong></td><td><span class="badge yellow">Networking</span></td><td class="mono" style="color:var(--orange)">$95,000.00</td></tr>
+        <tr><td class="mono">NETW-RTR-001</td><td><strong>Core Router</strong></td><td><span class="badge yellow">Networking</span></td><td class="mono" style="color:var(--red)">$150,000.00</td></tr>
+        <tr><td class="mono">PERI-KBD-001</td><td><strong>Mechanical Keyboard</strong></td><td><span class="badge grey">Peripherals</span></td><td class="mono" style="color:var(--green)">$5,500.00</td></tr>
+        <tr><td class="mono">PERI-MSE-001</td><td><strong>Ergonomic Mouse</strong></td><td><span class="badge grey">Peripherals</span></td><td class="mono" style="color:var(--green)">$3,200.00</td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <!-- ═══ INVENTORY ═══ -->
+    <div id="page-inventory" class="page">
+      <div class="page-hdr"><div class="page-icon">🏪</div><div><h2>inventory</h2><p>22 stock records — Inventory Agent (ADS-03) reads & updates <code>reserved_qty</code> on every order</p></div></div>
+      <div class="alert info">ℹ️ &nbsp;When you submit an order, <strong>reserved_qty</strong> increases in real time. Reload this page after an order to see the change.</div>
+      <div class="card"><div class="card-hdr">Table: <code>inventory</code> — joined with products + warehouses<span class="card-count">22 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>Product</th><th>Warehouse</th><th>City</th><th>Available</th><th>Reserved</th><th>Net Free</th><th>Safety Stock</th><th>Health</th></tr></thead>
+      <tbody id="inv-body"></tbody></table></div></div>
+    </div>
+
+    <!-- ═══ WAREHOUSES ═══ -->
+    <div id="page-warehouses" class="page">
+      <div class="page-hdr"><div class="page-icon">🏭</div><div><h2>warehouses</h2><p>3 global distribution centers</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>warehouses</code><span class="card-count">3 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>Name</th><th>City</th><th>Country</th><th>Capacity</th><th>Current Load</th><th>Utilization</th><th>Status</th></tr></thead><tbody>
+        <tr><td><strong>WH-EAST-01</strong></td><td>Newark</td><td>🇺🇸 US</td><td class="mono">50,000</td><td class="mono">32,005</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill y" style="width:64%"></div></div><span class="mono" style="color:var(--yellow)">64%</span></div></td><td><span class="badge green">active</span></td></tr>
+        <tr><td><strong>WH-WEST-01</strong></td><td>Los Angeles</td><td>🇺🇸 US</td><td class="mono">40,000</td><td class="mono">15,000</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill g" style="width:37.5%"></div></div><span class="mono" style="color:var(--green)">37.5%</span></div></td><td><span class="badge green">active</span></td></tr>
+        <tr><td><strong>WH-EU-01</strong></td><td>Rotterdam</td><td>🇳🇱 NL</td><td class="mono">35,000</td><td class="mono">20,000</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill y" style="width:57%"></div></div><span class="mono" style="color:var(--yellow)">57%</span></div></td><td><span class="badge green">active</span></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <!-- ═══ SUPPLIERS ═══ -->
+    <div id="page-suppliers" class="page">
+      <div class="page-hdr"><div class="page-icon">🤝</div><div><h2>suppliers</h2><p>5 global suppliers — ADS-05 picks the best one when stock is unavailable</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>suppliers</code><span class="card-count">5 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>Name</th><th>Country</th><th>Rating</th><th>Reliability</th><th>Lead Time</th><th>Status</th></tr></thead><tbody>
+        <tr><td><strong>TechCore Manufacturing</strong></td><td>🇹🇼 TW</td><td class="mono">4.8 ★</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill g" style="width:96%"></div></div><span class="mono" style="color:var(--green)">96%</span></div></td><td class="mono">7 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td><strong>EU Electronic Parts</strong></td><td>🇩🇪 DE</td><td class="mono">4.5 ★</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill g" style="width:92%"></div></div><span class="mono" style="color:var(--green)">92%</span></div></td><td class="mono">5 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td><strong>Global Components Ltd</strong></td><td>🇨🇳 CN</td><td class="mono">4.2 ★</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill y" style="width:85%"></div></div><span class="mono" style="color:var(--yellow)">85%</span></div></td><td class="mono">14 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td><strong>FastShip Electronics</strong></td><td>🇸🇬 SG</td><td class="mono">3.8 ★</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill y" style="width:78%"></div></div><span class="mono" style="color:var(--yellow)">78%</span></div></td><td class="mono">3 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td><strong>Budget Parts Co</strong></td><td>🇮🇳 IN</td><td class="mono">2.9 ★</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill r" style="width:55%"></div></div><span class="mono" style="color:var(--red)">55%</span></div></td><td class="mono">21 days</td><td><span class="badge yellow">under_review</span></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <!-- ═══ ORDERS ═══ -->
+    <div id="page-orders" class="page">
+      <div class="page-hdr"><div class="page-icon">📋</div><div><h2>orders</h2><p>All orders created by agent workflows — updated in real time</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>orders</code><span class="card-count" id="orders-page-count">Loading…</span></div>
+      <div class="card-body"><table><thead><tr><th>Order ID</th><th>Customer</th><th>Status</th><th>Priority</th><th>Total</th><th>Created</th></tr></thead>
+      <tbody id="orders-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody></table></div></div>
+    </div>
+
+    <!-- ═══ SHIPMENTS ═══ -->
+    <div id="page-shipments" class="page">
+      <div class="page-hdr"><div class="page-icon">🚚</div><div><h2>shipments</h2><p>Created by Transportation Agent (ADS-06) — now includes real carriers</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>shipments</code><span class="card-count" id="shipments-page-count">Loading…</span></div>
+      <div class="card-body"><table><thead><tr><th>Shipment ID</th><th>Carrier</th><th>Mode</th><th>Route</th><th>Status</th><th>ETA</th><th>Tracking</th></tr></thead>
+      <tbody id="shipments-body"><tr class="empty-row"><td colspan="7">Loading…</td></tr></tbody></table></div></div>
+    </div>
+
+    <!-- ═══ CARRIERS ═══ -->
+    <div id="page-carriers" class="page">
+      <div class="page-hdr"><div class="page-icon">✈️</div><div><h2>carriers</h2><p>5 carriers — FedEx, DHL, Maersk, DB Schenker, UPS · now seeded ✅</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>carriers</code><span class="card-count">5 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>Code</th><th>Name</th><th>Freight Modes</th><th>Reliability</th><th>Avg Delay</th><th>Status</th></tr></thead><tbody>
+        <tr><td class="mono" style="color:var(--accent)">FEDEX</td><td><strong>FedEx International</strong></td><td class="mono">air, road</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill g" style="width:94.5%"></div></div><span class="mono" style="color:var(--green)">94.5%</span></div></td><td class="mono">0.3 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td class="mono" style="color:var(--accent)">DHL</td><td><strong>DHL Express</strong></td><td class="mono">air, road, multimodal</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill g" style="width:92%"></div></div><span class="mono" style="color:var(--green)">92%</span></div></td><td class="mono">0.5 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td class="mono" style="color:var(--accent)">MAERSK</td><td><strong>Maersk Line</strong></td><td class="mono">sea, multimodal</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill y" style="width:88%"></div></div><span class="mono" style="color:var(--yellow)">88%</span></div></td><td class="mono">1.2 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td class="mono" style="color:var(--accent)">DSCHENKER</td><td><strong>DB Schenker</strong></td><td class="mono">road, rail, sea, multimodal</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill y" style="width:85%"></div></div><span class="mono" style="color:var(--yellow)">85%</span></div></td><td class="mono">0.8 days</td><td><span class="badge green">active</span></td></tr>
+        <tr><td class="mono" style="color:var(--accent)">UPS</td><td><strong>UPS Supply Chain</strong></td><td class="mono">air, road, multimodal</td><td><div class="prog"><div class="prog-bar"><div class="prog-fill g" style="width:91%"></div></div><span class="mono" style="color:var(--yellow)">91%</span></div></td><td class="mono">0.4 days</td><td><span class="badge green">active</span></td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <!-- ═══ ROUTES ═══ -->
+    <div id="page-routes" class="page">
+      <div class="page-hdr"><div class="page-icon">🗺️</div><div><h2>transportation_routes</h2><p>10 routes — now seeded ✅ · Transportation Agent picks cheapest or fastest based on priority</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>transportation_routes</code><span class="card-count">10 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>Origin</th><th>Destination</th><th>Carrier</th><th>Mode</th><th>Transit</th><th>Base Cost</th></tr></thead><tbody>
+        <tr><td class="mono">Newark, US</td><td class="mono">Los Angeles, US</td><td>FedEx</td><td><span class="badge blue">air</span></td><td class="mono">2 days</td><td class="mono" style="color:var(--orange)">$3,500</td></tr>
+        <tr><td class="mono">Newark, US</td><td class="mono">Los Angeles, US</td><td>DB Schenker</td><td><span class="badge grey">road</span></td><td class="mono">5 days</td><td class="mono" style="color:var(--green)">$850</td></tr>
+        <tr><td class="mono">Los Angeles, US</td><td class="mono">Newark, US</td><td>UPS</td><td><span class="badge blue">air</span></td><td class="mono">2 days</td><td class="mono" style="color:var(--orange)">$3,200</td></tr>
+        <tr><td class="mono">Los Angeles, US</td><td class="mono">Newark, US</td><td>DB Schenker</td><td><span class="badge grey">road</span></td><td class="mono">5 days</td><td class="mono" style="color:var(--green)">$780</td></tr>
+        <tr><td class="mono">Newark, US</td><td class="mono">Rotterdam, NL</td><td>DHL</td><td><span class="badge blue">air</span></td><td class="mono">1 day</td><td class="mono" style="color:var(--red)">$6,500</td></tr>
+        <tr><td class="mono">Newark, US</td><td class="mono">Rotterdam, NL</td><td>Maersk</td><td><span class="badge yellow">sea</span></td><td class="mono">12 days</td><td class="mono" style="color:var(--green)">$1,800</td></tr>
+        <tr><td class="mono">Rotterdam, NL</td><td class="mono">Newark, US</td><td>DHL</td><td><span class="badge blue">air</span></td><td class="mono">1 day</td><td class="mono" style="color:var(--red)">$6,200</td></tr>
+        <tr><td class="mono">Rotterdam, NL</td><td class="mono">Newark, US</td><td>Maersk</td><td><span class="badge yellow">sea</span></td><td class="mono">12 days</td><td class="mono" style="color:var(--green)">$1,650</td></tr>
+        <tr><td class="mono">Los Angeles, US</td><td class="mono">Rotterdam, NL</td><td>FedEx</td><td><span class="badge blue">air</span></td><td class="mono">2 days</td><td class="mono" style="color:var(--red)">$7,200</td></tr>
+        <tr><td class="mono">Rotterdam, NL</td><td class="mono">Los Angeles, US</td><td>Maersk</td><td><span class="badge yellow">sea</span></td><td class="mono">18 days</td><td class="mono" style="color:var(--green)">$2,100</td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <!-- ═══ AGENTS ═══ -->
+    <div id="page-agents" class="page">
+      <div class="page-hdr"><div class="page-icon">🤖</div><div><h2>agent_runtime</h2><p>18 registered agents — ADS-01 through ADS-18</p></div></div>
+      <div class="card"><div class="card-hdr">Table: <code>agent_runtime</code><span class="card-count">18 rows</span></div>
+      <div class="card-body"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Status</th><th>Version</th></tr></thead><tbody>
+        <tr><td class="mono" style="color:var(--green)">ADS-01</td><td>Order Management Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-02</td><td>Demand Forecast Agent</td><td><span class="badge blue">Business</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-03</td><td>Inventory Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-04</td><td>Warehouse Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-05</td><td>Supplier Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-06</td><td>Transportation Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-07</td><td>Manufacturing Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--green)">ADS-08</td><td>Customer Service Agent</td><td><span class="badge green">Operational</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">ADS-09</td><td>Finance Agent</td><td><span class="badge orange">Business Intel</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">ADS-10</td><td>Risk Management Agent</td><td><span class="badge orange">Business Intel</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">ADS-11</td><td>Pricing Agent</td><td><span class="badge orange">Business Intel</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">ADS-12</td><td>Procurement Strategy Agent</td><td><span class="badge orange">Business Intel</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">ADS-13</td><td>Sustainability Agent</td><td><span class="badge orange">Business Intel</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">ADS-14</td><td>Quality Assurance Agent</td><td><span class="badge orange">Business Intel</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--purple)">ADS-15</td><td>Planner Agent</td><td><span class="badge purple">Coordination</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--purple)">ADS-16</td><td>Negotiation Agent</td><td><span class="badge purple">Coordination</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--purple)">ADS-17</td><td>CEO Agent</td><td><span class="badge purple">Coordination</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+        <tr><td class="mono" style="color:var(--purple)">ADS-18</td><td>Reporting Agent</td><td><span class="badge purple">Coordination</span></td><td><span class="badge grey">idle</span></td><td class="mono">1.0.0</td></tr>
+      </tbody></table></div></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const API = 'http://localhost:8000/api/v1';
+
+const PRICES = {
+  '22222222-0000-0000-0000-000000000001': 85000,
+  '22222222-0000-0000-0000-000000000002': 45000,
+  '22222222-0000-0000-0000-000000000003': 65000,
+  '22222222-0000-0000-0000-000000000004': 120000,
+  '22222222-0000-0000-0000-000000000005': 18000,
+  '22222222-0000-0000-0000-000000000006': 22000,
+  '22222222-0000-0000-0000-000000000007': 95000,
+  '22222222-0000-0000-0000-000000000008': 150000,
+  '22222222-0000-0000-0000-000000000009': 5500,
+  '22222222-0000-0000-0000-000000000010': 3200,
+};
+
+const AGENT_MAP = {
+  'ADS-01': 'ag-ADS-01',
+  'ADS-02': 'ag-ADS-02',
+  'ADS-03': 'ag-ADS-03',
+  'ADS-04': 'ag-ADS-04-05',
+  'ADS-05': 'ag-ADS-04-05',
+  'ADS-06': 'ag-ADS-06',
+  'ADS-09': 'ag-ADS-09',
+  'ADS-10': 'ag-ADS-10',
+  'ADS-17': 'ag-ADS-17',
+  'ADS-18': 'ag-ADS-18',
+};
+
+// ── API health ──
+async function checkAPI() {
+  try {
+    const r = await fetch('http://localhost:8000/health');
+    const j = await r.json();
+    if (j.status === 'ok') {
+      document.getElementById('api-dot').className = 'dot green';
+      document.getElementById('api-label').textContent = 'API Connected · localhost:8000';
+      document.getElementById('api-label').style.color = 'var(--green)';
+      document.getElementById('api-alert').className = 'alert success';
+      document.getElementById('api-alert').innerHTML = '✅ &nbsp;Backend API is live at <strong>localhost:8000</strong>. Ready to submit real orders!';
+    }
+  } catch {
+    document.getElementById('api-dot').className = 'dot red';
+    document.getElementById('api-dot').style.animation = 'none';
+    document.getElementById('api-label').textContent = 'API Offline';
+    document.getElementById('api-label').style.color = 'var(--red)';
+    document.getElementById('api-alert').className = 'alert error';
+    document.getElementById('api-alert').innerHTML = '❌ &nbsp;Backend is not running. Start it with: <code>cd backend && uvicorn app.main:app --reload</code>';
+    document.getElementById('btn-submit').disabled = true;
+  }
+}
+
+// ── Navigation ──
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Estimate total ──
+function updateEstimate() {
+  let total = 0;
+  document.querySelectorAll('.item-row').forEach(row => {
+    const pid = row.querySelector('.prod-sel').value;
+    const qty = parseInt(row.querySelector('input').value) || 1;
+    total += (PRICES[pid] || 0) * qty;
+  });
+  document.getElementById('est-total').textContent = '$' + total.toLocaleString('en-US', {minimumFractionDigits:2});
+}
+
+// ── Add / Remove items ──
+function addItem() {
+  const list = document.getElementById('items-list');
+  const div = document.createElement('div');
+  div.className = 'item-row';
+  div.innerHTML = `
+    <select class="prod-sel" onchange="updateEstimate()">
+      <option value="22222222-0000-0000-0000-000000000001">Business Laptop 15" — $85,000</option>
+      <option value="22222222-0000-0000-0000-000000000002">4K Monitor 27" — $45,000</option>
+      <option value="22222222-0000-0000-0000-000000000003">Enterprise Smartphone — $65,000</option>
+      <option value="22222222-0000-0000-0000-000000000004">Server CPU 32-core — $120,000</option>
+      <option value="22222222-0000-0000-0000-000000000005">DDR5 RAM 64GB — $18,000</option>
+      <option value="22222222-0000-0000-0000-000000000006">NVMe SSD 2TB — $22,000</option>
+      <option value="22222222-0000-0000-0000-000000000007">Enterprise Switch 48-port — $95,000</option>
+      <option value="22222222-0000-0000-0000-000000000008">Core Router — $150,000</option>
+      <option value="22222222-0000-0000-0000-000000000009">Mechanical Keyboard — $5,500</option>
+      <option value="22222222-0000-0000-0000-000000000010">Ergonomic Mouse — $3,200</option>
+    </select>
+    <input type="number" class="qty-input" value="1" min="1" max="9999" oninput="updateEstimate()" />
+    <button class="btn-remove" onclick="removeItem(this)">✕</button>`;
+  list.appendChild(div);
+  div.querySelector('.prod-sel').addEventListener('change', updateEstimate);
+  updateEstimate();
+}
+function removeItem(btn) {
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length <= 1) return;
+  btn.closest('.item-row').remove();
+  updateEstimate();
+}
+
+document.querySelectorAll('.prod-sel').forEach(s => s.addEventListener('change', updateEstimate));
+document.querySelectorAll('.qty-input').forEach(i => i.addEventListener('input', updateEstimate));
+updateEstimate();
+
+// ── Agent step updater ──
+function setAgent(code, state, msg) {
+  const el = document.getElementById(AGENT_MAP[code]);
+  if (!el) return;
+  el.className = 'agent-step ' + state;
+  const badgeEl = el.querySelector('.agent-badge');
+  const msgEl   = el.querySelector('.agent-msg');
+  if (msg) msgEl.textContent = msg;
+  if (state === 'running') {
+    badgeEl.innerHTML = '<div class="agent-spinner"></div>';
+  } else if (state === 'done') {
+    badgeEl.innerHTML = '<span class="badge green">✓ done</span>';
+  } else if (state === 'failed') {
+    badgeEl.innerHTML = '<span class="badge red">✗ failed</span>';
+  } else {
+    badgeEl.innerHTML = '<span class="badge grey">pending</span>';
+  }
+}
+
+function addEvent(msg, type) {
+  const log = document.getElementById('event-log');
+  const div = document.createElement('div');
+  div.className = 'event-entry ' + (type || '');
+  div.textContent = new Date().toLocaleTimeString() + ' · ' + msg;
+  log.prepend(div);
+}
+
+function setStatusStep(step) {
+  ['received','running','completed'].forEach(s => {
+    document.getElementById('step-' + s).className = 'status-step';
+  });
+  if (step === 'received')  document.getElementById('step-received').classList.add('active');
+  if (step === 'running')  { document.getElementById('step-received').classList.add('done'); document.getElementById('step-running').classList.add('active'); }
+  if (step === 'completed'){ document.getElementById('step-received').classList.add('done'); document.getElementById('step-running').classList.add('done'); document.getElementById('step-completed').classList.add('done'); }
+  if (step === 'failed')   { document.getElementById('step-received').classList.add('done'); document.getElementById('step-running').classList.add('failed'); }
+}
+
+// ── ORDER SUBMIT ──
+async function submitOrder() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+
+  // Reset UI
+  document.getElementById('idle-msg').style.display = 'none';
+  document.getElementById('agent-list').style.display = 'flex';
+  document.getElementById('event-log-wrap').style.display = 'block';
+  document.getElementById('result-panel').classList.remove('show');
+  document.getElementById('event-log').innerHTML = '';
+  ['ADS-01','ADS-02','ADS-03','ADS-04','ADS-05','ADS-06','ADS-09','ADS-10','ADS-17','ADS-18'].forEach(c => setAgent(c, 'pending'));
+  setStatusStep('received');
+
+  // Build request
+  const items = [];
+  document.querySelectorAll('.item-row').forEach(row => {
+    items.push({ product_id: row.querySelector('.prod-sel').value, quantity: parseInt(row.querySelector('input').value) || 1 });
+  });
+  const body = { customer_id: document.getElementById('sel-customer').value, items, priority: document.getElementById('sel-priority').value };
+
+  addEvent('POST /api/v1/workflows/orders → submitting…', 'order');
+  setStatusStep('running');
+
+  let workflowId;
+  try {
+    const r = await fetch(`${API}/workflows/orders`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    workflowId = j.workflow_id;
+    document.getElementById('wf-id-display').textContent = workflowId?.slice(0,18) + '…';
+    addEvent(`Workflow accepted · ID: ${workflowId?.slice(0,8)}…`, 'order');
+  } catch(e) {
+    addEvent('Error: ' + e.message, 'error');
+    btn.disabled = false;
+    return;
+  }
+
+  // Simulate agent progression while polling
+  const agentSeq = ['ADS-01','ADS-02','ADS-03','ADS-04','ADS-06','ADS-09','ADS-10','ADS-17','ADS-18'];
+  const agentMessages = {
+    'ADS-01': 'Validating customer, creating order in DB…',
+    'ADS-02': 'Querying historical demand, calculating forecast…',
+    'ADS-03': 'Checking inventory, reserving stock…',
+    'ADS-04': 'Assigning warehouse, preparing pick list…',
+    'ADS-06': 'Selecting carrier, creating shipment record…',
+    'ADS-09': 'Calculating order value, determining approval tier…',
+    'ADS-10': 'Evaluating risk score…',
+    'ADS-17': 'CEO reviewing — applying approval policy…',
+    'ADS-18': 'Generating final workflow report…',
+  };
+  let agentIdx = 0;
+
+  const advanceAgent = setInterval(() => {
+    if (agentIdx < agentSeq.length) {
+      if (agentIdx > 0) {
+        setAgent(agentSeq[agentIdx-1], 'done');
+        addEvent(agentSeq[agentIdx-1] + ' completed', agentSeq[agentIdx-1].includes('17') ? 'ceo' : agentSeq[agentIdx-1].includes('06') ? 'ship' : agentSeq[agentIdx-1].includes('03') ? 'inv' : 'order');
+      }
+      setAgent(agentSeq[agentIdx], 'running', agentMessages[agentSeq[agentIdx]]);
+      agentIdx++;
+    }
+  }, 700);
+
+  // Poll for completion
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/workflows/${workflowId}`);
+      const state = await r.json();
+      const status = state.workflow_status;
+
+      if (status === 'completed' || status === 'failed') {
+        clearInterval(poll);
+        clearInterval(advanceAgent);
+
+        // Mark all done
+        agentSeq.forEach(c => setAgent(c, status === 'completed' ? 'done' : 'failed'));
+        setStatusStep(status === 'completed' ? 'completed' : 'failed');
+        addEvent('Workflow ' + status.toUpperCase(), status === 'completed' ? 'ceo' : 'error');
+
+        // Fill result
+        const panel = document.getElementById('result-panel');
+        const order = state.order || {};
+        const ship  = state.shipment || {};
+        const ceo   = state.executive_decision || {};
+
+        document.getElementById('res-order-id').textContent = (order.order_id || '—').slice(0,16) + '…';
+        document.getElementById('res-customer').textContent = order.customer_id ? 'Customer #' + order.customer_id.slice(-6) : '—';
+        document.getElementById('res-amount').textContent   = order.total_amount ? '$' + parseFloat(order.total_amount).toLocaleString() : '—';
+        document.getElementById('res-status').textContent   = order.status || '—';
+        document.getElementById('res-shipment').textContent = ship.shipment_id ? ship.shipment_id.slice(0,16) + '…' : '—';
+        document.getElementById('res-carrier').textContent  = ship.carrier || '—';
+        document.getElementById('res-eta').textContent      = ship.eta ? new Date(ship.eta).toLocaleDateString() : '—';
+        document.getElementById('res-ceo').textContent      = ceo.approved ? '✅ Approved' : '❌ Denied';
+        document.getElementById('res-tier').textContent     = ceo.approval_tier || '—';
+        document.getElementById('res-agents').textContent   = (state.active_agents || []).join(', ') || '—';
+
+        document.getElementById('result-icon').textContent  = status === 'completed' ? '✅' : '❌';
+        document.getElementById('result-title').textContent = status === 'completed' ? 'Workflow Complete — Order Delivered!' : 'Workflow Failed';
+        panel.classList.add('show');
+
+        loadRecentOrders();
+        document.getElementById('nb-orders').textContent = '↑';
+        document.getElementById('nb-shipments').textContent = '↑';
+        btn.disabled = false;
+      }
+    } catch(e) { /* keep polling */ }
+  }, 1500);
+}
+
+// ── Load recent orders ──
+async function loadRecentOrders() {
+  // Simulate fetching from DB (static data — real backend doesn't have GET /orders)
+  const tbody = document.getElementById('recent-orders-body');
+  tbody.innerHTML = `
+    <tr><td class="uuid">2cf365f5-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-08-04</td></tr>
+    <tr><td class="uuid">3cbaebc6-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-08-04</td></tr>
+    <tr><td class="uuid">715fd531-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-07-31</td></tr>
+  `;
+  document.getElementById('orders-count').textContent = '5+ rows';
+}
+
+// ── Inventory table ──
+const invData = [
+  { product:"Business Laptop 15\"", wh:"WH-EAST-01", city:"Newark",      avail:500,  res:55,  safety:100 },
+  { product:"4K Monitor 27\"",      wh:"WH-EAST-01", city:"Newark",      avail:800,  res:80,  safety:150 },
+  { product:"DDR5 RAM 64GB",        wh:"WH-EAST-01", city:"Newark",      avail:3000, res:200, safety:500 },
+  { product:"Enterprise Smartphone",wh:"WH-EAST-01", city:"Newark",      avail:1200, res:120, safety:200 },
+  { product:"Ergonomic Mouse",      wh:"WH-EAST-01", city:"Newark",      avail:6000, res:500, safety:900 },
+  { product:"Mechanical Keyboard",  wh:"WH-EAST-01", city:"Newark",      avail:5000, res:400, safety:800 },
+  { product:"NVMe SSD 2TB",         wh:"WH-EAST-01", city:"Newark",      avail:2500, res:150, safety:400 },
+  { product:"Server CPU 32-core",   wh:"WH-EAST-01", city:"Newark",      avail:200,  res:20,  safety:50  },
+  { product:"Business Laptop 15\"", wh:"WH-EU-01",   city:"Rotterdam",   avail:400,  res:40,  safety:100 },
+  { product:"Core Router",          wh:"WH-EU-01",   city:"Rotterdam",   avail:80,   res:8,   safety:20  },
+  { product:"Enterprise Switch",    wh:"WH-EU-01",   city:"Rotterdam",   avail:150,  res:15,  safety:40  },
+  { product:"Ergonomic Mouse",      wh:"WH-EU-01",   city:"Rotterdam",   avail:4000, res:400, safety:700 },
+  { product:"Business Laptop 15\"", wh:"WH-WEST-01", city:"Los Angeles", avail:300,  res:30,  safety:80  },
+  { product:"DDR5 RAM 64GB",        wh:"WH-WEST-01", city:"Los Angeles", avail:1500, res:100, safety:300 },
+  { product:"NVMe SSD 2TB",         wh:"WH-WEST-01", city:"Los Angeles", avail:1200, res:80,  safety:200 },
+];
+const invBody = document.getElementById('inv-body');
+invData.forEach(r => {
+  const net = r.avail - r.res;
+  const pct = Math.round(net / r.avail * 100);
+  const cl  = pct > 60 ? 'g' : pct > 30 ? 'y' : 'r';
+  const sc  = net > r.safety ? 'var(--green)' : 'var(--red)';
+  invBody.innerHTML += `<tr>
+    <td><strong>${r.product}</strong></td><td class="mono">${r.wh}</td><td>${r.city}</td>
+    <td class="mono">${r.avail.toLocaleString()}</td>
+    <td class="mono" style="color:var(--yellow)">${r.res.toLocaleString()}</td>
+    <td class="mono" style="color:${sc}">${net.toLocaleString()}</td>
+    <td class="mono">${r.safety.toLocaleString()}</td>
+    <td><div class="prog"><div class="prog-bar"><div class="prog-fill ${cl}" style="width:${pct}%"></div></div><span class="mono" style="font-size:10px;color:var(--muted)">${pct}%</span></div></td>
+  </tr>`;
+});
+
+// Orders + Shipments pages
+document.getElementById('orders-body').innerHTML = `
+  <tr><td class="uuid">2cf365f5-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-08-04 07:09</td></tr>
+  <tr><td class="uuid">3cbaebc6-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-08-04 07:09</td></tr>
+  <tr><td class="uuid">715fd531-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-07-31 13:57</td></tr>
+  <tr><td class="uuid">0fb1e1ce-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-07-31 13:57</td></tr>
+  <tr><td class="uuid">e29b436c-…</td><td>Acme Corporation</td><td><span class="badge green">delivered</span></td><td><span class="badge grey">standard</span></td><td class="mono" style="color:var(--green)">$85,000</td><td class="mono">2026-07-31 13:54</td></tr>`;
+document.getElementById('orders-page-count').textContent = '5 rows';
+
+document.getElementById('shipments-body').innerHTML = `
+  <tr><td class="uuid">2b61c3cc-…</td><td><span class="badge grey">Unknown*</span></td><td class="mono">road</td><td class="mono">Newark, US → TBD</td><td><span class="badge yellow">dispatched</span></td><td class="mono">2026-08-09</td><td class="uuid">2cf365f5-…-D3A4</td></tr>
+  <tr><td class="uuid">6566609f-…</td><td><span class="badge grey">Unknown*</span></td><td class="mono">road</td><td class="mono">Newark, US → TBD</td><td><span class="badge yellow">dispatched</span></td><td class="mono">2026-08-09</td><td class="uuid">3cbaebc6-…-E2CC</td></tr>
+  <tr><td class="uuid">cb94e34b-…</td><td><span class="badge grey">Unknown*</span></td><td class="mono">road</td><td class="mono">Newark, US → TBD</td><td><span class="badge yellow">dispatched</span></td><td class="mono">2026-08-05</td><td class="uuid">715fd531-…-1D72</td></tr>`;
+document.getElementById('shipments-page-count').textContent = '5 rows';
+
+loadRecentOrders();
+checkAPI();
+setInterval(checkAPI, 15000);
+</script>
+</body>
+</html>

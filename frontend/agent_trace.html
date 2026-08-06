@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supply Chain — Agent Trace Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0d1117; --surface:#161b22; --surface2:#1c2128; --surface3:#21262d;
+      --border:#30363d; --text:#e6edf3; --muted:#7d8590;
+      --accent:#58a6ff; --green:#3fb950; --yellow:#d29922;
+      --red:#f85149; --purple:#bc8cff; --orange:#ffa657; --teal:#39d353;
+    }
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+
+    /* HEADER */
+    header { background:var(--surface); border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:200; }
+    .logo { width:34px; height:34px; background:linear-gradient(135deg,#6e40c9,#bc8cff); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; }
+    header h1 { font-size:16px; font-weight:600; }
+    .api-badge { margin-left:auto; display:flex; align-items:center; gap:7px; font-size:12px; font-family:'JetBrains Mono',monospace; }
+    .dot { width:7px; height:7px; border-radius:50%; }
+    .dot.on  { background:var(--green); animation:pulse 2s infinite; }
+    .dot.off { background:var(--red); }
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* LAYOUT */
+    .container { max-width:1400px; margin:0 auto; padding:24px 28px; }
+
+    /* TOP ROW: Submit + Workflow ID input */
+    .top-row { display:grid; grid-template-columns:1fr auto; gap:16px; margin-bottom:24px; align-items:start; }
+    .submit-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .submit-card h2 { font-size:15px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px; }
+    label { display:block; font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:5px; }
+    select, input[type=text], input[type=number] {
+      width:100%; padding:8px 12px; background:var(--surface2); border:1px solid var(--border);
+      border-radius:8px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color .2s;
+    }
+    select:focus, input:focus { border-color:var(--accent); }
+    .items-row { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+    .item-chip { display:flex; gap:6px; align-items:center; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 10px; }
+    .item-chip select { padding:4px 8px; font-size:12px; background:transparent; border:none; }
+    .item-chip input { width:60px; padding:4px 8px; font-size:12px; }
+    .btn-rm { background:rgba(248,81,73,.15); border:none; color:var(--red); border-radius:5px; width:22px; height:22px; cursor:pointer; font-size:12px; }
+    .btn-add { background:rgba(88,166,255,.08); border:1px dashed rgba(88,166,255,.3); border-radius:8px; color:var(--accent); font-size:12px; padding:6px 12px; cursor:pointer; white-space:nowrap; }
+    .btn-run { background:linear-gradient(135deg,#6e40c9,#bc8cff); border:none; border-radius:9px; color:#fff; font-size:13px; font-weight:600; padding:10px 20px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:all .2s; }
+    .btn-run:hover { filter:brightness(1.1); transform:translateY(-1px); }
+    .btn-run:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+    .wf-lookup { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; min-width:280px; }
+    .wf-lookup h2 { font-size:13px; font-weight:600; margin-bottom:12px; color:var(--muted); }
+    .btn-load { width:100%; margin-top:8px; padding:9px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer; transition:background .2s; }
+    .btn-load:hover { background:var(--surface3); }
+
+    /* TIMELINE HEADER */
+    .timeline-header { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+    .wf-meta { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 18px; display:flex; gap:24px; flex:1; }
+    .wf-meta-item { font-size:12px; }
+    .wf-meta-item .mk { color:var(--muted); margin-bottom:2px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+    .wf-meta-item .mv { font-family:'JetBrains Mono',monospace; font-weight:500; }
+
+    /* MAIN TRACE AREA */
+    .trace-layout { display:grid; grid-template-columns:260px 1fr; gap:16px; }
+
+    /* AGENT SIDEBAR */
+    .agent-sidebar { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; height:fit-content; position:sticky; top:77px; }
+    .agent-sidebar-hdr { padding:12px 16px; border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; }
+    .agent-btn { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; border-bottom:1px solid rgba(48,54,61,.4); transition:all .15s; border-left:3px solid transparent; }
+    .agent-btn:last-child { border-bottom:none; }
+    .agent-btn:hover { background:var(--surface2); }
+    .agent-btn.active { background:rgba(88,166,255,.06); border-left-color:var(--accent); }
+    .agent-btn.status-ok   { }
+    .agent-btn.status-fail { border-left-color:var(--red) !important; }
+    .agent-btn .ab-icon { font-size:16px; width:24px; text-align:center; }
+    .agent-btn .ab-info { flex:1; }
+    .agent-btn .ab-code { font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted); }
+    .agent-btn .ab-name { font-size:12px; font-weight:500; }
+    .agent-btn .ab-dur  { font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--muted); margin-left:auto; }
+    .agent-btn .ab-badge { display:inline-flex; align-items:center; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:500; }
+    .ab-badge.ok { background:rgba(63,185,80,.15); color:var(--green); }
+    .ab-badge.fail { background:rgba(248,81,73,.15); color:var(--red); }
+
+    /* DETAIL PANEL */
+    .detail-panel { display:flex; flex-direction:column; gap:14px; }
+
+    /* Empty / loading */
+    .empty-state { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:60px; text-align:center; color:var(--muted); }
+    .empty-state .es-icon { font-size:48px; margin-bottom:14px; }
+    .empty-state p { font-size:13px; line-height:1.8; }
+
+    /* SECTION CARD */
+    .sec { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .sec-hdr { padding:12px 18px; border-bottom:1px solid var(--border); font-size:12px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    .sec-hdr .sh-label { color:var(--muted); font-weight:400; margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; }
+    .sec-body { padding:16px 18px; }
+
+    /* KV rows */
+    .kv-grid { display:grid; grid-template-columns:180px 1fr; gap:4px 16px; }
+    .kv-k { font-size:11px; color:var(--muted); padding:5px 0; border-bottom:1px solid rgba(48,54,61,.3); }
+    .kv-v { font-size:12px; font-family:'JetBrains Mono',monospace; padding:5px 0; border-bottom:1px solid rgba(48,54,61,.3); word-break:break-all; }
+    .kv-k:last-of-type, .kv-v:last-of-type { border-bottom:none; }
+
+    /* JSON viewer */
+    .json-wrap { background:var(--surface2); border-radius:8px; padding:14px; overflow-x:auto; max-height:380px; overflow-y:auto; }
+    .json-wrap pre { font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.7; white-space:pre-wrap; }
+    .j-key    { color:#79c0ff; }
+    .j-str    { color:#a5d6ff; }
+    .j-num    { color:#ffa657; }
+    .j-bool   { color:#ff7b72; }
+    .j-null   { color:#8b949e; }
+
+    /* Timeline bar */
+    .timeline-bar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:var(--surface2); margin-bottom:16px; }
+    .timeline-seg { height:100%; transition:flex .3s; }
+    .timeline-seg:hover { filter:brightness(1.3); }
+
+    /* Badge */
+    .badge { display:inline-flex; align-items:center; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:500; }
+    .badge.green  { background:rgba(63,185,80,.15); color:var(--green); }
+    .badge.red    { background:rgba(248,81,73,.15); color:var(--red); }
+    .badge.blue   { background:rgba(88,166,255,.15); color:var(--accent); }
+    .badge.purple { background:rgba(188,140,255,.15); color:var(--purple); }
+    .badge.yellow { background:rgba(210,153,34,.15); color:var(--yellow); }
+    .badge.grey   { background:rgba(125,133,144,.15); color:var(--muted); }
+
+    /* Spinner */
+    .spin { display:inline-block; width:14px; height:14px; border:2px solid rgba(188,140,255,.3); border-top-color:var(--purple); border-radius:50%; animation:rot .7s linear infinite; }
+    @keyframes rot{to{transform:rotate(360deg)}}
+
+    /* diff view */
+    .diff-key-new { color:var(--green); }
+    .diff-key-same { color:var(--muted); }
+    .diff-key-changed { color:var(--yellow); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔬</div>
+  <h1>Agent Trace Viewer</h1>
+  <div class="api-badge">
+    <div class="dot" id="api-dot"></div>
+    <span id="api-lbl" style="color:var(--muted)">Checking…</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- TOP ROW -->
+  <div class="top-row">
+    <!-- Submit new order -->
+    <div class="submit-card">
+      <h2>🚀 Submit Order &amp; Capture Traces</h2>
+      <div class="form-grid">
+        <div>
+          <label>Customer</label>
+          <select id="sel-customer">
+            <option value="11111111-0000-0000-0000-000000000001">Acme Corporation (Enterprise)</option>
+            <option value="11111111-0000-0000-0000-000000000002">TechWave Solutions (Premium)</option>
+            <option value="11111111-0000-0000-0000-000000000003">GlobalMart Retail (Enterprise)</option>
+            <option value="11111111-0000-0000-0000-000000000004">Sunrise Electronics (Premium)</option>
+            <option value="11111111-0000-0000-0000-000000000005">MedSupply Direct (Standard)</option>
+          </select>
+        </div>
+        <div>
+          <label>Priority</label>
+          <select id="sel-priority">
+            <option value="standard">Standard</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+          <button class="btn-run" id="btn-run" onclick="runOrder()">
+            <span id="run-spinner" style="display:none" class="spin"></span>
+            🚀 &nbsp;Run &amp; Trace
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>Products</label>
+        <div class="items-row" id="items-row">
+          <div class="item-chip">
+            <select class="prod-sel">
+              <option value="22222222-0000-0000-0000-000000000001">Business Laptop — $85k</option>
+              <option value="22222222-0000-0000-0000-000000000002">4K Monitor — $45k</option>
+              <option value="22222222-0000-0000-0000-000000000003">Enterprise Smartphone — $65k</option>
+              <option value="22222222-0000-0000-0000-000000000004">Server CPU — $120k</option>
+              <option value="22222222-0000-0000-0000-000000000005">DDR5 RAM — $18k</option>
+              <option value="22222222-0000-0000-0000-000000000006">NVMe SSD — $22k</option>
+              <option value="22222222-0000-0000-0000-000000000007">Enterprise Switch — $95k</option>
+              <option value="22222222-0000-0000-0000-000000000008">Core Router — $150k</option>
+              <option value="22222222-0000-0000-0000-000000000009">Keyboard — $5.5k</option>
+              <option value="22222222-0000-0000-0000-000000000010">Mouse — $3.2k</option>
+            </select>
+            <input type="number" value="2" min="1" max="9999" style="width:56px" />
+            <button class="btn-rm" onclick="rmItem(this)">✕</button>
+          </div>
+          <button class="btn-add" onclick="addItem()">+ Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Load existing workflow -->
+    <div class="wf-lookup">
+      <h2>🔍 Load Existing Workflow</h2>
+      <label>Workflow ID</label>
+      <input type="text" id="wf-input" placeholder="Paste workflow_id…" />
+      <button class="btn-load" onclick="loadTrace(document.getElementById('wf-input').value.trim())">Load Trace</button>
+    </div>
+  </div>
+
+  <!-- STATUS MSG -->
+  <div id="status-msg" style="display:none;margin-bottom:16px;padding:10px 16px;border-radius:8px;font-size:13px;"></div>
+
+  <!-- TIMELINE HEADER -->
+  <div id="timeline-section" style="display:none">
+    <div class="wf-meta" id="wf-meta" style="margin-bottom:14px;"></div>
+    <div class="timeline-bar" id="timeline-bar" style="margin-bottom:14px;"></div>
+
+    <!-- TRACE LAYOUT -->
+    <div class="trace-layout">
+      <div class="agent-sidebar">
+        <div class="agent-sidebar-hdr">Agents Executed</div>
+        <div id="agent-list"></div>
+      </div>
+      <div class="detail-panel" id="detail-panel">
+        <div class="empty-state">
+          <div class="es-icon">👈</div>
+          <p>Select an agent from the left<br/>to inspect its input &amp; output</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state before first run -->
+  <div id="initial-empty" class="empty-state">
+    <div class="es-icon">🔬</div>
+    <p>Submit an order above or paste a <strong>workflow_id</strong> to inspect<br/>
+    exactly what every agent received as input and returned as output.</p>
+  </div>
+
+</div>
+
+<script>
+const API = 'http://localhost:8000/api/v1';
+const PRODUCTS = {
+  '22222222-0000-0000-0000-000000000001':'Business Laptop 15"',
+  '22222222-0000-0000-0000-000000000002':'4K Monitor 27"',
+  '22222222-0000-0000-0000-000000000003':'Enterprise Smartphone',
+  '22222222-0000-0000-0000-000000000004':'Server CPU 32-core',
+  '22222222-0000-0000-0000-000000000005':'DDR5 RAM 64GB',
+  '22222222-0000-0000-0000-000000000006':'NVMe SSD 2TB',
+  '22222222-0000-0000-0000-000000000007':'Enterprise Switch 48-port',
+  '22222222-0000-0000-0000-000000000008':'Core Router',
+  '22222222-0000-0000-0000-000000000009':'Mechanical Keyboard',
+  '22222222-0000-0000-0000-000000000010':'Ergonomic Mouse',
+};
+const ICONS = { 'ADS-01':'📋','ADS-02':'📈','ADS-03':'🏪','ADS-04':'🏭','ADS-05':'🤝','ADS-06':'🚚','ADS-07':'🔧','ADS-08':'💬','ADS-09':'💰','ADS-10':'⚠️','ADS-17':'👔','ADS-18':'📊' };
+
+let _traceData = [];
+let _activeIdx = -1;
+
+// ── API check ──
+async function checkAPI() {
+  try {
+    const r = await fetch('http://localhost:8000/health');
+    const j = await r.json();
+    document.getElementById('api-dot').className = 'dot on';
+    document.getElementById('api-lbl').textContent = 'API Live · localhost:8000';
+    document.getElementById('api-lbl').style.color = 'var(--green)';
+  } catch {
+    document.getElementById('api-dot').className = 'dot off';
+    document.getElementById('api-lbl').textContent = 'API Offline';
+    document.getElementById('api-lbl').style.color = 'var(--red)';
+    document.getElementById('btn-run').disabled = true;
+  }
+}
+
+// ── Items ──
+function addItem() {
+  const row = document.getElementById('items-row');
+  const addBtn = row.querySelector('.btn-add');
+  const chip = document.createElement('div');
+  chip.className = 'item-chip';
+  chip.innerHTML = `
+    <select class="prod-sel">
+      <option value="22222222-0000-0000-0000-000000000001">Business Laptop — $85k</option>
+      <option value="22222222-0000-0000-0000-000000000002">4K Monitor — $45k</option>
+      <option value="22222222-0000-0000-0000-000000000003">Enterprise Smartphone — $65k</option>
+      <option value="22222222-0000-0000-0000-000000000004">Server CPU — $120k</option>
+      <option value="22222222-0000-0000-0000-000000000005">DDR5 RAM — $18k</option>
+      <option value="22222222-0000-0000-0000-000000000006">NVMe SSD — $22k</option>
+      <option value="22222222-0000-0000-0000-000000000007">Enterprise Switch — $95k</option>
+      <option value="22222222-0000-0000-0000-000000000008">Core Router — $150k</option>
+      <option value="22222222-0000-0000-0000-000000000009">Keyboard — $5.5k</option>
+      <option value="22222222-0000-0000-0000-000000000010">Mouse — $3.2k</option>
+    </select>
+    <input type="number" value="1" min="1" max="9999" style="width:56px" />
+    <button class="btn-rm" onclick="rmItem(this)">✕</button>`;
+  row.insertBefore(chip, addBtn);
+}
+function rmItem(btn) {
+  const chips = document.querySelectorAll('.item-chip');
+  if (chips.length <= 1) return;
+  btn.closest('.item-chip').remove();
+}
+
+// ── Status message ──
+function showStatus(msg, type) {
+  const el = document.getElementById('status-msg');
+  const colors = { info:'rgba(88,166,255,.12)', success:'rgba(63,185,80,.12)', error:'rgba(248,81,73,.12)', warn:'rgba(210,153,34,.12)' };
+  const borders = { info:'rgba(88,166,255,.3)', success:'rgba(63,185,80,.3)', error:'rgba(248,81,73,.3)', warn:'rgba(210,153,34,.3)' };
+  el.style.display = 'block';
+  el.style.background = colors[type] || colors.info;
+  el.style.border = '1px solid ' + (borders[type] || borders.info);
+  el.innerHTML = msg;
+}
+
+// ── Submit order + poll ──
+async function runOrder() {
+  const btn = document.getElementById('btn-run');
+  const spin = document.getElementById('run-spinner');
+  btn.disabled = true; spin.style.display = 'inline-block';
+  document.getElementById('initial-empty').style.display = 'none';
+
+  const items = [...document.querySelectorAll('.item-chip')].map(chip => ({
+    product_id: chip.querySelector('.prod-sel').value,
+    quantity: parseInt(chip.querySelector('input').value) || 1,
+  }));
+  const body = {
+    customer_id: document.getElementById('sel-customer').value,
+    items,
+    priority: document.getElementById('sel-priority').value,
+  };
+
+  showStatus('⏳ Submitting order…', 'info');
+
+  let wfId;
+  try {
+    const r = await fetch(`${API}/workflows/orders`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const j = await r.json();
+    wfId = j.workflow_id;
+    document.getElementById('wf-input').value = wfId;
+    showStatus(`✅ Workflow started · <code style="font-family:'JetBrains Mono'">${wfId}</code> · Polling for completion…`, 'success');
+  } catch(e) {
+    showStatus('❌ Failed to connect: ' + e.message, 'error');
+    btn.disabled = false; spin.style.display = 'none';
+    return;
+  }
+
+  // Poll until completed or failed
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/workflows/${wfId}`);
+      const s = await r.json();
+      if (s.workflow_status === 'completed' || s.workflow_status === 'failed') {
+        clearInterval(poll);
+        showStatus(`${s.workflow_status === 'completed' ? '✅' : '❌'} Workflow <strong>${s.workflow_status}</strong> — loading traces…`, s.workflow_status === 'completed' ? 'success' : 'error');
+        await loadTrace(wfId);
+        btn.disabled = false; spin.style.display = 'none';
+      }
+    } catch { /* keep polling */ }
+  }, 800);
+}
+
+// ── Load trace from API ──
+async function loadTrace(wfId) {
+  if (!wfId) { showStatus('⚠️ Enter a workflow ID first', 'warn'); return; }
+  showStatus('⏳ Loading trace…', 'info');
+  try {
+    const r = await fetch(`${API}/workflows/${wfId}/trace`);
+    if (!r.ok) { showStatus('❌ Workflow not found: ' + wfId, 'error'); return; }
+    const data = await r.json();
+    _traceData = data.traces || [];
+    renderTrace(data);
+    showStatus(`✅ Trace loaded · ${_traceData.length} agents · status: <strong>${data.workflow_status}</strong>`, 'success');
+  } catch(e) {
+    showStatus('❌ Error: ' + e.message, 'error');
+  }
+}
+
+// ── Render trace ──
+function renderTrace(data) {
+  document.getElementById('initial-empty').style.display = 'none';
+  document.getElementById('timeline-section').style.display = 'block';
+
+  const traces = data.traces || [];
+  const totalMs = traces.reduce((s, t) => s + (t.duration_ms || 0), 0);
+
+  // Meta bar
+  const firstT = traces[0]?.started_at ? new Date(traces[0].started_at).toLocaleString() : '—';
+  const lastT  = traces[traces.length-1]?.finished_at ? new Date(traces[traces.length-1].finished_at).toLocaleTimeString() : '—';
+  const colors = ['#58a6ff','#3fb950','#d29922','#bc8cff','#ffa657','#39d353','#f85149','#79c0ff','#ff7b72','#a5d6ff'];
+  document.getElementById('wf-meta').innerHTML = `
+    <div class="wf-meta-item"><div class="mk">Workflow ID</div><div class="mv">${data.workflow_id?.slice(0,18)}…</div></div>
+    <div class="wf-meta-item"><div class="mk">Status</div><div class="mv"><span class="badge ${data.workflow_status==='completed'?'green':'red'}">${data.workflow_status}</span></div></div>
+    <div class="wf-meta-item"><div class="mk">Agents Run</div><div class="mv">${traces.length}</div></div>
+    <div class="wf-meta-item"><div class="mk">Total Time</div><div class="mv">${totalMs.toFixed(0)} ms</div></div>
+    <div class="wf-meta-item"><div class="mk">Started</div><div class="mv">${firstT}</div></div>
+    <div class="wf-meta-item"><div class="mk">Finished</div><div class="mv">${lastT}</div></div>`;
+
+  // Timeline bar
+  const bar = document.getElementById('timeline-bar');
+  bar.innerHTML = '';
+  traces.forEach((t, i) => {
+    const pct = totalMs > 0 ? ((t.duration_ms / totalMs) * 100).toFixed(1) : (100/traces.length).toFixed(1);
+    const seg = document.createElement('div');
+    seg.className = 'timeline-seg';
+    seg.style.cssText = `flex:${pct};background:${colors[i % colors.length]};cursor:pointer;`;
+    seg.title = `${t.agent_code} · ${t.duration_ms}ms`;
+    seg.onclick = () => showAgent(i);
+    bar.appendChild(seg);
+  });
+
+  // Agent sidebar
+  const list = document.getElementById('agent-list');
+  list.innerHTML = '';
+  traces.forEach((t, i) => {
+    const btn = document.createElement('div');
+    btn.className = `agent-btn status-${t.status === 'completed' ? 'ok' : 'fail'}`;
+    btn.id = `ab-${i}`;
+    btn.onclick = () => showAgent(i);
+    btn.innerHTML = `
+      <div class="ab-icon">${ICONS[t.agent_code] || '🤖'}</div>
+      <div class="ab-info">
+        <div class="ab-code">${t.agent_code}</div>
+        <div class="ab-name">${t.agent_name}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+        <span class="ab-badge ${t.status==='completed'?'ok':'fail'}">${t.status==='completed'?'✓':'✗'}</span>
+        <span class="ab-dur">${t.duration_ms}ms</span>
+      </div>`;
+    list.appendChild(btn);
+  });
+
+  // Auto-select first
+  if (traces.length > 0) showAgent(0);
+}
+
+// ── Show single agent detail ──
+function showAgent(idx) {
+  _activeIdx = idx;
+  // Update sidebar active state
+  document.querySelectorAll('.agent-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
+
+  const t = _traceData[idx];
+  if (!t) return;
+
+  const panel = document.getElementById('detail-panel');
+
+  // Compute output diff (keys that changed or are new vs input)
+  const inp = t.input || {};
+  const out = t.output || {};
+  const changedKeys = Object.keys(out).filter(k => JSON.stringify(out[k]) !== JSON.stringify(inp[k]));
+  const newKeys = changedKeys.filter(k => !(k in inp));
+  const modKeys = changedKeys.filter(k => k in inp);
+
+  panel.innerHTML = `
+    <!-- AGENT HEADER -->
+    <div class="sec">
+      <div class="sec-hdr">
+        <span style="font-size:20px">${ICONS[t.agent_code]||'🤖'}</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">${t.agent_name}</div>
+          <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono'">${t.agent_code}</div>
+        </div>
+        <span class="badge ${t.status==='completed'?'green':'red'}" style="margin-left:auto">${t.status}</span>
+      </div>
+      <div class="sec-body">
+        <div class="kv-grid">
+          <div class="kv-k">Started at</div><div class="kv-v">${new Date(t.started_at).toLocaleTimeString()}.${new Date(t.started_at).getMilliseconds()}ms</div>
+          <div class="kv-k">Finished at</div><div class="kv-v">${new Date(t.finished_at).toLocaleTimeString()}.${new Date(t.finished_at).getMilliseconds()}ms</div>
+          <div class="kv-k">Duration</div><div class="kv-v" style="color:var(--yellow)">${t.duration_ms} ms</div>
+          <div class="kv-k">Keys written to state</div><div class="kv-v">${changedKeys.map(k=>`<span class="badge ${newKeys.includes(k)?'green':'yellow'}" style="margin:1px">${k}</span>`).join(' ') || '<span style="color:var(--muted)">none</span>'}</div>
+          ${t.decision ? `<div class="kv-k">Decision</div><div class="kv-v">${t.decision.action}: ${t.decision.reason}</div>` : ''}
+          ${t.events_published?.length ? `<div class="kv-k">Events published</div><div class="kv-v">${t.events_published.map(e=>`<span class="badge blue" style="margin:1px">${e.event_type}</span>`).join(' ')}</div>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- INPUT STATE -->
+    <div class="sec">
+      <div class="sec-hdr">
+        📥 Input — State received by ${t.agent_code}
+        <span class="sh-label">${Object.keys(inp).length} keys</span>
+      </div>
+      <div class="sec-body">
+        <div class="json-wrap"><pre>${syntaxHighlight(inp)}</pre></div>
+      </div>
+    </div>
+
+    <!-- OUTPUT DIFF -->
+    <div class="sec">
+      <div class="sec-hdr">
+        📤 Output — What ${t.agent_code} wrote back to state
+        <span class="sh-label">${changedKeys.length} keys changed</span>
+      </div>
+      <div class="sec-body">
+        ${changedKeys.length === 0
+          ? '<div style="color:var(--muted);font-size:13px;padding:8px 0">No state changes (pass-through node)</div>'
+          : `<div class="json-wrap"><pre>${syntaxHighlight(Object.fromEntries(changedKeys.map(k=>[k, out[k]])))}</pre></div>`}
+      </div>
+    </div>
+
+    <!-- FULL OUTPUT -->
+    <div class="sec">
+      <div class="sec-hdr">
+        🗂 Full Output Dict returned by _execute()
+        <span class="sh-label">${Object.keys(out).length} keys</span>
+      </div>
+      <div class="sec-body">
+        <div class="json-wrap"><pre>${syntaxHighlight(out)}</pre></div>
+      </div>
+    </div>
+
+    ${t.events_published?.length ? `
+    <!-- EVENTS PUBLISHED -->
+    <div class="sec">
+      <div class="sec-hdr">⚡ Events Published by ${t.agent_code}<span class="sh-label">${t.events_published.length}</span></div>
+      <div class="sec-body">
+        <div class="json-wrap"><pre>${syntaxHighlight(t.events_published)}</pre></div>
+      </div>
+    </div>` : ''}
+
+    ${t.decision ? `
+    <!-- DECISION -->
+    <div class="sec">
+      <div class="sec-hdr">✅ Decision Record<span class="sh-label">from decisions[]</span></div>
+      <div class="sec-body">
+        <div class="json-wrap"><pre>${syntaxHighlight(t.decision)}</pre></div>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+// ── JSON syntax highlighter ──
+function syntaxHighlight(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+    let cls = 'j-num';
+    if (/^"/.test(match)) {
+      cls = /:$/.test(match) ? 'j-key' : 'j-str';
+    } else if (/true|false/.test(match)) {
+      cls = 'j-bool';
+    } else if (/null/.test(match)) {
+      cls = 'j-null';
+    }
+    return `<span class="${cls}">${match}</span>`;
+  });
+}
+
+checkAPI();
+setInterval(checkAPI, 15000);
+</script>
+</body>
+</html>

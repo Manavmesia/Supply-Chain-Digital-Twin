@@ -1,5 +1,5 @@
 """
-Workflow API endpoints — Phase 3
+Workflow API endpoints — Phase 3 + Trace
 
 POST /api/v1/workflows/orders
     Accepts an order request, initialises shared state, and runs the
@@ -7,11 +7,13 @@ POST /api/v1/workflows/orders
 
 GET /api/v1/workflows/{workflow_id}
     Returns the current workflow state from the in-memory checkpoint store.
+
+GET /api/v1/workflows/{workflow_id}/trace
+    Returns per-agent input/output traces captured during execution.
 """
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from typing import Any
 
@@ -31,26 +33,14 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 # ---------------------------------------------------------------------------
-# In-process state store for workflow results
+# In-process state stores
 # (Phase 6 upgrades to Redis/PostgreSQL)
 # ---------------------------------------------------------------------------
 
 _WORKFLOW_STORE: dict[str, dict[str, Any]] = {}
 
-# Compiled graph (singleton — avoids rebuilding MemorySaver per request)
-_COMPILED_GRAPH = None
-
-
-def _get_graph():
-    global _COMPILED_GRAPH
-    if _COMPILED_GRAPH is None:
-
-        async def _session_factory():
-            """Return a new AsyncSession that the caller must close."""
-            return AsyncSessionLocal()
-
-        _COMPILED_GRAPH = compile_workflow(session_factory=_session_factory)
-    return _COMPILED_GRAPH
+# Per-workflow trace store: workflow_id → list of per-agent trace dicts
+_TRACE_STORE: dict[str, list[dict[str, Any]]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +51,7 @@ async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWor
     """
     Executes the full supply chain workflow asynchronously.
     Result is stored in _WORKFLOW_STORE[workflow_id].
+    Per-agent traces are stored in _TRACE_STORE[workflow_id].
     """
     initial_state: SupplyChainState = {
         "workflow_id": workflow_id,
@@ -84,8 +75,11 @@ async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWor
 
     _WORKFLOW_STORE[workflow_id] = {**initial_state, "workflow_status": "running"}
 
+    # Create per-workflow trace collector (shared mutable list)
+    trace: list[dict[str, Any]] = []
+    _TRACE_STORE[workflow_id] = trace
+
     try:
-        graph = _get_graph()
         config = {"configurable": {"thread_id": workflow_id}}
 
         # Use a single session for the full workflow run
@@ -94,8 +88,11 @@ async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWor
             async def _session_factory():
                 return session
 
-            # Rebuild graph with bound session for this run
-            compiled = compile_workflow(session_factory=_session_factory)
+            # Compile graph with trace collector bound in
+            compiled = compile_workflow(
+                session_factory=_session_factory,
+                trace_collector=trace,
+            )
             final_state = await compiled.ainvoke(initial_state, config=config)
 
             if not final_state.get("errors") and final_state.get("workflow_status") != "failed":
@@ -108,6 +105,7 @@ async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWor
             "Workflow completed",
             workflow_id=workflow_id,
             status=final_state.get("workflow_status"),
+            agents_run=len(trace),
         )
 
     except Exception as exc:  # noqa: BLE001
@@ -137,7 +135,8 @@ async def start_order_workflow(
     Accepts a customer order and starts the supply chain workflow.
 
     The workflow runs asynchronously in the background. Use the returned
-    `workflow_id` to poll `GET /workflows/{workflow_id}` for status.
+    `workflow_id` to poll `GET /workflows/{workflow_id}` for status,
+    and `GET /workflows/{workflow_id}/trace` for per-agent I/O traces.
     """
     workflow_id = str(uuid.uuid4())
     correlation_id = str(uuid.uuid4())
@@ -193,3 +192,38 @@ async def get_workflow_status(workflow_id: str) -> WorkflowStatusResponse:
         event_count=len(state.get("event_history") or []),
         error_count=len(state.get("errors") or []),
     )
+
+
+@router.get(
+    "/{workflow_id}/trace",
+    summary="Get per-agent input/output traces for a workflow",
+)
+async def get_workflow_trace(workflow_id: str) -> dict[str, Any]:
+    """
+    Returns the full per-agent execution trace for a completed (or running) workflow.
+
+    Each entry contains:
+    - agent_code / agent_name
+    - started_at / finished_at / duration_ms
+    - status (completed | failed)
+    - input: snapshot of SupplyChainState the agent received
+    - output: partial state dict the agent returned
+    - decision: the agent's own decision record (from decisions list)
+    - events_published: events this agent published to event_history
+    """
+    # Check workflow exists
+    if workflow_id not in _WORKFLOW_STORE and workflow_id not in _TRACE_STORE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workflow '{workflow_id}' not found",
+        )
+
+    trace = _TRACE_STORE.get(workflow_id, [])
+    workflow_status = (_WORKFLOW_STORE.get(workflow_id) or {}).get("workflow_status", "unknown")
+
+    return {
+        "workflow_id": workflow_id,
+        "workflow_status": workflow_status,
+        "agents_executed": len(trace),
+        "traces": trace,
+    }
