@@ -127,7 +127,7 @@ Operational Layer       Business Layer          Coordination Layer
 | Charts | Apache ECharts | Supply chain maps, KPI charts |
 | Backend API | FastAPI (Python 3.12) | REST API gateway |
 | Agent Orchestration | LangGraph | Multi-agent workflow engine |
-| LLM Providers | OpenAI / Anthropic / Gemini | Reasoning, negotiation, explanation |
+| LLM Providers | Groq / Anthropic / Gemini | Reasoning, negotiation, explanation |
 | Relational Database | PostgreSQL 16 + pgvector | Source of truth + semantic memory |
 | Cache / Checkpoints | Redis 7 | Active workflow state, LangGraph checkpoints |
 | Event Bus | **RabbitMQ 3** | Async agent-to-agent communication |
@@ -155,7 +155,7 @@ Ensure the following are installed:
 | Git | 2.x | https://git-scm.com |
 
 Optional (for LLM features):
-- OpenAI API Key, Anthropic API Key, or Google Gemini API Key
+- Groq API Key, Anthropic API Key, or Google Gemini API Key
 - LangSmith API Key (for LLM tracing)
 
 ---
@@ -385,14 +385,13 @@ RABBITMQ_URL=amqp://guest:guest@mq:5672/
 RABBITMQ_DLQ_THRESHOLD=50
 
 # LLM Providers (set at least one)
-OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...
 
 # LLM Configuration
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o
-LLM_FALLBACK_MODEL=gpt-4o-mini
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.3-70b-versatile
 
 # LangSmith (optional but recommended)
 LANGCHAIN_TRACING_V2=true

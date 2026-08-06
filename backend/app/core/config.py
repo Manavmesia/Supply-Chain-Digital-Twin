@@ -34,5 +34,11 @@ class Settings(BaseSettings):
     # Finance — budget threshold for automatic approval (Phase 4)
     FINANCE_APPROVAL_THRESHOLD: Decimal = Decimal("50000.00")
 
+    # LLM Provider Configuration
+    LLM_PROVIDER: str = "groq"
+    GROQ_API_KEY: str | None = None
+    LLM_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_TEMPERATURE: float = 0.0
+
 
 settings = Settings()

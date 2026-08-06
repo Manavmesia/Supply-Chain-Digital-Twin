@@ -213,11 +213,12 @@ class TestInventoryRepository:
         assert inv.available_qty == 300
 
     @pytest.mark.asyncio
-    async def test_monitor_not_at_west_warehouse(self, db_session):
-        """Seed data has no monitor stock at WH-WEST-01."""
+    async def test_cpu_not_at_west_warehouse(self, db_session):
+        """Seed data has no CPU stock at WH-WEST-01."""
         from app.repositories.inventory import InventoryRepository
+        product_cpu_id = uuid.UUID("22222222-0000-0000-0000-000000000004")
         repo = InventoryRepository(db_session)
-        inv = await repo.get_by_product_and_warehouse(PRODUCT_MONITOR_ID, WAREHOUSE_WEST_ID)
+        inv = await repo.get_by_product_and_warehouse(product_cpu_id, WAREHOUSE_WEST_ID)
         assert inv is None
 
 

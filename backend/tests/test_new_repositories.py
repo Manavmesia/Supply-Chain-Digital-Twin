@@ -45,12 +45,14 @@ def make_pricing_history(product_id: uuid.UUID = PRODUCT_LAPTOP_ID, **kwargs):
 def make_promotion(**kwargs):
     from app.models.promotion import Promotion
     now = datetime.now(timezone.utc)
+    starts = kwargs.get("starts_at", now - timedelta(hours=2))
+    ends = kwargs.get("ends_at", now + timedelta(days=7))
     return Promotion(
         promotion_id=uuid.uuid4(),
         name=kwargs.get("name", "Test Promo"),
         status=kwargs.get("status", "active"),
-        starts_at=kwargs.get("starts_at", now - timedelta(hours=1)),
-        ends_at=kwargs.get("ends_at", now + timedelta(days=7)),
+        starts_at=starts,
+        ends_at=ends,
         discount_percent=kwargs.get("discount_percent", Decimal("10.00")),
         created_at=now,
         updated_at=now,
@@ -116,10 +118,10 @@ class TestPurchaseOrderRepository:
         from app.repositories.purchase_order import PurchaseOrderRepository
         repo = PurchaseOrderRepository(db_session)
 
-        po = make_purchase_order(status="approved")
+        po = make_purchase_order(status="submitted")
         await repo.create(po)
 
-        results = await repo.get_by_status("approved")
+        results = await repo.get_by_status("submitted")
         assert any(p.po_id == po.po_id for p in results)
 
     @pytest.mark.asyncio
@@ -139,7 +141,7 @@ class TestPurchaseOrderRepository:
         repo = PurchaseOrderRepository(db_session)
 
         yesterday = date.today() - timedelta(days=1)
-        po = make_purchase_order(status="sent")
+        po = make_purchase_order(status="shipped")
         po.requested_delivery = yesterday
         await repo.create(po)
 
@@ -165,7 +167,7 @@ class TestPurchaseOrderRepository:
         repo = PurchaseOrderRepository(db_session)
 
         future = date.today() + timedelta(days=10)
-        po = make_purchase_order(status="sent")
+        po = make_purchase_order(status="shipped")
         po.requested_delivery = future
         await repo.create(po)
 
@@ -741,6 +743,7 @@ class TestPromotionRepository:
         now = datetime.now(timezone.utc)
         promo = make_promotion(
             status="active",
+            starts_at=now - timedelta(hours=2),
             ends_at=now - timedelta(hours=1),
         )
         await repo.create(promo)

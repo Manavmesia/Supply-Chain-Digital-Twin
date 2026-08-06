@@ -49,12 +49,14 @@ class SupplyChainState(TypedDict, total=False):
     # ── Shipment / Transportation ────────────────────────────────────────────
     shipment: dict[str, Any]          # Shipment record + carrier + ETA
 
-    # ── Business agents (Phase 4) ────────────────────────────────────────────
+    # ── Business agents (Phase 4 & 5) ────────────────────────────────────────
     finance: dict[str, Any]           # Budget analysis, approval status
     risk: dict[str, Any]              # Risk scores and flags
     forecast: dict[str, Any]          # Demand forecast output
     quality: dict[str, Any]           # QA inspection result
     sustainability: dict[str, Any]    # CO2 / sustainability metrics
+    manufacturing: dict[str, Any]     # Production orders & capacity state
+    customer_service: dict[str, Any]  # Customer notifications & support tickets
 
     # ── Coordination ─────────────────────────────────────────────────────────
     decisions: list[dict[str, Any]]   # Ordered list of agent decisions

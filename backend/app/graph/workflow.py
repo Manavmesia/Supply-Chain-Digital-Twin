@@ -45,6 +45,8 @@ from app.agents.operational.order_management import OrderManagementAgent
 from app.agents.operational.supplier import SupplierAgent
 from app.agents.operational.transportation import TransportationAgent
 from app.agents.operational.warehouse import WarehouseAgent
+from app.agents.operational.manufacturing import ManufacturingAgent
+from app.agents.operational.customer_service import CustomerServiceAgent
 from app.graph.state import SupplyChainState
 
 
@@ -169,6 +171,14 @@ def build_workflow(
     graph.add_node(
         "reporting",
         _make_node(ReportingAgent, session_factory, publisher),
+    )
+    graph.add_node(
+        "customer_service",
+        _make_node(CustomerServiceAgent, session_factory, publisher),
+    )
+    graph.add_node(
+        "manufacturing",
+        _make_node(ManufacturingAgent, session_factory, publisher),
     )
 
     # ── Entry ─────────────────────────────────────────────────────────────────

@@ -54,8 +54,8 @@ class PurchaseOrder(Base):
     currency: Mapped[str] = mapped_column(String, default="USD", nullable=False)
     status: Mapped[str] = mapped_column(
         Enum(
-            "draft", "approved", "sent", "acknowledged", "in_transit",
-            "partially_received", "received", "cancelled",
+            "draft", "submitted", "acknowledged", "in_production",
+            "shipped", "received", "cancelled", "disputed",
             name="purchase_order_status",
         ),
         default="draft",

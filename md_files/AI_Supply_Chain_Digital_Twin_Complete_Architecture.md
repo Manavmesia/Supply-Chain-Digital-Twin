@@ -525,7 +525,7 @@ Technical
   Frontend          React + TypeScript
   Backend           FastAPI
   Multi-Agent       LangGraph
-  LLM               OpenAI / Anthropic / Gemini
+  LLM               Groq / Anthropic / Gemini
   Database          PostgreSQL
   Cache             Redis
   Event Bus         RabbitMQ

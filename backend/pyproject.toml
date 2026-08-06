@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pgvector>=0.2.5",
     "alembic>=1.13.1",
+    "langchain-groq>=1.0.0",
 ]
 
 [project.optional-dependencies]

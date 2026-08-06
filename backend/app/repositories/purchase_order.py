@@ -39,8 +39,8 @@ class PurchaseOrderRepository(BaseRepository[PurchaseOrder]):
     async def get_pending_delivery(
         self, as_of: date | None = None
     ) -> Sequence[PurchaseOrder]:
-        """Return POs that are in flight (sent / acknowledged / in_transit /
-        partially_received) and whose requested_delivery date is on or before
+        """Return POs that are in flight (submitted / acknowledged / in_production /
+        shipped) and whose requested_delivery date is on or before
         *as_of* (defaults to today).
 
         Useful for the Supplier Agent to surface overdue deliveries.
@@ -51,7 +51,7 @@ class PurchaseOrderRepository(BaseRepository[PurchaseOrder]):
 
         query = select(PurchaseOrder).where(
             PurchaseOrder.status.in_(
-                ["sent", "acknowledged", "in_transit", "partially_received"]
+                ["submitted", "acknowledged", "in_production", "shipped"]
             ),
             PurchaseOrder.requested_delivery <= cutoff,
         )

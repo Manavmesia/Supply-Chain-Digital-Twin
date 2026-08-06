@@ -17,11 +17,12 @@ import abc
 import traceback
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from app.graph.state import SupplyChainState
+if TYPE_CHECKING:
+    from app.graph.state import SupplyChainState
 
 logger = structlog.get_logger(__name__)
 
