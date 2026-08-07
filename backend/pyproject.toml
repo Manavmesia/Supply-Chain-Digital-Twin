@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "backend"
 version = "0.1.0"
@@ -16,6 +20,10 @@ dependencies = [
     "pgvector>=0.2.5",
     "alembic>=1.13.1",
     "langchain-groq>=1.0.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.2.0",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -29,3 +37,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

@@ -262,6 +262,13 @@ class TestRepositoryBoundaryEdgeCases:
     @pytest.mark.asyncio
     async def test_carrier_repository_get_available_empty_string(self, db_session):
         """Querying carrier availability for mode with no active carriers returns empty list."""
+        from sqlalchemy import update
+        from app.models.carrier import Carrier
+        await db_session.execute(
+            update(Carrier).where(Carrier.status == "active").values(status="inactive")
+        )
+        await db_session.flush()
+
         repo = CarrierRepository(db_session)
         results = await repo.get_available(freight_mode="rail")
         assert list(results) == []

@@ -1,10 +1,9 @@
 """
 Pydantic schemas for the workflow API endpoints.
-"""
+"""  
 
 from __future__ import annotations
 
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -21,10 +20,14 @@ class OrderWorkflowRequest(BaseModel):
     POST /api/v1/workflows/orders
 
     Kicks off the full supply chain workflow for a customer order.
+
+    Note: `priority` is intentionally absent — it is auto-assigned by the
+    Order Management Agent (ADS-01) based on customer tier and order value.
+    End users must not be able to influence routing or approval thresholds
+    by manipulating priority directly.
     """
     customer_id: UUID
     items: list[OrderItemRequest] = Field(min_length=1)
-    priority: Literal["standard", "high", "critical"] = "standard"
 
     @field_validator("items")
     @classmethod
@@ -50,6 +53,8 @@ class WorkflowStatusResponse(BaseModel):
     requires_human_approval: bool
     event_count: int
     error_count: int
+    blackboard: dict | None = None
+    human_overrides: dict | None = None
 
 
 class WorkflowAcceptedResponse(BaseModel):

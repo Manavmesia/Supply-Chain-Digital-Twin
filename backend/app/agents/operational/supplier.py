@@ -178,8 +178,21 @@ class SupplierAgent(BaseAgent):
 
             await self._publish(state, "SupplierSelected", selected_payload)
             await self._publish(state, "PurchaseOrderCreated", po_payload)
+            # AUD-48 Fix: Publish SupplierUpdated whenever a supplier is engaged,
+            # carrying full profile data so downstream agents can observe changes
+            supplier_updated_payload = {
+                "supplier_id": str(best_supplier.supplier_id),
+                "supplier_name": best_supplier.name,
+                "reliability_score": float(best_supplier.reliability_score),
+                "lead_time_days": best_supplier.lead_time_days,
+                "status": best_supplier.status,
+                "minimum_order_qty": int(best_sp.minimum_order_qty),
+                "source_agent": self.agent_code,
+            }
+            await self._publish(state, "SupplierUpdated", supplier_updated_payload)
             event_history = self._append_event(event_history, "SupplierSelected", selected_payload)
             event_history = self._append_event(event_history, "PurchaseOrderCreated", po_payload)
+            event_history = self._append_event(event_history, "SupplierUpdated", supplier_updated_payload)
 
             decisions = self._record_decision(
                 decisions, "supplier_selected",

@@ -167,8 +167,9 @@ class TestOrderManagementAgent:
         state = _make_state(
             order={
                 "customer_id": str(customer.customer_id),
+                # priority is NOT user-supplied — OrderManagementAgent derives it
+                # from customer_tier: enterprise → critical
                 "items": [{"product_id": str(product_id), "quantity": 2}],
-                "priority": "standard",
             }
         )
 
@@ -178,6 +179,8 @@ class TestOrderManagementAgent:
         assert result.get("workflow_status") != "failed", f"Unexpected failure: {result.get('decisions')}"
         assert "order" in result
         assert result["order"]["status"] == "pending"
+        # enterprise customer_tier must auto-derive critical priority
+        assert result["order"]["priority"] == "critical"
         assert any(e["event_type"] == "OrderCreated" for e in result.get("event_history", []))
         assert "ADS-01" in result["active_agents"]
 

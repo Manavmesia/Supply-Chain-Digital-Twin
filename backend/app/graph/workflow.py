@@ -1,53 +1,61 @@
 """
 Supply Chain LangGraph Workflow
 
-Assembles the StateGraph for Phase 4 — Business Intelligence.
+Assembles the StateGraph for Phase 5 — Decentralized Peer-to-Peer Multi-Agent Loop.
 
 Graph topology:
     START
-      → order_management
+      → order_management (intake)
+           ↓
+      → demand_forecast (loop start)
       → inventory
-           ↓ (stock ok)       ↓ (out of stock)
-       warehouse           supplier
-           ↓                   ↓
-       transportation ←────────┘
+      → warehouse / supplier
+      → transportation
+      → sustainability
+      → quality_assurance
+      → finance
+      → pricing
+      → risk
+      → procurement_strategy
+      → planner
+      → negotiation
            ↓
-       finance
-           ↓
-       risk
-           ↓
-       demand_forecast
-           ↓
-       ceo
-           ↓
-       reporting
-           ↓
-       END
-
-Conditional edges read state["next_node"] to decide routing.
-Each node is a wrapper that calls agent.run(state) and merges the partial update.
+      → consensus_checker (evaluates blackboard consensus/objections)
+           ↓ (if contested & loop_count < 3)  → loops back to demand_forecast
+           ↓ (if consensus reached or limit)   → customer_service
+      → customer_service
+      → manufacturing (remanufacture if QA/Planner triggered)
+      → reporting (audit)
+      → END
 """
 
 from __future__ import annotations
 
 from typing import Any
+from datetime import datetime, timezone
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.business.demand_forecast import DemandForecastAgent
 from app.agents.business.finance import FinanceAgent
+from app.agents.business.pricing import PricingAgent
+from app.agents.business.procurement_strategy import ProcurementStrategyAgent
+from app.agents.business.quality_assurance import QualityAssuranceAgent
 from app.agents.business.risk import RiskAgent
+from app.agents.business.sustainability import SustainabilityAgent
 from app.agents.coordination.ceo import CEOAgent
+from app.agents.coordination.negotiation import NegotiationAgent
+from app.agents.coordination.planner import PlannerAgent
 from app.agents.coordination.reporting import ReportingAgent
+from app.agents.operational.customer_service import CustomerServiceAgent
 from app.agents.operational.inventory import InventoryAgent
+from app.agents.operational.manufacturing import ManufacturingAgent
 from app.agents.operational.order_management import OrderManagementAgent
 from app.agents.operational.supplier import SupplierAgent
 from app.agents.operational.transportation import TransportationAgent
 from app.agents.operational.warehouse import WarehouseAgent
-from app.agents.operational.manufacturing import ManufacturingAgent
-from app.agents.operational.customer_service import CustomerServiceAgent
-from app.graph.state import SupplyChainState
+from app.graph.state import SupplyChainState, BlackboardEntry
 
 
 # ---------------------------------------------------------------------------
@@ -61,22 +69,15 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
       2. Calls agent.run(state)
       3. Records input snapshot + output diff in trace_collector (if provided)
       4. Returns the partial state update
-
-    session_factory is a zero-argument async callable that returns an AsyncSession.
-    If None the agent runs without a DB session (useful for unit tests).
-    trace_collector is a list; if provided, each agent appends a trace entry.
     """
     import time
     from datetime import datetime, timezone
 
-    # Keys that are too verbose / not useful for agent I/O inspection
     _SKIP_KEYS = {"messages"}
-    # Keys that are big lists — truncate to last N entries in snapshot
     _TRUNCATE_KEYS = {"event_history", "active_agents", "decisions", "errors"}
     _TRUNCATE_N = 3
 
     def _snapshot(state: dict) -> dict:
-        """Extract a concise, JSON-safe snapshot of state for tracing."""
         snap = {}
         for k, v in state.items():
             if k in _SKIP_KEYS:
@@ -92,7 +93,6 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
         t_start = time.perf_counter()
         started_at = datetime.now(tz=timezone.utc).isoformat()
 
-        # Snapshot what the agent RECEIVES as input
         input_snapshot = _snapshot(dict(state))
 
         session = await session_factory() if session_factory else None
@@ -119,7 +119,7 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
                 ),
                 "events_published": [
                     e for e in (output.get("event_history") or [])
-                    if e.get("source_agent") == agent_cls.agent_code
+                     if e.get("source_agent") == agent_cls.agent_code
                 ],
             })
 
@@ -130,15 +130,60 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
 
 
 # ---------------------------------------------------------------------------
-# Conditional routing functions
+# Decentralized Loop & Consensus Checker
+# ---------------------------------------------------------------------------
+
+async def consensus_checker(state: SupplyChainState) -> dict[str, Any]:
+    """
+    Evaluates the Blackboard status:
+      - If there are any active contested topics and loop_count < 2, increment loop and retry.
+      - If loops are exhausted and topics remain contested, escalate to human.
+      - Otherwise, commit consensus.
+    """
+    blackboard = state.get("blackboard") or {}
+    loop_count = state.get("loop_count", 0)
+
+    has_contested = False
+    contested_topics = []
+    for topic, entries in blackboard.items():
+        for entry in entries:
+            if entry.get("status") == "contested":
+                has_contested = True
+                contested_topics.append(topic)
+                break
+
+    if has_contested:
+        if loop_count < 2:
+            return {
+                "loop_count": loop_count + 1,
+                "next_node": "demand_forecast",
+            }
+        else:
+            return {
+                "workflow_status": "escalated",
+                "requires_human_approval": True,
+                "next_node": "customer_service",
+            }
+
+    return {
+        "workflow_status": "completed",
+        "next_node": "customer_service",
+    }
+
+
+def route_after_consensus_checker(state: SupplyChainState) -> str:
+    """Return the designated next node based on consensus checker result."""
+    return state.get("next_node") or "customer_service"
+
+
+# ---------------------------------------------------------------------------
+# Existing Routing helpers
 # ---------------------------------------------------------------------------
 
 def route_after_inventory(state: SupplyChainState) -> str:
-    """Route to warehouse if stock is available, else to supplier."""
     next_node = state.get("next_node")
     if next_node in ("supplier", "warehouse"):
         return next_node
-    # Default: if any inventory out_of_stock → supplier; else warehouse
     inventory = state.get("inventory") or {}
     for _, data in inventory.items():
         if isinstance(data, dict) and data.get("status") == "out_of_stock":
@@ -147,19 +192,19 @@ def route_after_inventory(state: SupplyChainState) -> str:
 
 
 def route_after_order_management(state: SupplyChainState) -> str:
-    """Abort to END if order was rejected."""
     if state.get("workflow_status") == "failed":
         return END
     return "demand_forecast"
 
 
 def route_after_supplier(state: SupplyChainState) -> str:
-    """After supplier node, always proceed to transportation."""
     return "transportation"
 
 
-def route_after_ceo(state: SupplyChainState) -> str:
-    """Always proceed to reporting after CEO decision (approved or denied)."""
+def route_after_customer_service(state: SupplyChainState) -> str:
+    planning = state.get("planning") or {}
+    if planning.get("remanufacture_required"):
+        return "manufacturing"
     return "reporting"
 
 
@@ -172,86 +217,91 @@ def build_workflow(
     publisher=None,
     trace_collector=None,
 ) -> StateGraph:
-    """
-    Assemble and compile the LangGraph StateGraph.
-
-    Args:
-        session_factory:  async callable → AsyncSession (or None for tests)
-        publisher:        EventPublisher instance (or None for tests)
-        trace_collector:  list to collect per-agent input/output traces
-
-    Returns:
-        Compiled LangGraph app (callable as ``app.ainvoke(state, config)``)
-    """
-
+    """Assemble and compile the LangGraph StateGraph."""
     graph = StateGraph(SupplyChainState)
 
     def _node(cls):
-        """Shorthand: build node with shared session/publisher/trace_collector."""
         return _make_node(cls, session_factory, publisher, trace_collector)
 
-    # ── Add Phase 3 nodes ─────────────────────────────────────────────────────
+    # ── Operational Nodes ─────────────────────────────────────────────────────
     graph.add_node("order_management", _node(OrderManagementAgent))
     graph.add_node("inventory",        _node(InventoryAgent))
     graph.add_node("warehouse",        _node(WarehouseAgent))
     graph.add_node("supplier",         _node(SupplierAgent))
     graph.add_node("transportation",   _node(TransportationAgent))
-    graph.add_node("ceo",              _node(CEOAgent))
-
-    # ── Add Phase 4 nodes ─────────────────────────────────────────────────────
-    graph.add_node("finance",          _node(FinanceAgent))
-    graph.add_node("risk",             _node(RiskAgent))
-    graph.add_node("demand_forecast",  _node(DemandForecastAgent))
-    graph.add_node("reporting",        _node(ReportingAgent))
-    graph.add_node("customer_service", _node(CustomerServiceAgent))
     graph.add_node("manufacturing",    _node(ManufacturingAgent))
+    graph.add_node("customer_service", _node(CustomerServiceAgent))
+    graph.add_node("legacy_ceo_compat", _node(CEOAgent))
 
-    # ── Entry ─────────────────────────────────────────────────────────────────
+    # ── BI Nodes ─────────────────────────────────────────────────────────────
+    graph.add_node("demand_forecast",      _node(DemandForecastAgent))
+    graph.add_node("sustainability",       _node(SustainabilityAgent))
+    graph.add_node("quality_assurance",    _node(QualityAssuranceAgent))
+    graph.add_node("finance",              _node(FinanceAgent))
+    graph.add_node("pricing",              _node(PricingAgent))
+    graph.add_node("risk",                 _node(RiskAgent))
+    graph.add_node("procurement_strategy", _node(ProcurementStrategyAgent))
+    graph.add_node("planner",              _node(PlannerAgent))
+    graph.add_node("negotiation",          _node(NegotiationAgent))
+
+    # ── Coordination & Consensus ──────────────────────────────────────────────
+    graph.add_node("consensus_checker", consensus_checker)
+    graph.add_node("reporting",         _node(ReportingAgent))
+
+    # ── Flow connections ────────────────--------------------------------──────
     graph.add_edge(START, "order_management")
 
-    # ── Conditional: order_management → demand_forecast OR END ───────────────
     graph.add_conditional_edges(
         "order_management",
         route_after_order_management,
         {"demand_forecast": "demand_forecast", END: END},
     )
 
-    # ── Demand Forecast → inventory ───────────────────────────────────────────
     graph.add_edge("demand_forecast", "inventory")
 
-    # ── Conditional: inventory → warehouse OR supplier ────────────────────────
     graph.add_conditional_edges(
         "inventory",
         route_after_inventory,
         {"warehouse": "warehouse", "supplier": "supplier"},
     )
 
-    # ── Warehouse → transportation (always) ───────────────────────────────────
     graph.add_edge("warehouse", "transportation")
 
-    # ── Supplier → transportation (always) ────────────────────────────────────
     graph.add_conditional_edges(
         "supplier",
         route_after_supplier,
         {"transportation": "transportation"},
     )
 
-    # ── Transportation → finance (Phase 4 sequential BI chain) ───────────────
-    graph.add_edge("transportation", "finance")
+    # Parallel pipeline review loop
+    graph.add_edge("transportation",       "sustainability")
+    graph.add_edge("sustainability",       "quality_assurance")
+    graph.add_edge("quality_assurance",    "finance")
+    graph.add_edge("finance",              "pricing")
+    graph.add_edge("pricing",              "risk")
+    graph.add_edge("risk",                 "procurement_strategy")
+    graph.add_edge("procurement_strategy", "planner")
+    graph.add_edge("planner",              "negotiation")
+    
+    # Negotiation routes to consensus evaluator
+    graph.add_edge("negotiation", "consensus_checker")
 
-    # ── Finance → risk → ceo ──────────────────────────────────────────────────
-    graph.add_edge("finance", "risk")
-    graph.add_edge("risk", "ceo")
-
-    # ── CEO → reporting (Phase 4) ─────────────────────────────────────────────
+    # Consensus evaluator conditional edge
     graph.add_conditional_edges(
-        "ceo",
-        route_after_ceo,
-        {"reporting": "reporting"},
+        "consensus_checker",
+        route_after_consensus_checker,
+        {"demand_forecast": "demand_forecast", "customer_service": "customer_service"},
     )
 
-    # ── Reporting → END ──────────────────────────────────────────────────────
-    graph.add_edge("reporting", END)
+    graph.add_conditional_edges(
+        "customer_service",
+        route_after_customer_service,
+        {"reporting": "reporting", "manufacturing": "manufacturing"},
+    )
+
+    graph.add_edge("manufacturing", "reporting")
+    graph.add_edge("reporting", "legacy_ceo_compat")
+    graph.add_edge("legacy_ceo_compat", END)
 
     return graph
 

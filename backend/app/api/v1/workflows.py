@@ -19,6 +19,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from pydantic import BaseModel
 
 from app.core.database import AsyncSessionLocal
 from app.graph.state import SupplyChainState
@@ -47,56 +48,67 @@ _TRACE_STORE: dict[str, list[dict[str, Any]]] = {}
 # Background workflow runner
 # ---------------------------------------------------------------------------
 
-async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWorkflowRequest) -> None:
+async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWorkflowRequest | None = None) -> None:
     """
-    Executes the full supply chain workflow asynchronously.
-    Result is stored in _WORKFLOW_STORE[workflow_id].
-    Per-agent traces are stored in _TRACE_STORE[workflow_id].
+    Executes or resumes the decentralized supply chain workflow.
     """
-    initial_state: SupplyChainState = {
-        "workflow_id": workflow_id,
-        "correlation_id": correlation_id,
-        "workflow_status": "received",
-        "active_agents": [],
-        "event_history": [],
-        "decisions": [],
-        "errors": [],
-        "messages": [],
-        "retries": {},
-        "order": {
-            "customer_id": str(request.customer_id),
-            "items": [
-                {"product_id": str(i.product_id), "quantity": i.quantity}
-                for i in request.items
-            ],
-            "priority": request.priority,
-        },
-    }
+    existing_state = _WORKFLOW_STORE.get(workflow_id)
+    if existing_state:
+        initial_state = dict(existing_state)
+        initial_state["loop_count"] = 0
+        initial_state["next_node"] = None
+        initial_state["workflow_status"] = "running"
+        initial_state["requires_human_approval"] = False
+    else:
+        if request is None:
+            raise ValueError("request must be provided for new workflows")
+        initial_state = {
+            "workflow_id": workflow_id,
+            "correlation_id": correlation_id,
+            "workflow_status": "running",
+            "active_agents": [],
+            "event_history": [],
+            "decisions": [],
+            "errors": [],
+            "messages": [],
+            "retries": {},
+            "blackboard": {},
+            "human_overrides": {},
+            "loop_count": 0,
+            "order": {
+                "customer_id": str(request.customer_id),
+                "items": [
+                    {"product_id": str(i.product_id), "quantity": i.quantity}
+                    for i in request.items
+                ],
+            },
+        }
 
     _WORKFLOW_STORE[workflow_id] = {**initial_state, "workflow_status": "running"}
 
-    # Create per-workflow trace collector (shared mutable list)
-    trace: list[dict[str, Any]] = []
-    _TRACE_STORE[workflow_id] = trace
+    # Create/retrieve trace collector
+    trace = _TRACE_STORE.get(workflow_id)
+    if trace is None:
+        trace = []
+        _TRACE_STORE[workflow_id] = trace
 
     try:
         config = {"configurable": {"thread_id": workflow_id}}
 
-        # Use a single session for the full workflow run
         async with AsyncSessionLocal() as session:
-
             async def _session_factory():
                 return session
 
-            # Compile graph with trace collector bound in
             compiled = compile_workflow(
                 session_factory=_session_factory,
                 trace_collector=trace,
             )
             final_state = await compiled.ainvoke(initial_state, config=config)
 
+            # Mark completed only if there are no active errors/escalations
             if not final_state.get("errors") and final_state.get("workflow_status") != "failed":
-                final_state["workflow_status"] = "completed"
+                if final_state.get("workflow_status") != "escalated":
+                    final_state["workflow_status"] = "completed"
 
             await session.commit()
 
@@ -115,6 +127,7 @@ async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWor
             "workflow_status": "failed",
             "errors": [{"error": str(exc)}],
         }
+
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +165,6 @@ async def start_order_workflow(
         "Workflow accepted",
         workflow_id=workflow_id,
         customer_id=str(request.customer_id),
-        priority=request.priority,
     )
 
     return WorkflowAcceptedResponse(
@@ -191,6 +203,8 @@ async def get_workflow_status(workflow_id: str) -> WorkflowStatusResponse:
         requires_human_approval=state.get("requires_human_approval", False),
         event_count=len(state.get("event_history") or []),
         error_count=len(state.get("errors") or []),
+        blackboard=state.get("blackboard"),
+        human_overrides=state.get("human_overrides"),
     )
 
 
@@ -227,3 +241,88 @@ async def get_workflow_trace(workflow_id: str) -> dict[str, Any]:
         "agents_executed": len(trace),
         "traces": trace,
     }
+
+
+class OverrideRequest(BaseModel):
+    topic: str
+    action: str  # "pin" | "revert"
+    value: dict[str, Any]
+
+
+@router.post(
+    "/{workflow_id}/override",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Human override / PIN a decision on the Blackboard",
+)
+async def human_override(
+    workflow_id: str,
+    request: OverrideRequest,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    """
+    Exposes the Human Monitoring Override. Allows an observer to override,
+    PIN, or REVERT a decision on the versioned blackboard, and resumes
+    the consensus loops.
+    """
+    state = _WORKFLOW_STORE.get(workflow_id)
+    if state is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workflow '{workflow_id}' not found",
+        )
+
+    overrides = dict(state.get("human_overrides") or {})
+    blackboard = dict(state.get("blackboard") or {})
+    topic = request.topic
+
+    if request.action == "pin":
+        overrides[topic] = request.value
+        topic_entries = list(blackboard.get(topic) or [])
+        
+        # Mark previous active as superseded
+        new_entries = []
+        for entry in topic_entries:
+            entry_copy = dict(entry)
+            if entry_copy.get("status") in ("proposed", "contested", "accepted"):
+                entry_copy["status"] = "superseded"
+            new_entries.append(entry_copy)
+            
+        from datetime import datetime, timezone
+        new_entries.append({
+            "agent_id": "human_override",
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "confidence": 1.0,
+            "rationale": "User manually overridden/pinned this decision.",
+            "status": "accepted",
+            "data": request.value,
+        })
+        blackboard[topic] = new_entries
+
+    elif request.action == "revert":
+        overrides.pop(topic, None)
+        topic_entries = list(blackboard.get(topic) or [])
+        if topic_entries:
+            # Revert latest override to proposed
+            topic_entries[-1]["status"] = "proposed"
+            blackboard[topic] = topic_entries
+
+    state["human_overrides"] = overrides
+    state["blackboard"] = blackboard
+    state["workflow_status"] = "running"
+    state["requires_human_approval"] = False
+    state["loop_count"] = 0  # Reset loop counter to allow retry reasoning
+
+    _WORKFLOW_STORE[workflow_id] = state
+
+    # Trigger async retry loop run
+    background_tasks.add_task(
+        _run_workflow,
+        workflow_id,
+        state.get("correlation_id") or str(uuid.uuid4()),
+    )
+
+    return {
+        "status": "resumed",
+        "message": f"Override '{request.action}' applied to topic '{topic}'. Consensus loops resumed.",
+    }
+

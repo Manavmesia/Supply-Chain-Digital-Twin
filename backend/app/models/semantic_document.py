@@ -3,7 +3,13 @@ from datetime import datetime
 from typing import Any
 
 from app.models.base import Base
-from pgvector.sqlalchemy import Vector
+try:
+    from pgvector.sqlalchemy import Vector as _VectorType
+    _PGVECTOR_AVAILABLE = True
+except ModuleNotFoundError:
+    # pgvector not installed locally (Phase 5 dependency) — use a plain JSON column fallback
+    _VectorType = None  # type: ignore[assignment]
+    _PGVECTOR_AVAILABLE = False
 from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,7 +26,7 @@ class SemanticDocument(Base):
     content: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str | None] = mapped_column(String, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(768), nullable=True
+        _VectorType(768) if _PGVECTOR_AVAILABLE else JSONB, nullable=True
     )
     doc_metadata: Mapped[Any] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

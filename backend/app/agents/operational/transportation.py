@@ -191,6 +191,9 @@ class TransportationAgent(BaseAgent):
                 "shipment_id": str(shipment_id),
                 "order_id": order_id_str,
                 "carrier": selected_carrier.name if selected_carrier else "Unknown",
+                # AUD-45 Fix: carrier_id FK included in state so downstream agents
+                # (Risk, Reporting) can reference the carrier without a DB query
+                "carrier_id": str(selected_carrier.carrier_id) if selected_carrier else None,
                 "tracking_id": tracking_id,
                 "freight_mode": freight_mode,
                 "eta": eta.isoformat(),

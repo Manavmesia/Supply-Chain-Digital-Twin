@@ -58,7 +58,7 @@ class DemandForecastAgent(BaseAgent):
                 hist_qty = int(res.scalar() or 0)
 
             # Baseline 30-day forecast: average monthly sales + current order
-            baseline_forecast = max(hist_qty, order_qty * 10)
+            baseline_forecast = max(hist_qty, order_qty)
 
             # ── 2. Check active promotions for product ────────────────────────
             promo_multiplier = 1.0
@@ -97,7 +97,7 @@ class DemandForecastAgent(BaseAgent):
                 "product_id": product_id_str,
                 "forecast_quantity": adjusted_forecast,
                 "confidence": confidence,
-                "baseline_quantity": baseline_forecast,
+                "baseline_quantity": float(hist_qty) if hist_qty > 0 else float(avg_12m),
                 "promo_multiplier": promo_multiplier,
             }
 

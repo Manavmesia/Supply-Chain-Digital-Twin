@@ -10,6 +10,11 @@ class Settings(BaseSettings):
 
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "AI Supply Chain Digital Twin"
+    APP_VERSION: str = "1.0.0"
+
+    # Security
+    SECRET_KEY: str = "dev-secret-key-change-in-production-32chars"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # Database (PostgreSQL)
     POSTGRES_SERVER: str = "localhost"

@@ -14,11 +14,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.agents.operational.order_management import OrderManagementAgent
 from app.graph.state import SupplyChainState
 from app.graph.workflow import (
     build_workflow,
     compile_workflow,
-    route_after_ceo,
+    route_after_customer_service,
     route_after_inventory,
     route_after_order_management,
     route_after_supplier,
@@ -47,6 +48,22 @@ def _base_state(**overrides) -> SupplyChainState:
     }
     state.update(overrides)
     return state
+
+
+# =============================================================================
+# Rejection handling tests
+# =============================================================================
+
+class TestOrderManagementRejectionHandling:
+    def test_reject_includes_error_details_for_status_endpoint(self):
+        agent = OrderManagementAgent(session=None, publisher=None)
+        state = _base_state(workflow_status="received")
+
+        result = agent._reject(state, "Customer 11111111-0000-0000-0000-000000000001 not found")
+
+        assert result["workflow_status"] == "failed"
+        assert result["errors"]
+        assert result["errors"][0]["error"] == "Customer 11111111-0000-0000-0000-000000000001 not found"
 
 
 # =============================================================================
@@ -88,9 +105,13 @@ class TestRoutingFunctions:
         state.pop("next_node", None)
         assert route_after_inventory(state) == "warehouse"
 
-    def test_route_after_ceo_goes_to_reporting(self):
+    def test_route_after_customer_service_defaults_to_reporting(self):
         state = _base_state()
-        assert route_after_ceo(state) == "reporting"
+        assert route_after_customer_service(state) == "reporting"
+
+    def test_route_after_customer_service_goes_to_manufacturing_when_remanufacture_required(self):
+        state = _base_state(planning={"remanufacture_required": True})
+        assert route_after_customer_service(state) == "manufacturing"
 
     def test_route_after_supplier_always_transportation(self):
         state = _base_state()
@@ -112,13 +133,21 @@ class TestGraphCompilation:
 
     def test_graph_node_names(self):
         graph = build_workflow(session_factory=None, publisher=None)
-        # After build, nodes are in the graph's node definitions
+        # Phase 3 operational nodes
         assert "order_management" in graph.nodes
         assert "inventory" in graph.nodes
         assert "warehouse" in graph.nodes
         assert "supplier" in graph.nodes
         assert "transportation" in graph.nodes
-        assert "ceo" in graph.nodes
+        assert "legacy_ceo_compat" in graph.nodes
+        # Phase 4 BI nodes
+        assert "sustainability" in graph.nodes
+        assert "quality_assurance" in graph.nodes
+        assert "pricing" in graph.nodes
+        assert "procurement_strategy" in graph.nodes
+        assert "planner" in graph.nodes
+        assert "negotiation" in graph.nodes
+        assert "customer_service" in graph.nodes
 
 
 # =============================================================================
@@ -164,6 +193,13 @@ class TestWorkflowHappyPath:
                 }),
             ),
             patch(
+                "app.agents.business.demand_forecast.DemandForecastAgent._execute",
+                new=AsyncMock(return_value={
+                    "forecast": {product_id: {"forecast_quantity": 10, "baseline_quantity": 10, "confidence": 0.85}},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
                 "app.agents.operational.inventory.InventoryAgent._execute",
                 new=AsyncMock(return_value={
                     "inventory": {product_id: {"status": "reserved", "warehouse_id": warehouse_id}},
@@ -177,17 +213,71 @@ class TestWorkflowHappyPath:
                 new=AsyncMock(return_value={
                     "warehouse": {"warehouse_id": warehouse_id, "city": "Newark", "country": "US"},
                     "order": {**order_state, "status": "warehouse_assigned"},
-                    "decisions": [],
-                    "event_history": [{"event_type": "ShipmentReady"}],
+                    "decisions": [], "event_history": [{"event_type": "ShipmentReady"}],
                 }),
             ),
             patch(
                 "app.agents.operational.transportation.TransportationAgent._execute",
                 new=AsyncMock(return_value={
-                    "shipment": {"shipment_id": shipment_id, "status": "dispatched", "eta": "2026-08-10T00:00:00Z"},
+                    "shipment": {"shipment_id": shipment_id, "status": "dispatched", "eta": "2026-08-10T00:00:00Z", "freight_mode": "road", "transit_days": 5},
                     "order": {**order_state, "status": "in_transit"},
-                    "decisions": [],
-                    "event_history": [{"event_type": "ShipmentCreated"}, {"event_type": "ShipmentDispatched"}],
+                    "decisions": [], "event_history": [{"event_type": "ShipmentCreated"}, {"event_type": "ShipmentDispatched"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.sustainability.SustainabilityAgent._execute",
+                new=AsyncMock(return_value={
+                    "sustainability": {"co2_kg": 12.5, "sustainability_score": 90.0, "freight_mode": "road"},
+                    "decisions": [], "event_history": [{"event_type": "SustainabilityScoreCalculated"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.quality_assurance.QualityAssuranceAgent._execute",
+                new=AsyncMock(return_value={
+                    "quality": {"status": "passed", "all_passed": True, "failed_count": 0, "inspections": []},
+                    "decisions": [], "event_history": [{"event_type": "QualityPassed"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.finance.FinanceAgent._execute",
+                new=AsyncMock(return_value={
+                    "finance": {"gross_margin_pct": 25.0, "financial_approval": True, "total_cost": "3750.00"},
+                    "decisions": [], "event_history": [{"event_type": "FinancialApprovalGranted"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.pricing.PricingAgent._execute",
+                new=AsyncMock(return_value={
+                    "pricing": {"status": "completed", "results": []},
+                    "decisions": [], "event_history": [{"event_type": "PriceStable"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.risk.RiskAgent._execute",
+                new=AsyncMock(return_value={
+                    "risk": {"score": 10.0, "level": "Low", "factors": []},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.business.procurement_strategy.ProcurementStrategyAgent._execute",
+                new=AsyncMock(return_value={
+                    "procurement": {"strategy": "standard", "reorder_urgency": "normal", "contract_alerts": []},
+                    "decisions": [], "event_history": [{"event_type": "ProcurementPlanCreated"}],
+                }),
+            ),
+            patch(
+                "app.agents.coordination.planner.PlannerAgent._execute",
+                new=AsyncMock(return_value={
+                    "planning": {"status": "completed", "actions": [], "remanufacture_required": False, "estimated_completion_days": 3},
+                    "decisions": [], "event_history": [{"event_type": "ExecutionPlanReady"}],
+                }),
+            ),
+            patch(
+                "app.agents.coordination.negotiation.NegotiationAgent._execute",
+                new=AsyncMock(return_value={
+                    "negotiation": {"status": "skipped", "reason": "no_purchase_orders"},
+                    "decisions": [], "event_history": [{"event_type": "NegotiationCompleted"}],
                 }),
             ),
             patch(
@@ -196,8 +286,21 @@ class TestWorkflowHappyPath:
                     "executive_decision": {"approved": True, "approval_tier": "auto"},
                     "order": {**order_state, "status": "delivered"},
                     "workflow_status": "completed",
-                    "decisions": [],
-                    "event_history": [{"event_type": "CEOApprovalGranted"}],
+                    "decisions": [], "event_history": [{"event_type": "CEOApprovalGranted"}],
+                }),
+            ),
+            patch(
+                "app.agents.operational.customer_service.CustomerServiceAgent._execute",
+                new=AsyncMock(return_value={
+                    "customer_service": {"status": "completed", "notifications": [], "tickets": [], "is_escalated": False},
+                    "decisions": [], "event_history": [{"event_type": "CustomerNotified"}],
+                }),
+            ),
+            patch(
+                "app.agents.coordination.reporting.ReportingAgent._execute",
+                new=AsyncMock(return_value={
+                    "reports": {"latest_report_id": str(uuid.uuid4()), "summary": {}},
+                    "decisions": [], "event_history": [{"event_type": "ReportGenerated"}],
                 }),
             ),
         ):
@@ -206,7 +309,6 @@ class TestWorkflowHappyPath:
                 order={
                     "customer_id": str(uuid.uuid4()),
                     "items": [{"product_id": product_id, "quantity": 2}],
-                    "priority": "standard",
                 }
             )
             config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -240,10 +342,15 @@ class TestWorkflowOutOfStockPath:
             patch(
                 "app.agents.operational.order_management.OrderManagementAgent._execute",
                 new=AsyncMock(return_value={
-                    "order": order_state,
-                    "workflow_status": "operational",
-                    "decisions": [],
-                    "event_history": [{"event_type": "OrderCreated"}],
+                    "order": order_state, "workflow_status": "operational",
+                    "decisions": [], "event_history": [{"event_type": "OrderCreated"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.demand_forecast.DemandForecastAgent._execute",
+                new=AsyncMock(return_value={
+                    "forecast": {product_id: {"forecast_quantity": 50, "baseline_quantity": 50, "confidence": 0.8}},
+                    "decisions": [], "event_history": [],
                 }),
             ),
             patch(
@@ -251,8 +358,7 @@ class TestWorkflowOutOfStockPath:
                 new=AsyncMock(return_value={
                     "inventory": {product_id: {"status": "out_of_stock"}},
                     "next_node": "supplier",
-                    "decisions": [],
-                    "event_history": [{"event_type": "InventoryOutOfStock"}],
+                    "decisions": [], "event_history": [{"event_type": "InventoryOutOfStock"}],
                 }),
             ),
             patch(
@@ -267,9 +373,64 @@ class TestWorkflowOutOfStockPath:
             patch(
                 "app.agents.operational.transportation.TransportationAgent._execute",
                 new=AsyncMock(return_value={
-                    "shipment": {"shipment_id": str(uuid.uuid4()), "status": "dispatched"},
-                    "decisions": [],
-                    "event_history": [{"event_type": "ShipmentCreated"}],
+                    "shipment": {"shipment_id": str(uuid.uuid4()), "status": "dispatched", "freight_mode": "road", "transit_days": 5},
+                    "decisions": [], "event_history": [{"event_type": "ShipmentCreated"}],
+                }),
+            ),
+            patch(
+                "app.agents.business.sustainability.SustainabilityAgent._execute",
+                new=AsyncMock(return_value={
+                    "sustainability": {"co2_kg": 10.0, "sustainability_score": 92.0},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.business.quality_assurance.QualityAssuranceAgent._execute",
+                new=AsyncMock(return_value={
+                    "quality": {"status": "passed", "all_passed": True, "failed_count": 0, "inspections": []},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.business.finance.FinanceAgent._execute",
+                new=AsyncMock(return_value={
+                    "finance": {"gross_margin_pct": 20.0, "financial_approval": True, "total_cost": "4000.00"},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.business.pricing.PricingAgent._execute",
+                new=AsyncMock(return_value={
+                    "pricing": {"status": "completed", "results": []},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.business.risk.RiskAgent._execute",
+                new=AsyncMock(return_value={
+                    "risk": {"score": 10.0, "level": "Low", "factors": []},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.business.procurement_strategy.ProcurementStrategyAgent._execute",
+                new=AsyncMock(return_value={
+                    "procurement": {"strategy": "standard", "reorder_urgency": "normal", "contract_alerts": []},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.coordination.planner.PlannerAgent._execute",
+                new=AsyncMock(return_value={
+                    "planning": {"status": "completed", "actions": [], "remanufacture_required": False, "estimated_completion_days": 3},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.coordination.negotiation.NegotiationAgent._execute",
+                new=AsyncMock(return_value={
+                    "negotiation": {"status": "skipped", "reason": "no_purchase_orders"},
+                    "decisions": [], "event_history": [],
                 }),
             ),
             patch(
@@ -277,8 +438,21 @@ class TestWorkflowOutOfStockPath:
                 new=AsyncMock(return_value={
                     "executive_decision": {"approved": True, "approval_tier": "auto"},
                     "workflow_status": "completed",
-                    "decisions": [],
-                    "event_history": [{"event_type": "CEOApprovalGranted"}],
+                    "decisions": [], "event_history": [{"event_type": "CEOApprovalGranted"}],
+                }),
+            ),
+            patch(
+                "app.agents.operational.customer_service.CustomerServiceAgent._execute",
+                new=AsyncMock(return_value={
+                    "customer_service": {"status": "completed"},
+                    "decisions": [], "event_history": [],
+                }),
+            ),
+            patch(
+                "app.agents.coordination.reporting.ReportingAgent._execute",
+                new=AsyncMock(return_value={
+                    "reports": {"latest_report_id": str(uuid.uuid4()), "summary": {}},
+                    "decisions": [], "event_history": [],
                 }),
             ),
         ):
@@ -286,7 +460,6 @@ class TestWorkflowOutOfStockPath:
             initial = _base_state(order={
                 "customer_id": str(uuid.uuid4()),
                 "items": [{"product_id": product_id, "quantity": 50}],
-                "priority": "standard",
             })
             config = {"configurable": {"thread_id": str(uuid.uuid4())}}
             final = await compiled.ainvoke(initial, config=config)

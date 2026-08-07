@@ -29,6 +29,28 @@ from app.models.product import Product
 
 logger = structlog.get_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# Priority derivation — system-controlled, never user-supplied
+# ---------------------------------------------------------------------------
+
+_PRIORITY_HIGH_AMOUNT_THRESHOLD = Decimal("50000.00")
+
+
+def _derive_priority(customer_tier: str, total_amount: Decimal) -> str:
+    """Derive order priority from customer tier and order value.
+
+    Evaluated in order — first match wins:
+    - ``enterprise`` tier  → ``critical``  (contractual SLA)
+    - ``premium`` tier     → ``high``      (fast-track fulfilment)
+    - ``standard`` + amount > $50,000 → ``high`` (high-value escalation)
+    - everything else      → ``standard``  (cost-optimised path)
+    """
+    if customer_tier == "enterprise":
+        return "critical"
+    if customer_tier == "premium" or total_amount > _PRIORITY_HIGH_AMOUNT_THRESHOLD:
+        return "high"
+    return "standard"
+
 
 class OrderManagementAgent(BaseAgent):
     agent_code = "ADS-01"
@@ -41,7 +63,6 @@ class OrderManagementAgent(BaseAgent):
         # ── 1. Extract order request data ────────────────────────────────────
         customer_id_str = order_input.get("customer_id")
         items_input: list[dict] = order_input.get("items", [])
-        priority = order_input.get("priority", "standard")
         workflow_id = state.get("workflow_id", str(uuid.uuid4()))
         correlation_id = state.get("correlation_id", str(uuid.uuid4()))
 
@@ -91,7 +112,19 @@ class OrderManagementAgent(BaseAgent):
             )
             total_amount += unit_price * quantity
 
-        # ── 4. Create Order record ────────────────────────────────────────────
+        # ── 4. Auto-derive priority (system-controlled, not user-supplied) ─────
+        #
+        # Priority governs two downstream behaviours:
+        #   1. Transportation Agent  — carrier/route selection strategy
+        #   2. CEO Agent             — error-tolerance during approval
+        #
+        # Rules (evaluated in order; first match wins):
+        #   enterprise tier                   → critical  (SLA commitment)
+        #   premium tier  OR amount > $50,000 → high      (fast-track fulfilment)
+        #   standard tier AND amount ≤ $50,000 → standard (cost-optimised)
+        priority = _derive_priority(customer.customer_tier, total_amount)
+
+        # ── 5. Create Order record ────────────────────────────────────────────
         order_id = uuid.uuid4()
         order = Order(
             order_id=order_id,
@@ -139,6 +172,8 @@ class OrderManagementAgent(BaseAgent):
             order_id=str(order_id),
             customer=customer.name,
             total=str(total_amount),
+            derived_priority=priority,
+            customer_tier=customer.customer_tier,
             workflow_id=workflow_id,
         )
 
