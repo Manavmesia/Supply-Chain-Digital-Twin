@@ -38,12 +38,16 @@ class CEOAgent(BaseAgent):
 
         approved = True
         approval_tier = "auto"
-        requires_human_approval = False
-        workflow_status = "completed"
+        requires_human_approval = bool(state.get("requires_human_approval"))
+        workflow_status = state.get("workflow_status") if state.get("workflow_status") in {"escalated", "failed"} else "completed"
         rationale = "Order satisfied standard approval criteria."
         order_status = str(order.get("status") or "")
 
-        if risk_score > 85.0:
+        if workflow_status == "escalated" or requires_human_approval:
+            approval_tier = "human_required"
+            requires_human_approval = True
+            rationale = "Workflow escalated for human review and approval."
+        elif risk_score > 85.0:
             approved = False
             approval_tier = "risk_denied"
             workflow_status = "failed"

@@ -51,6 +51,7 @@ _AGENT_CATALOGUE = [
     # Coordination
     {"code": "ADS-15", "name": "Planner",              "layer": "coordination",  "description": "Enterprise execution planning and task orchestration"},
     {"code": "ADS-16", "name": "Negotiation",          "layer": "coordination",  "description": "Conflict resolution and multi-agent trade-off analysis"},
+    {"code": "ADS-17", "name": "CEO",                  "layer": "coordination",  "description": "Strategic governance, policy enforcement, final approvals"},
     {"code": "ADS-18", "name": "Reporting & Analytics","layer": "coordination",  "description": "Executive dashboards, explainability reports, audit"},
 ]
 
@@ -96,7 +97,7 @@ async def get_analytics_summary(
 
     # Active suppliers
     supplier_res = await session.execute(
-        select(func.count(Supplier.supplier_id)).where(Supplier.is_active.is_(True))
+        select(func.count(Supplier.supplier_id)).where(Supplier.status == "active")
     )
     active_suppliers = supplier_res.scalar() or 0
 
