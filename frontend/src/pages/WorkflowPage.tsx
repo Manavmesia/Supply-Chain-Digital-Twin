@@ -724,6 +724,9 @@ export const WorkflowPage: React.FC = () => {
   const orderData = (status?.order || null) as Record<string, unknown> | null;
   const shipmentData = (status?.shipment || null) as Record<string, unknown> | null;
   const execDecision = (status?.executive_decision || null) as Record<string, unknown> | null;
+  const replenishmentRequests = Array.isArray(status?.replenishment_requests)
+    ? (status?.replenishment_requests as Array<Record<string, unknown>>)
+    : [];
   const orderItems: Array<Record<string, unknown>> = Array.isArray(orderData?.items) ? (orderData.items as Array<Record<string, unknown>>) : [];
 
   const calculatedItemsTotal = orderItems.reduce((acc, it) => {
@@ -1038,6 +1041,38 @@ export const WorkflowPage: React.FC = () => {
               </span>
             </div>
           </div>
+
+          {replenishmentRequests.length > 0 && (
+            <div
+              className="mb-4 p-3 animate-fade-in"
+              style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '8px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+              }}
+            >
+              <div>
+                <strong style={{ color: '#3b82f6', fontSize: '0.85rem' }}>
+                  🔄 Autonomous Inbound Replenishment Triggered (Self-Healing Digital Twin)
+                </strong>
+                <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>
+                  Inventory Agent (ADS-03) detected safety stock breaches and dispatched Supplier Agent (ADS-05) to issue {replenishmentRequests.length} inbound replenishment Purchase Order(s).
+                </p>
+              </div>
+              <a
+                href="/inventory"
+                className="btn btn-sm btn-ghost"
+                style={{ fontSize: '0.75rem', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.4)' }}
+              >
+                Inspect Inbound POs →
+              </a>
+            </div>
+          )}
 
           {/* Line items table */}
           {orderItems.length > 0 && (

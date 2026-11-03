@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { inventoryApi } from '../services/api';
-import type { InventoryRecord, InventorySummary } from '../types';
+import type { InventoryRecord, InventorySummary, PurchaseOrder } from '../types';
+import { formatCurrency, formatPoId } from '../utils/formatters';
 
 const STATUS_CONFIG = {
   ok:       { color: '#10b981', label: 'OK' },
@@ -8,24 +9,34 @@ const STATUS_CONFIG = {
   critical: { color: '#ef4444', label: 'Critical' },
 };
 
+const PO_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
+  in_transit: { color: '#3b82f6', label: 'In Transit' },
+  draft:      { color: '#f59e0b', label: 'Drafted' },
+  received:   { color: '#10b981', label: 'Received' },
+};
+
 export const InventoryPage: React.FC = () => {
   const [items, setItems] = useState<InventoryRecord[]>([]);
+  const [replenishmentOrders, setReplenishmentOrders] = useState<PurchaseOrder[]>([]);
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [lowOnly, setLowOnly] = useState(false);
   const [search, setSearch] = useState('');
+  const [receivingPoId, setReceivingPoId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const isMountedRef = useRef(true);
 
   const fetchInventory = useCallback(async (isSilent = false) => {
     try {
-      const [invRes, sumRes] = await Promise.all([
+      const [invRes, sumRes, repRes] = await Promise.all([
         inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
         inventoryApi.getSummary(),
+        inventoryApi.getReplenishmentOrders({ limit: 50 }),
       ]);
       if (isMountedRef.current) {
         setItems(invRes.items);
         setSummary(sumRes);
+        setReplenishmentOrders(repRes.items);
         setLastUpdated(new Date());
       }
     } catch (err) {
@@ -37,6 +48,20 @@ export const InventoryPage: React.FC = () => {
     }
   }, [lowOnly]);
 
+  const handleReceiveStock = async (poId: string) => {
+    setReceivingPoId(poId);
+    try {
+      await inventoryApi.receiveReplenishmentOrder(poId);
+      await fetchInventory(true);
+    } catch (err) {
+      console.error('Failed to receive replenishment PO:', err);
+    } finally {
+      if (isMountedRef.current) {
+        setReceivingPoId(null);
+      }
+    }
+  };
+
   useEffect(() => {
     let ignore = false;
     isMountedRef.current = true;
@@ -44,10 +69,12 @@ export const InventoryPage: React.FC = () => {
     Promise.all([
       inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
       inventoryApi.getSummary(),
-    ]).then(([invRes, sumRes]) => {
+      inventoryApi.getReplenishmentOrders({ limit: 50 }),
+    ]).then(([invRes, sumRes, repRes]) => {
       if (!ignore && isMountedRef.current) {
         setItems(invRes.items);
         setSummary(sumRes);
+        setReplenishmentOrders(repRes.items);
         setLastUpdated(new Date());
         setLoading(false);
       }
@@ -240,6 +267,128 @@ export const InventoryPage: React.FC = () => {
                         >
                           {sc.label}
                         </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Autonomous Inbound Replenishment & Purchase Orders */}
+      <div className="card mt-6 animate-fade-in" style={{ borderTop: '3px solid #3b82f6' }}>
+        <div className="section-header mb-4">
+          <div>
+            <h3 className="section-title">🔄 Autonomous Inbound Replenishment (Self-Healing Digital Twin)</h3>
+            <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.25rem' }}>
+              When order reservations breach safety stock thresholds, ADS-03 &amp; ADS-05 autonomously draft purchase orders to restore inventory buffers.
+            </p>
+          </div>
+          <span className="badge badge-info">{replenishmentOrders.length} inbound POs</span>
+        </div>
+
+        {replenishmentOrders.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-icon">🤝</span>
+            <p>No active replenishment purchase orders</p>
+            <p style={{ fontSize: '0.8rem', color: '#475569' }}>
+              All inventory levels are currently above reorder points
+            </p>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>PO Reference</th>
+                  <th>Target SKU / Product</th>
+                  <th>Assigned Supplier</th>
+                  <th>Destination Hub</th>
+                  <th>Order Qty</th>
+                  <th>Unit Cost</th>
+                  <th>Total Cost</th>
+                  <th>Lead Time</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {replenishmentOrders.map((po) => {
+                  const psc = PO_STATUS_CONFIG[po.status] ?? PO_STATUS_CONFIG.draft;
+                  return (
+                    <tr key={po.po_id}>
+                      <td>
+                        <span className="tag" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                          {formatPoId(po.po_id)}
+                        </span>
+                      </td>
+                      <td>
+                        <div>
+                          <strong>{po.product_name}</strong>
+                          <div className="tag" style={{ marginTop: '2px', fontSize: '0.7rem' }}>
+                            {po.sku}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: 500, color: 'var(--c-text-primary)' }}>
+                          {po.supplier_name}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
+                          {po.warehouse_name || 'Main Fulfillment Hub'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge badge-info">{po.quantity.toLocaleString()} units</span>
+                      </td>
+                      <td>{formatCurrency(po.unit_cost)}</td>
+                      <td style={{ fontWeight: 600, color: '#10b981' }}>
+                        {formatCurrency(po.total_cost)}
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                          ⏱ {po.lead_time_days} days
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            background: `${psc.color}22`,
+                            color: psc.color,
+                            border: `1px solid ${psc.color}44`,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {psc.label}
+                        </span>
+                      </td>
+                      <td>
+                        {po.status === 'received' ? (
+                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 600 }}>
+                            ✓ Stock Restored
+                          </span>
+                        ) : (
+                          <button
+                            className="btn btn-sm"
+                            style={{
+                              background: '#10b981',
+                              color: '#fff',
+                              border: 'none',
+                              fontSize: '0.75rem',
+                              padding: '4px 10px',
+                              fontWeight: 600,
+                            }}
+                            onClick={() => handleReceiveStock(po.po_id)}
+                            disabled={receivingPoId === po.po_id}
+                          >
+                            {receivingPoId === po.po_id ? 'Receiving…' : '✓ Receive Stock'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

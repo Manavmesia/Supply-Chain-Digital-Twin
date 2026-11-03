@@ -66,6 +66,7 @@ class SupplyChainState(TypedDict, total=False):
     customer_service: dict[str, Any]  # Customer notifications & support tickets
     pricing: dict[str, Any]           # Dynamic pricing recommendations (ADS-11)
     procurement: dict[str, Any]       # Procurement strategy + contract alerts (ADS-12)
+    replenishment_requests: list[dict[str, Any]]  # Autonomous replenishment PO requests from ADS-03
 
     # ── Coordination ─────────────────────────────────────────────────────────
     decisions: list[dict[str, Any]]   # Ordered list of agent decisions

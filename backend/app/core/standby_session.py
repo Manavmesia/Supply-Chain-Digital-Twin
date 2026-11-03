@@ -252,6 +252,8 @@ def create_standby_session(
                         w_id = str(v)
                     elif "reserved_qty" in k and isinstance(v, (int, float)):
                         qty_val = int(v)
+                    elif isinstance(v, (int, float)) and v > 0:
+                        qty_val = int(v)
                 if p_id:
                     persistence.reserve_inventory_units(p_id, qty_val, w_id)
             except Exception as e:
@@ -302,23 +304,43 @@ def create_standby_session(
 
         if "from inventory" in q or "inventory." in q:
             target_pid = None
-            for pid in param_uuids:
-                try:
-                    target_pid = uuid.UUID(pid)
-                    break
-                except Exception:
-                    pass
+            target_wid = None
+            compile_params = query.compile().params if hasattr(query, "compile") else {}
+            for k, v in compile_params.items():
+                if "product_id" in k and v:
+                    target_pid = str(v)
+                elif "warehouse_id" in k and v:
+                    target_wid = str(v)
+
+            if not target_pid:
+                for pid in param_uuids:
+                    if pid in STANDBY_PRODUCT_DATA or any(pid == str(p[0]) for p in persistence._BASELINE_PRODUCTS):
+                        target_pid = pid
+                        break
+                if not target_pid and param_uuids:
+                    for pid in param_uuids:
+                        try:
+                            uuid.UUID(pid)
+                            target_pid = pid
+                            break
+                        except Exception:
+                            pass
 
             try:
                 with persistence._get_connection() as conn:
-                    if target_pid:
+                    if target_pid and target_wid:
+                        rows = conn.execute(
+                            "SELECT inventory_id, product_id, warehouse_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ? AND warehouse_id = ?",
+                            (str(target_pid), str(target_wid)),
+                        ).fetchall()
+                    elif target_pid:
                         rows = conn.execute(
                             "SELECT inventory_id, product_id, warehouse_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ?",
-                            (str(target_pid),)
+                            (str(target_pid),),
                         ).fetchall()
                     else:
                         rows = conn.execute(
-                            "SELECT inventory_id, product_id, warehouse_id, available_qty, reserved_qty, safety_stock FROM inventory"
+                            "SELECT inventory_id, product_id, warehouse_id, available_qty, reserved_qty, safety_stock FROM inventory",
                         ).fetchall()
                     if rows:
                         inv_objs = [
@@ -336,7 +358,7 @@ def create_standby_session(
             except Exception as e:
                 logger.warning("Failed to query live inventory for standby session", error=str(e))
 
-            inv = StandbyInventory(product_id=target_pid or uuid.uuid4(), warehouse_id=wh.warehouse_id)
+            inv = StandbyInventory(product_id=uuid.UUID(str(target_pid)) if target_pid else uuid.uuid4(), warehouse_id=wh.warehouse_id)
             return _scalars([inv])
 
         if "from supplier" in q or "supplier." in q:

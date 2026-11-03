@@ -40,6 +40,7 @@ from app.core.catalog import (
     BASELINE_INVENTORY as _BASELINE_INVENTORY,
     BASELINE_ORDERS as _BASELINE_ORDERS,
     BASELINE_PRODUCTS as _BASELINE_PRODUCTS,
+    BASELINE_PURCHASE_ORDERS as _BASELINE_PURCHASE_ORDERS,
     BASELINE_REPORTS as _BASELINE_REPORTS,
     BASELINE_ROUTES as _BASELINE_ROUTES,
     BASELINE_SUPPLIERS as _BASELINE_SUPPLIERS,
@@ -189,6 +190,24 @@ def init_db() -> None:
                 created_at TEXT,
                 payload_json TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                po_id TEXT PRIMARY KEY,
+                supplier_id TEXT,
+                supplier_name TEXT,
+                product_id TEXT,
+                product_name TEXT,
+                sku TEXT,
+                warehouse_id TEXT,
+                warehouse_name TEXT,
+                quantity INTEGER,
+                unit_cost REAL,
+                total_cost REAL,
+                lead_time_days INTEGER,
+                status TEXT DEFAULT 'in_transit',
+                workflow_id TEXT,
+                created_at TEXT
+            );
             """
         )
 
@@ -304,6 +323,20 @@ def init_db() -> None:
                         json.dumps(rep.get("payload_summary", {})),
                     ),
                 )
+
+        # Seed baseline purchase orders if empty
+        cur = conn.execute("SELECT COUNT(*) as count FROM purchase_orders")
+        if cur.fetchone()["count"] == 0:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO purchase_orders (
+                    po_id, supplier_id, supplier_name, product_id, product_name,
+                    sku, warehouse_id, warehouse_name, quantity, unit_cost,
+                    total_cost, lead_time_days, status, workflow_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                _BASELINE_PURCHASE_ORDERS,
+            )
 
 
 # Initialize DB immediately on module import
@@ -1268,3 +1301,119 @@ def get_report(report_id: str) -> dict[str, Any] | None:
             "created_at": row["created_at"],
             "payload_summary": payload,
         }
+
+
+# ── Purchase Orders & Autonomous Replenishment ────────────────────────────────
+
+def save_purchase_order(po_dict: dict[str, Any]) -> None:
+    """Save or update an autonomous inbound replenishment Purchase Order."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO purchase_orders (
+                po_id, supplier_id, supplier_name, product_id, product_name,
+                sku, warehouse_id, warehouse_name, quantity, unit_cost,
+                total_cost, lead_time_days, status, workflow_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(po_dict.get("po_id", uuid.uuid4())),
+                str(po_dict.get("supplier_id", "")),
+                str(po_dict.get("supplier_name", "Primary Supplier")),
+                str(po_dict.get("product_id", "")),
+                str(po_dict.get("product_name", "Component")),
+                str(po_dict.get("sku", "SKU-001")),
+                str(po_dict.get("warehouse_id", "")),
+                str(po_dict.get("warehouse_name", "Main Hub")),
+                int(po_dict.get("quantity", 100)),
+                float(po_dict.get("unit_cost", 0.0)),
+                float(po_dict.get("total_cost", 0.0)),
+                int(po_dict.get("lead_time_days", 5)),
+                str(po_dict.get("status", "in_transit")),
+                str(po_dict.get("workflow_id")) if po_dict.get("workflow_id") else None,
+                str(po_dict.get("created_at") or now_iso),
+            ),
+        )
+
+
+def list_purchase_orders(
+    limit: int = 50,
+    status_filter: str | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve autonomous purchase orders from SQLite ordered by creation time descending."""
+    with _get_connection() as conn:
+        query = "SELECT * FROM purchase_orders"
+        params: list[Any] = []
+        if status_filter:
+            query += " WHERE status = ?"
+            params.append(status_filter)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def replenish_inventory_units(
+    product_id: str,
+    quantity: int,
+    warehouse_id: str | None = None,
+) -> bool:
+    """Add procured units back into live warehouse inventory (closes replenishment loop)."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with _get_connection() as conn:
+        row = None
+        if warehouse_id:
+            row = conn.execute(
+                "SELECT inventory_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ? AND warehouse_id = ?",
+                (product_id, warehouse_id),
+            ).fetchone()
+        if not row:
+            row = conn.execute(
+                "SELECT inventory_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ? LIMIT 1",
+                (product_id,),
+            ).fetchone()
+
+        if row:
+            inv_id = row["inventory_id"]
+            new_available = int(row["available_qty"]) + int(quantity)
+            net = new_available - int(row["reserved_qty"])
+            st = "critical" if net <= 0 else ("low" if net < int(row["safety_stock"]) else "ok")
+            conn.execute(
+                """
+                UPDATE inventory 
+                SET available_qty = ?, status = ?, updated_at = ?
+                WHERE inventory_id = ?
+                """,
+                (new_available, st, now_iso, inv_id),
+            )
+            return True
+        return False
+
+
+def receive_purchase_order(po_id: str) -> dict[str, Any] | None:
+    """Mark an inbound purchase order as received and replenish warehouse stock."""
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM purchase_orders WHERE po_id = ?",
+            (po_id,),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE purchase_orders SET status = 'received' WHERE po_id = ?",
+            (po_id,),
+        )
+    # Add units to inventory
+    replenish_inventory_units(
+        product_id=row["product_id"],
+        quantity=int(row["quantity"]),
+        warehouse_id=row["warehouse_id"],
+    )
+    return {
+        "po_id": row["po_id"],
+        "status": "received",
+        "product_id": row["product_id"],
+        "quantity_replenished": row["quantity"],
+        "warehouse_id": row["warehouse_id"],
+    }

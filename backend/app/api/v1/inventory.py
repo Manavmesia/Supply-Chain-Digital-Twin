@@ -191,6 +191,46 @@ async def get_inventory_summary(
         return persistence.get_inventory_summary()
 
 
+# ── Inbound Replenishment REST Endpoints ─────────────────────────────────────
+
+@router.get(
+    "/replenishment-orders",
+    summary="List autonomous inbound replenishment purchase orders",
+)
+async def list_replenishment_orders(
+    limit: int = Query(50, ge=1, le=100),
+    status_filter: str | None = Query(None, alias="status"),
+) -> dict[str, Any]:
+    """Retrieve autonomous purchase orders drafted by ADS-05 Supplier Agent."""
+    orders = persistence.list_purchase_orders(limit=limit, status_filter=status_filter)
+    return {
+        "items": orders,
+        "total": len(orders),
+        "limit": limit,
+    }
+
+
+@router.post(
+    "/replenishment-orders/{po_id}/receive",
+    summary="Receive an inbound shipment and replenish warehouse inventory",
+)
+async def receive_replenishment_order(
+    po_id: str,
+) -> dict[str, Any]:
+    """Commit inbound stock receipt to warehouse inventory, completing the replenishment loop."""
+    result = persistence.receive_purchase_order(po_id)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Purchase order '{po_id}' not found",
+        )
+    return {
+        "success": True,
+        "message": f"Inbound replenishment {po_id} received successfully. Stock added to warehouse.",
+        "data": result,
+    }
+
+
 @router.get(
     "/{product_id}",
     summary="Get inventory for a specific product",

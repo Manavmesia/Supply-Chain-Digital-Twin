@@ -10,6 +10,7 @@ import type {
   Order,
   InventoryRecord,
   InventorySummary,
+  PurchaseOrder,
   Supplier,
   SupplierStats,
   Report,
@@ -186,6 +187,20 @@ export const inventoryApi = {
   getByProduct: async (productId: string) => {
     try {
       const { data } = await apiClient.get(`/inventory/${productId}`);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  getReplenishmentOrders: async (params?: { limit?: number; status?: string }): Promise<{ items: PurchaseOrder[]; total: number }> => {
+    try {
+      const { data } = await apiClient.get<{ items: PurchaseOrder[]; total: number }>('/inventory/replenishment-orders', { params });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  receiveReplenishmentOrder: async (poId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const { data } = await apiClient.post<{ success: boolean; message: string }>(`/inventory/replenishment-orders/${poId}/receive`);
       return data;
     } catch (err) { return handleError(err); }
   },

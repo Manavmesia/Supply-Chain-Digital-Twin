@@ -39,6 +39,7 @@ def _mock_scalar(value):
     """Return an AsyncMock that mimics session.execute() returning one scalar."""
     result = MagicMock()
     result.scalar_one_or_none.return_value = value
+    result.scalar_one.return_value = value
     result.scalars.return_value.all.return_value = [value] if value is not None else []
     result.all.return_value = [(value, value)] if value else []
     return result

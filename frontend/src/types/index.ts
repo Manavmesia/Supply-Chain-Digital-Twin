@@ -37,6 +37,8 @@ export interface WorkflowStatus {
   order: Record<string, unknown> | null;
   shipment: Record<string, unknown> | null;
   executive_decision: Record<string, unknown> | null;
+  supplier?: Record<string, unknown> | null;
+  replenishment_requests?: Record<string, unknown>[] | null;
   requires_human_approval: boolean;
   event_count: number;
   error_count: number;
@@ -177,6 +179,24 @@ export interface InventorySummary {
   low_stock_locations: number;
   out_of_stock_locations: number;
   fill_rate_pct: number;
+}
+
+export interface PurchaseOrder {
+  po_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  product_id: string;
+  product_name: string;
+  sku: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  lead_time_days: number;
+  status: 'draft' | 'in_transit' | 'received';
+  workflow_id: string | null;
+  created_at: string;
 }
 
 // Suppliers

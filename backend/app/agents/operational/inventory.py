@@ -94,7 +94,17 @@ class InventoryAgent(BaseAgent):
                     Inventory.warehouse_id == warehouse_id,
                 )
             )
-            inv_after = r2.scalar_one()
+            inv_after = None
+            if hasattr(r2, "scalar_one_or_none") and callable(r2.scalar_one_or_none):
+                inv_after = r2.scalar_one_or_none()
+            if inv_after is None and hasattr(r2, "scalar_one") and callable(r2.scalar_one):
+                try:
+                    inv_after = r2.scalar_one()
+                except Exception:
+                    inv_after = None
+            if inv_after is None:
+                inv_after = inv
+
             net_available = int(inv_after.available_qty) - int(inv_after.reserved_qty)
 
             availability[str(product_id)] = {
@@ -109,15 +119,84 @@ class InventoryAgent(BaseAgent):
             if net_available < int(inv_after.safety_stock):
                 low_stock_products.append(str(product_id))
 
-        # ── Publish low-stock events ──────────────────────────────────────────
+        # ── Publish low-stock events & assemble autonomous replenishment requests ──
         event_history = list(state.get("event_history") or [])
         decisions = list(state.get("decisions") or [])
+        replenishment_requests: list[dict[str, Any]] = []
 
         for pid in low_stock_products:
-            payload = {"product_id": pid, "warehouse_id": selected_warehouse_id}
+            inv_data = availability.get(pid, {})
+            safety_stock = int(inv_data.get("safety_stock", 200))
+            net_avail = int(inv_data.get("net_available_after", 0))
+            reorder_qty = max(safety_stock * 2 - net_avail, 100)
+            wh_target = inv_data.get("warehouse_id") or selected_warehouse_id
+            replenishment_requests.append({
+                "product_id": pid,
+                "warehouse_id": wh_target,
+                "quantity": reorder_qty,
+                "reason": "safety_stock_breach",
+            })
+            payload = {
+                "product_id": pid,
+                "warehouse_id": selected_warehouse_id,
+                "reorder_qty": reorder_qty,
+                "reason": "safety_stock_breach",
+            }
             await self._publish(state, "InventoryLow", payload)
             event_history = self._append_event(event_history, "InventoryLow", payload)
-            logger.warning("Safety stock breach", product_id=pid)
+            logger.warning("Safety stock breach — autonomous replenishment queued", product_id=pid, reorder_qty=reorder_qty)
+
+        for pid in out_of_stock_products:
+            needed = int(availability.get(pid, {}).get("needed", 50))
+            reorder_qty = max(needed * 2, 100)
+            replenishment_requests.append({
+                "product_id": pid,
+                "warehouse_id": selected_warehouse_id,
+                "quantity": reorder_qty,
+                "reason": "out_of_stock",
+            })
+
+        if replenishment_requests:
+            rep_payload = {
+                "order_id": order.get("order_id"),
+                "replenishment_requests": replenishment_requests,
+                "count": len(replenishment_requests),
+            }
+            await self._publish(state, "AutonomousReplenishmentTriggered", rep_payload)
+            event_history = self._append_event(event_history, "AutonomousReplenishmentTriggered", rep_payload)
+
+            # If all items are reserved, order proceeds directly to warehouse;
+            # persist autonomous inbound replenishment PO(s) immediately.
+            if all_reserved:
+                from datetime import date, timedelta
+                from app.core import persistence
+                from app.agents.operational.supplier import PRODUCT_MAP
+                for req in replenishment_requests:
+                    try:
+                        pid_str = str(req["product_id"])
+                        qty = int(req["quantity"])
+                        wh_str = str(req.get("warehouse_id") or selected_warehouse_id or "")
+                        prod_info = PRODUCT_MAP.get(pid_str, ("Industrial Component", "SKU-001"))
+                        po_id = str(uuid.uuid4())
+                        persistence.save_purchase_order({
+                            "po_id": po_id,
+                            "product_id": pid_str,
+                            "product_name": prod_info[0],
+                            "product_sku": prod_info[1],
+                            "supplier_id": str(uuid.uuid4()),
+                            "supplier_name": "Apex Global Logistics & Supplies",
+                            "warehouse_id": wh_str,
+                            "quantity": qty,
+                            "unit_cost": 120.00,
+                            "total_cost": round(qty * 120.00, 2),
+                            "lead_time_days": 4,
+                            "requested_delivery": (date.today() + timedelta(days=4)).isoformat(),
+                            "status": "in_transit",
+                            "triggered_by_agent": self.agent_code,
+                            "workflow_id": str(state.get("workflow_id") or ""),
+                        })
+                    except Exception as ex:
+                        logger.warning("Could not persist autonomous PO in inventory agent", error=str(ex))
 
         # ── Route based on stock outcome (LLM-driven if API key present) ──────
         from pydantic import BaseModel
@@ -130,20 +209,22 @@ class InventoryAgent(BaseAgent):
                 return InventoryDecisionSchema(
                     rationale=f"Products {out_of_stock_products} unavailable — routing to Supplier for procurement"
                 )
+            rep_note = f" (Autonomous inbound replenishment triggered for {len(replenishment_requests)} low-stock SKU(s))" if replenishment_requests else ""
             return InventoryDecisionSchema(
-                rationale=f"All {len(items)} items reserved from warehouse {selected_warehouse_id}"
+                rationale=f"All {len(items)} items reserved from warehouse {selected_warehouse_id}{rep_note}"
             )
 
         inv_context = {
             "all_reserved": all_reserved,
             "out_of_stock_products": out_of_stock_products,
             "low_stock_products": low_stock_products,
+            "replenishment_requests_count": len(replenishment_requests),
             "selected_warehouse_id": selected_warehouse_id,
             "item_count": len(items),
         }
         inv_rules = [
-            "If any items cannot be reserved, route must escalate to supplier for replenishment.",
-            "If all items are reserved, route to warehouse for picking and packing.",
+            "If any items cannot be reserved, route must escalate to supplier for procurement.",
+            "If all items are reserved, route to warehouse for picking and packing (replenishment orders are created autonomously).",
             "Rationale must detail the reservation status and warehouse assignment.",
         ]
 
@@ -160,6 +241,7 @@ class InventoryAgent(BaseAgent):
             payload = {
                 "order_id": order.get("order_id"),
                 "out_of_stock": out_of_stock_products,
+                "replenishment_requests": replenishment_requests,
             }
             await self._publish(state, "InventoryOutOfStock", payload)
             event_history = self._append_event(event_history, "InventoryOutOfStock", payload)
@@ -176,35 +258,41 @@ class InventoryAgent(BaseAgent):
             )
             return {
                 "inventory": availability,
+                "replenishment_requests": replenishment_requests,
                 "decisions": decisions,
                 "event_history": event_history,
                 "next_node": "supplier",
             }
 
-        # All items reserved — route to warehouse
+        # All items reserved — order proceeds to warehouse for picking & shipping
+        target_next = "warehouse"
         payload = {
             "order_id": order.get("order_id"),
             "reserved_items": list(availability.keys()),
             "warehouse_id": selected_warehouse_id,
+            "replenishment_triggered": bool(replenishment_requests),
         }
         await self._publish(state, "InventoryAllocated", payload)
         event_history = self._append_event(event_history, "InventoryAllocated", payload)
         decisions = self._record_decision(
             decisions, "inventory_allocated",
-            llm_inv_dec.rationale or f"All {len(items)} items reserved from warehouse {selected_warehouse_id}",
+            llm_inv_dec.rationale or f"All {len(items)} items reserved from warehouse {selected_warehouse_id}"
+            + (f" with {len(replenishment_requests)} autonomous replenishment PO(s) queued" if replenishment_requests else ""),
             payload,
             source=inv_src,
         )
         logger.info(
             "Inventory allocated",
             warehouse_id=selected_warehouse_id,
+            replenishment_count=len(replenishment_requests),
             workflow_id=state.get("workflow_id"),
         )
         return {
             "inventory": availability,
+            "replenishment_requests": replenishment_requests,
             "decisions": decisions,
             "event_history": event_history,
-            "next_node": "warehouse",
+            "next_node": target_next,
         }
 
     def _out_of_stock(

@@ -206,3 +206,42 @@ BASELINE_REPORTS: list[dict[str, Any]] = [
         },
     },
 ]
+
+# ── Baseline Purchase Orders (Autonomous Inbound Replenishment) ───────────────
+
+BASELINE_PURCHASE_ORDERS = [
+    (
+        "po000000-0000-0000-0000-000000000001",
+        "33333333-0000-0000-0000-000000000001",
+        "Apex Microelectronics Inc.",
+        "30000000-0000-0000-0000-000000000001",
+        "Industrial Sensor Module",
+        "ELEC-001",
+        "22222222-0000-0000-0000-000000000001",
+        "Pacific Northwest MegaHub",
+        500,
+        110.00,
+        55000.00,
+        4,
+        "in_transit",
+        "7f92a34c-6d8b-4a5f-9271-9df61c778fa1",
+        "2026-11-02T11:00:00Z",
+    ),
+    (
+        "po000000-0000-0000-0000-000000000002",
+        "33333333-0000-0000-0000-000000000002",
+        "Stuttgart Industrial Sensors GmbH",
+        "30000000-0000-0000-0000-000000000004",
+        "Precision Ball Bearing Set",
+        "MECH-001",
+        "22222222-0000-0000-0000-000000000002",
+        "Midwest Fulfillment Center",
+        250,
+        70.00,
+        17500.00,
+        6,
+        "draft",
+        None,
+        "2026-11-02T14:30:00Z",
+    ),
+]

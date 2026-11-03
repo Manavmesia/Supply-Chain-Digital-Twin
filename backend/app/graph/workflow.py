@@ -186,7 +186,7 @@ def route_after_inventory(state: SupplyChainState) -> str:
         return next_node
     inventory = state.get("inventory") or {}
     for _, data in inventory.items():
-        if isinstance(data, dict) and data.get("status") == "out_of_stock":
+        if isinstance(data, dict) and data.get("status") in ("out_of_stock", "critical"):
             return "supplier"
     return "warehouse"
 
@@ -198,6 +198,9 @@ def route_after_order_management(state: SupplyChainState) -> str:
 
 
 def route_after_supplier(state: SupplyChainState) -> str:
+    next_node = state.get("next_node")
+    if next_node in ("warehouse", "transportation"):
+        return next_node
     return "transportation"
 
 
@@ -270,7 +273,7 @@ def build_workflow(
     graph.add_conditional_edges(
         "supplier",
         route_after_supplier,
-        {"transportation": "transportation"},
+        {"warehouse": "warehouse", "transportation": "transportation"},
     )
 
     # Parallel pipeline review loop

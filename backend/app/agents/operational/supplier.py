@@ -23,6 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base_agent import BaseAgent
+from app.core import persistence
+from app.core.catalog import PRODUCT_MAP
 from app.graph.state import SupplyChainState
 from app.models.purchase_order import PurchaseOrder
 from app.models.supplier import Supplier
@@ -60,28 +62,62 @@ class SupplierAgent(BaseAgent):
             if wh:
                 warehouse_id_str = str(wh.warehouse_id)
 
-        # ── Collect out-of-stock products ─────────────────────────────────────
-        out_of_stock_items = [
-            item for item in (order.get("items") or [])
-            if inventory.get(str(item["product_id"]), {}).get("status") == "out_of_stock"
-        ]
+        # ── Collect out-of-stock products & autonomous replenishment requests ──
+        items_to_procure: list[dict[str, Any]] = []
 
-        if not out_of_stock_items:
-            # Nothing to procure — route to transportation
+        # 1. Customer order out-of-stock items
+        for item in (order.get("items") or []):
+            inv_stat = inventory.get(str(item["product_id"]), {})
+            if isinstance(inv_stat, dict) and inv_stat.get("status") == "out_of_stock":
+                items_to_procure.append({
+                    "product_id": str(item["product_id"]),
+                    "quantity": int(item["quantity"]),
+                    "reason": "customer_order_out_of_stock",
+                    "warehouse_id": warehouse_id_str,
+                })
+
+        # 2. Autonomous safety stock replenishment requests from ADS-03
+        for rep in (state.get("replenishment_requests") or []):
+            pid_str = str(rep["product_id"])
+            if not any(it["product_id"] == pid_str for it in items_to_procure):
+                items_to_procure.append({
+                    "product_id": pid_str,
+                    "quantity": int(rep.get("quantity", 100)),
+                    "reason": rep.get("reason", "safety_stock_breach"),
+                    "warehouse_id": rep.get("warehouse_id") or warehouse_id_str,
+                })
+
+        # 3. Direct inventory safety stock inspection
+        for pid, inv_info in inventory.items():
+            if isinstance(inv_info, dict):
+                net_avail = inv_info.get("net_available_after")
+                safety_stock = inv_info.get("safety_stock")
+                if net_avail is not None and safety_stock is not None and int(net_avail) < int(safety_stock):
+                    if not any(it["product_id"] == pid for it in items_to_procure):
+                        reorder_qty = max(int(safety_stock) * 2 - int(net_avail), 100)
+                        items_to_procure.append({
+                            "product_id": pid,
+                            "quantity": reorder_qty,
+                            "reason": "safety_stock_breach",
+                            "warehouse_id": inv_info.get("warehouse_id") or warehouse_id_str,
+                        })
+
+        if not items_to_procure:
+            # Nothing to procure — route to transportation or warehouse
             decisions = self._record_decision(
                 state, "no_procurement_needed",
-                "All items were in stock; supplier not required",
+                "All inventory levels healthy; supplier procurement not required",
             )
             return {"decisions": decisions}
 
-        # ── Process each out-of-stock product ─────────────────────────────────
+        # ── Process each product needing procurement ──────────────────────────
         all_purchase_orders: list[dict] = []
         event_history = list(state.get("event_history") or [])
         decisions = list(state.get("decisions") or [])
 
-        for item in out_of_stock_items:
-            product_id = uuid.UUID(str(item["product_id"]))
-            needed_qty = int(item["quantity"])
+        for proc_item in items_to_procure:
+            product_id = uuid.UUID(str(proc_item["product_id"]))
+            needed_qty = int(proc_item["quantity"])
 
             # Query supplier_products join suppliers for this product
             result = await session.execute(
@@ -260,6 +296,29 @@ class SupplierAgent(BaseAgent):
             )
 
             all_purchase_orders.append(po_payload)
+
+            # ── Persist to SQLite Persistent Engine ───────────────────────────
+            prod_info = PRODUCT_MAP.get(str(product_id), ("Industrial Component", "SKU-001"))
+            try:
+                persistence.save_purchase_order({
+                    "po_id": str(po_id),
+                    "supplier_id": str(best_supplier.supplier_id),
+                    "supplier_name": str(best_supplier.name),
+                    "product_id": str(product_id),
+                    "product_name": prod_info[0],
+                    "sku": prod_info[1],
+                    "warehouse_id": str(warehouse_id_str) if warehouse_id_str else "",
+                    "warehouse_name": "Distribution Center",
+                    "quantity": order_qty,
+                    "unit_cost": float(unit_cost_dec),
+                    "total_cost": float(total_cost_dec),
+                    "lead_time_days": int(best_supplier.lead_time_days),
+                    "status": "in_transit",
+                    "workflow_id": str(state.get("workflow_id")) if state.get("workflow_id") else None,
+                })
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not persist purchase order to SQLite", error=str(exc))
+
             logger.info(
                 "Supplier selected and PO created",
                 supplier=best_supplier.name,
@@ -268,6 +327,9 @@ class SupplierAgent(BaseAgent):
                 workflow_id=state.get("workflow_id"),
             )
 
+        active_agents = state.get("active_agents") or []
+        next_destination = "warehouse" if "ADS-04" not in active_agents else "transportation"
+
         return {
             "supplier": {
                 "status": "selected",
@@ -275,5 +337,5 @@ class SupplierAgent(BaseAgent):
             },
             "decisions": decisions,
             "event_history": event_history,
-            "next_node": "transportation",
+            "next_node": next_destination,
         }

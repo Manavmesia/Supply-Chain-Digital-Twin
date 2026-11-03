@@ -67,6 +67,14 @@ export function formatReportId(id: string | null | undefined): string {
   return `#RPT-${prefix.slice(0, 8).toUpperCase()}`;
 }
 
+/** Formats a purchase order ID into a branded code: e.g. #PO-EAA2D0 */
+export function formatPoId(id: string | null | undefined): string {
+  if (!id) return '#PO-AUTO';
+  const clean = id.replace(/[^a-zA-Z0-9]/g, '');
+  const prefix = clean.startsWith('po') ? clean.slice(2) : clean;
+  return `#PO-${prefix.slice(0, 8).toUpperCase()}`;
+}
+
 /** Formats a carrier tracking ID into a professional shipping code: e.g. TRK-8F2B9A10 */
 export function formatTrackingId(id: string | null | undefined): string {
   if (!id) return 'TRK-EXP-01';
