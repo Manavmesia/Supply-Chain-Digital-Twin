@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     LLM_API_KEY: str | None = None
-    LLM_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_MODEL: str = "openai/gpt-oss-20b"
     LLM_TEMPERATURE: float = 0.0
 
 

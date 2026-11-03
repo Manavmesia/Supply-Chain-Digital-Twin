@@ -87,11 +87,12 @@ def get_llm(
     if provider == "groq":
         from langchain_groq import ChatGroq
 
-        selected_model = model or settings.LLM_MODEL or "llama-3.3-70b-versatile"
+        selected_model = model or settings.LLM_MODEL or "openai/gpt-oss-20b"
         return ChatGroq(
             model=selected_model,
             temperature=temp,
             groq_api_key=api_key if api_key else None,
+            max_retries=0,
             **kwargs,
         )
 

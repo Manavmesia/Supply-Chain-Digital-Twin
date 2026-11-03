@@ -242,7 +242,30 @@ def create_standby_session(
     def mock_execute(query: Any, *args: Any, **kwargs: Any) -> MagicMock:
         q = str(query).lower()
 
+        # Extract any bound parameters / UUIDs
+        param_uuids: set[str] = set()
+        if hasattr(query, "compile"):
+            try:
+                for v in query.compile().params.values():
+                    if isinstance(v, uuid.UUID):
+                        param_uuids.add(str(v).lower())
+                    elif isinstance(v, str):
+                        param_uuids.add(v.lower())
+            except Exception:
+                pass
+        for a in args:
+            if isinstance(a, dict):
+                for v in a.values():
+                    param_uuids.add(str(v).lower())
+        for v in kwargs.values():
+            param_uuids.add(str(v).lower())
+
         if "from customers" in q or "customers." in q or "customer_id" in q:
+            for cid in param_uuids:
+                if cid in STANDBY_CUSTOMERS:
+                    return _scalar(StandbyCustomer(customer_id=cid))
+            if customer_id:
+                return _scalar(StandbyCustomer(customer_id=customer_id))
             return _scalar(cust)
 
         if "from transportation_routes" in q or "transportation_routes." in q:
@@ -255,7 +278,14 @@ def create_standby_session(
             return _scalar(wh)
 
         if "from inventory" in q or "inventory." in q:
-            inv = StandbyInventory(product_id=uuid.uuid4(), warehouse_id=wh.warehouse_id)
+            target_pid = None
+            for pid in param_uuids:
+                try:
+                    target_pid = uuid.UUID(pid)
+                    break
+                except Exception:
+                    pass
+            inv = StandbyInventory(product_id=target_pid or uuid.uuid4(), warehouse_id=wh.warehouse_id)
             return _scalars([inv])
 
         if "from supplier" in q or "supplier." in q:
@@ -274,7 +304,10 @@ def create_standby_session(
             return _scalar(25)
 
         if "from products" in q or "products." in q or "product_id" in q:
-            # Check if any known product ID appears in query string
+            # Check if any known product ID appears in bound params or query string
+            for pid in param_uuids:
+                if pid in STANDBY_PRODUCT_DATA:
+                    return _scalar(StandbyProduct(product_id=pid))
             for pid, (pname, psku, pprice) in STANDBY_PRODUCT_DATA.items():
                 if str(pid).lower() in q:
                     return _scalar(StandbyProduct(pid, pname, psku, pprice))
@@ -282,7 +315,7 @@ def create_standby_session(
             if items:
                 for it in items:
                     pid_str = str(it.get("product_id", "")).lower()
-                    if pid_str in q or len(items) == 1:
+                    if pid_str in param_uuids or pid_str in q:
                         try:
                             uid = uuid.UUID(pid_str)
                             return _scalar(StandbyProduct(uid))
