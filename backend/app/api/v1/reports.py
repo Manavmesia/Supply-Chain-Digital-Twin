@@ -17,6 +17,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import persistence
 from app.core.database import get_db_session
 from app.repositories.report import ReportRepository
 
@@ -89,36 +90,49 @@ async def list_reports(
             filters["status"] = status_filter
 
         reports = await repo.get_multi(skip=skip, limit=limit, filters=filters)
-        total = await repo.count(filters=filters)
-
-        return {
-            "items": [
-                {
-                    "report_id": str(r.report_id),
-                    "report_type": r.report_type,
-                    "title": r.title,
-                    "status": r.status,
-                    "workflow_id": str(r.workflow_id) if r.workflow_id else None,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "payload_summary": r.payload_summary,
-                }
-                for r in reports
-            ],
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-        }
+        if reports:
+            total = await repo.count(filters=filters)
+            return {
+                "items": [
+                    {
+                        "report_id": str(r.report_id),
+                        "report_type": r.report_type,
+                        "title": r.title,
+                        "status": r.status,
+                        "workflow_id": str(r.workflow_id) if r.workflow_id else None,
+                        "generated_by_agent": getattr(r, "generated_by_agent", "ADS-18"),
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "payload_summary": r.payload_summary,
+                    }
+                    for r in reports
+                ],
+                "total": total,
+                "skip": skip,
+                "limit": limit,
+            }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DB query failed in list_reports, returning fallback", error=str(exc))
-        filtered = _FALLBACK_REPORTS
-        if status_filter:
-            filtered = [r for r in filtered if r["status"] == status_filter]
+        logger.debug("DB query failed in list_reports, using persistent engine", error=str(exc))
+
+    persisted_items, persisted_total = persistence.list_reports(
+        skip=skip, limit=limit, status_filter=status_filter
+    )
+    if persisted_items or persisted_total > 0:
         return {
-            "items": filtered[skip : skip + limit],
-            "total": len(filtered),
+            "items": persisted_items,
+            "total": persisted_total,
             "skip": skip,
             "limit": limit,
         }
+
+    filtered = _FALLBACK_REPORTS
+    if status_filter:
+        filtered = [r for r in filtered if r["status"] == status_filter]
+    return {
+        "items": filtered[skip : skip + limit],
+        "total": len(filtered),
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.get(
@@ -146,7 +160,11 @@ async def get_report_by_id(
                 "payload_summary": report.payload_summary,
             }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DB query failed in get_report_by_id, checking fallback", error=str(exc))
+        logger.debug("DB query failed in get_report_by_id, checking persistent engine", error=str(exc))
+
+    persisted_rep = persistence.get_report(str(report_id))
+    if persisted_rep is not None:
+        return persisted_rep
 
     str_id = str(report_id)
     for r in _FALLBACK_REPORTS:

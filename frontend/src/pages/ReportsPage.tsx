@@ -4,7 +4,9 @@ import type { Report } from '../types';
 import { formatReportId, formatWorkflowId } from '../utils/formatters';
 
 const STATUS_CONFIG: Record<string, { color: string; badge: string }> = {
+  ready:       { color: '#10b981', badge: 'badge-success' },
   generated:   { color: '#10b981', badge: 'badge-success' },
+  generating:  { color: '#3b82f6', badge: 'badge-info' },
   pending:     { color: '#f59e0b', badge: 'badge-warning' },
   failed:      { color: '#ef4444', badge: 'badge-danger' },
   archived:    { color: '#64748b', badge: 'badge-muted' },

@@ -40,6 +40,7 @@ from app.core.catalog import (
     BASELINE_INVENTORY as _BASELINE_INVENTORY,
     BASELINE_ORDERS as _BASELINE_ORDERS,
     BASELINE_PRODUCTS as _BASELINE_PRODUCTS,
+    BASELINE_REPORTS as _BASELINE_REPORTS,
     BASELINE_ROUTES as _BASELINE_ROUTES,
     BASELINE_SUPPLIERS as _BASELINE_SUPPLIERS,
     BASELINE_WAREHOUSES as _BASELINE_WAREHOUSES,
@@ -177,6 +178,17 @@ def init_db() -> None:
                 unit_price REAL,
                 line_total REAL
             );
+
+            CREATE TABLE IF NOT EXISTS reports (
+                report_id TEXT PRIMARY KEY,
+                report_type TEXT,
+                title TEXT,
+                status TEXT,
+                workflow_id TEXT,
+                generated_by_agent TEXT,
+                created_at TEXT,
+                payload_json TEXT
+            );
             """
         )
 
@@ -269,6 +281,29 @@ def init_db() -> None:
                     "completed",
                 ),
             )
+
+        # Seed baseline reports if empty
+        cur = conn.execute("SELECT COUNT(*) as count FROM reports")
+        if cur.fetchone()["count"] == 0:
+            for rep in _BASELINE_REPORTS:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO reports (
+                        report_id, report_type, title, status, workflow_id,
+                        generated_by_agent, created_at, payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        rep["report_id"],
+                        rep["report_type"],
+                        rep["title"],
+                        rep["status"],
+                        rep.get("workflow_id"),
+                        rep.get("generated_by_agent", "ADS-18"),
+                        rep.get("created_at", now_iso),
+                        json.dumps(rep.get("payload_summary", {})),
+                    ),
+                )
 
 
 # Initialize DB immediately on module import
@@ -1143,4 +1178,93 @@ def get_dashboard_metrics() -> dict[str, Any]:
                 "out_of_stock": o_stock,
                 "healthy": h_stock,
             },
+        }
+
+
+# ── Reports Live Persistence ──────────────────────────────────────────────────
+
+def save_report(report_dict: dict[str, Any]) -> None:
+    """Save or update an immutable executive report record in SQLite."""
+    with _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO reports (
+                report_id, report_type, title, status, workflow_id,
+                generated_by_agent, created_at, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(report_dict.get("report_id", uuid.uuid4())),
+                str(report_dict.get("report_type", "executive_summary")),
+                str(report_dict.get("title", "Autonomous Supply Chain Operational Synthesis")),
+                str(report_dict.get("status", "ready")),
+                str(report_dict.get("workflow_id")) if report_dict.get("workflow_id") else None,
+                str(report_dict.get("generated_by_agent", "ADS-18")),
+                str(report_dict.get("created_at") or datetime.now(timezone.utc).isoformat()),
+                json.dumps(report_dict.get("payload_summary") or {}),
+            ),
+        )
+
+
+def list_reports(
+    skip: int = 0,
+    limit: int = 50,
+    status_filter: str | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Retrieve historical reports from SQLite ordered by creation time descending."""
+    with _get_connection() as conn:
+        query = "SELECT * FROM reports"
+        count_query = "SELECT COUNT(*) as count FROM reports"
+        params: list[Any] = []
+        if status_filter:
+            query += " WHERE status = ?"
+            count_query += " WHERE status = ?"
+            params.append(status_filter)
+
+        total = conn.execute(count_query, params).fetchone()["count"]
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        rows = conn.execute(query, [*params, limit, skip]).fetchall()
+
+        items = []
+        for r in rows:
+            payload = {}
+            if r["payload_json"]:
+                try:
+                    payload = json.loads(r["payload_json"])
+                except Exception:
+                    payload = {}
+            items.append({
+                "report_id": r["report_id"],
+                "report_type": r["report_type"],
+                "title": r["title"],
+                "status": r["status"],
+                "workflow_id": r["workflow_id"],
+                "generated_by_agent": r["generated_by_agent"],
+                "created_at": r["created_at"],
+                "payload_summary": payload,
+            })
+        return items, total
+
+
+def get_report(report_id: str) -> dict[str, Any] | None:
+    """Retrieve a single report by ID from SQLite."""
+    with _get_connection() as conn:
+        row = conn.execute("SELECT * FROM reports WHERE report_id = ?", (str(report_id),)).fetchone()
+        if not row:
+            return None
+        payload = {}
+        if row["payload_json"]:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                payload = {}
+        return {
+            "report_id": row["report_id"],
+            "report_type": row["report_type"],
+            "title": row["title"],
+            "status": row["status"],
+            "workflow_id": row["workflow_id"],
+            "generated_by_agent": row["generated_by_agent"],
+            "created_at": row["created_at"],
+            "payload_summary": payload,
         }

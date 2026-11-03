@@ -107,14 +107,25 @@ class ReportingAgent(BaseAgent):
         payload_summary["decision_source"] = rep_src
 
         report_id = uuid.uuid4()
+        report_record = {
+            "report_id": str(report_id),
+            "report_type": "executive_summary",
+            "title": f"Order Fulfillment Summary — Order #{str(order_id_str)[:8]}",
+            "status": "ready",
+            "workflow_id": str(wf_id_uuid) if wf_id_uuid else str(workflow_id_str),
+            "correlation_id": str(corr_id_uuid) if corr_id_uuid else None,
+            "generated_by_agent": self.agent_code,
+            "payload_summary": payload_summary,
+        }
+
         if session:
             try:
                 repo = ReportRepository(session)
                 await repo.create({
                     "report_id": report_id,
-                    "report_type": "executive_summary",
-                    "title": f"Order Fulfillment Summary — Order #{str(order_id_str)[:8]}",
-                    "status": "ready",
+                    "report_type": report_record["report_type"],
+                    "title": report_record["title"],
+                    "status": report_record["status"],
                     "workflow_id": wf_id_uuid,
                     "correlation_id": corr_id_uuid,
                     "generated_by_agent": self.agent_code,
@@ -123,6 +134,12 @@ class ReportingAgent(BaseAgent):
                 await session.flush()
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Could not persist report DB record", error=str(exc))
+
+        try:
+            from app.core import persistence
+            persistence.save_report(report_record)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not persist report to SQLite", error=str(exc))
 
         event_history = list(state.get("event_history") or [])
         decisions_list = list(decisions)

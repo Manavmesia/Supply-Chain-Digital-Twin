@@ -157,3 +157,52 @@ BASELINE_ORDERS = [
         "2026-11-01T15:45:00Z",
     ),
 ]
+
+# ── Baseline Reports ──────────────────────────────────────────────────────────
+
+BASELINE_REPORTS: list[dict[str, Any]] = [
+    {
+        "report_id": "e4f878a2-1111-4235-9c88-123456789abc",
+        "report_type": "executive_summary",
+        "title": "Autonomous Supply Chain Operational Synthesis",
+        "status": "ready",
+        "workflow_id": "7f92a34c-6d8b-4a5f-9271-9df61c778fa1",
+        "generated_by_agent": "ADS-18",
+        "created_at": "2026-11-02T10:30:00Z",
+        "payload_summary": {
+            "order_count": 124,
+            "fulfillment_rate": "98.4%",
+            "sustainability_score": 94.2,
+            "margin_pct": 28.5,
+            "disruption_handled": True,
+        },
+    },
+    {
+        "report_id": "b7c29410-2222-4235-9c88-123456789def",
+        "report_type": "sustainability",
+        "title": "Carbon Footprint & ESG Verification Report",
+        "status": "ready",
+        "workflow_id": "8a14b52d-7e9c-4b6a-8382-0ea72d889fb2",
+        "generated_by_agent": "ADS-13",
+        "created_at": "2026-11-02T09:15:00Z",
+        "payload_summary": {
+            "total_co2_kg": 182.4,
+            "transportation_mode": "EV_FLEET",
+            "esg_compliance": "A+",
+        },
+    },
+    {
+        "report_id": "c9d38521-3333-4235-9c88-123456789123",
+        "report_type": "risk",
+        "title": "Tier-1 Supplier Resilience & Risk Audit",
+        "status": "ready",
+        "workflow_id": "9b25c63e-8fa0-4c7b-9493-1fb83e990ac3",
+        "generated_by_agent": "ADS-10",
+        "created_at": "2026-11-02T08:00:00Z",
+        "payload_summary": {
+            "overall_risk_score": 24.0,
+            "geopolitical_risk": "low",
+            "bottleneck_identified": False,
+        },
+    },
+]
