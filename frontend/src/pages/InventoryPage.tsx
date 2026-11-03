@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { inventoryApi } from '../services/api';
 import type { InventoryRecord, InventorySummary } from '../types';
 
@@ -14,24 +14,54 @@ export const InventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [lowOnly, setLowOnly] = useState(false);
   const [search, setSearch] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    let ignore = false;
-    Promise.all([
-      inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
-      inventoryApi.getSummary(),
-    ]).then(([invRes, sumRes]) => {
-      if (!ignore) {
+  const fetchInventory = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    try {
+      const [invRes, sumRes] = await Promise.all([
+        inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
+        inventoryApi.getSummary(),
+      ]);
+      if (isMountedRef.current) {
         setItems(invRes.items);
         setSummary(sumRes);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error('Inventory load failed:', err);
+    } finally {
+      if (isMountedRef.current && !isSilent) {
         setLoading(false);
       }
-    }).catch((err) => {
-      console.error(err);
-      if (!ignore) setLoading(false);
-    });
-    return () => { ignore = true; };
+    }
   }, [lowOnly]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchInventory(false);
+
+    // Auto-sync inventory every 3.5 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchInventory(true);
+      }
+    }, 3500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchInventory(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchInventory]);
 
   const filtered = items.filter(
     (item) =>
@@ -45,6 +75,19 @@ export const InventoryPage: React.FC = () => {
       <div className="page-header">
         <h1><span className="gradient-text">Inventory Intelligence</span></h1>
         <p>Live stock levels across all warehouses with safety stock monitoring</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => fetchInventory(false)}
+            disabled={loading}
+          >
+            ↻ Refresh Inventory
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+            Live Auto-Sync (3.5s) • Updated {lastUpdated.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
 
       {/* Summary KPIs */}

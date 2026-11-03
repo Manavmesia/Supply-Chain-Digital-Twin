@@ -21,7 +21,7 @@ const App: React.FC = () => {
       setSystemOnline(h.status === 'ok');
     };
     check();
-    const interval = setInterval(check, 30_000);
+    const interval = setInterval(check, 10_000);
     return () => clearInterval(interval);
   }, []);
 

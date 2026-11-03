@@ -51,7 +51,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
       if (mounted) setHealth(h);
     };
     checkHealth();
-    const interval = setInterval(checkHealth, 30_000);
+    const interval = setInterval(checkHealth, 8000);
     return () => { mounted = false; clearInterval(interval); };
   }, []);
 
@@ -70,6 +70,32 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
       </div>
 
       <div className="topbar-right">
+        {/* Live sync pulse badge */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            fontSize: '0.72rem',
+            color: '#10b981',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            padding: '2px 8px',
+            borderRadius: '12px',
+          }}
+          title="All screens automatically sync data in real time"
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#10b981',
+              boxShadow: '0 0 6px #10b981',
+            }}
+          />
+          Live Real-Time Sync
+        </div>
         {/* Dependency health indicators */}
         {health && (
           <div className="topbar-health">

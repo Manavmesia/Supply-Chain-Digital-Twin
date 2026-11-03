@@ -589,8 +589,21 @@ export const WorkflowPage: React.FC = () => {
     };
 
     fetchHistoryAndRestore();
+
+    // Auto-sync workflow history list every 3.5 seconds
+    const historyInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        workflowApi.list(30).then((res) => {
+          if (isMounted) {
+            setRecentWorkflows(res?.items || []);
+          }
+        }).catch(() => {});
+      }
+    }, 3500);
+
     return () => {
       isMounted = false;
+      clearInterval(historyInterval);
       stopPolling();
     };
   }, [loadWorkflow, stopPolling]);

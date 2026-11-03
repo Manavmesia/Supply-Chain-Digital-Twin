@@ -93,6 +93,15 @@ export const SimulatePage: React.FC = () => {
     }
   };
 
+  const fetchSimHistory = useCallback(async () => {
+    try {
+      const res = await simulateApi.list(15);
+      setRecentSims(res.items || []);
+    } catch (err) {
+      console.error('Recent simulations fetch error:', err);
+    }
+  }, []);
+
   useEffect(() => {
     simulateApi.list(15).then((res) => {
       const items = res.items || [];
@@ -104,10 +113,20 @@ export const SimulatePage: React.FC = () => {
       if (targetId) {
         loadSimulation(targetId);
       }
-    }).catch(err => console.error('Recent simulations fetch error:', err));
+    }).catch(err => console.error('Recent simulations initial fetch error:', err));
 
-    return () => stopPoll();
-  }, []);
+    // Auto-update recent simulations every 4 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchSimHistory();
+      }
+    }, 4000);
+
+    return () => {
+      clearInterval(interval);
+      stopPoll();
+    };
+  }, [fetchSimHistory, loadSimulation, stopPoll]);
 
   const runSimulation = async () => {
     if (!selectedScenario) return;

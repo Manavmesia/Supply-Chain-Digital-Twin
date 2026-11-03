@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { analyticsApi } from '../services/api';
 import { KPIGrid } from '../components/dashboard/KPIGrid';
 import { AgentPipeline } from '../components/dashboard/AgentPipeline';
@@ -14,25 +14,56 @@ export const DashboardPage: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    let ignore = false;
-    Promise.all([
-      analyticsApi.getDashboard(),
-      analyticsApi.getAgents(),
-    ]).then(([dash, agentsRes]) => {
-      if (!ignore) {
+  const fetchDashboardData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsUpdating(true);
+    try {
+      const [dash, agentsRes] = await Promise.all([
+        analyticsApi.getDashboard(),
+        analyticsApi.getAgents(),
+      ]);
+      if (isMountedRef.current) {
         setDashboard(dash);
         setAgents(agentsRes.agents);
-        setLoading(false);
+        setLastUpdated(new Date());
       }
-    }).catch((err) => {
+    } catch (err) {
       console.error('Dashboard load failed:', err);
-      if (!ignore) setLoading(false);
-    });
-    return () => { ignore = true; };
-  }, [refreshKey]);
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+        setIsUpdating(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchDashboardData(false);
+
+    // Live auto-sync every 3.5 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboardData(true);
+      }
+    }, 3500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboardData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchDashboardData]);
 
   const statusColors: Record<string, string> = {
     pending:    '#f59e0b',
@@ -56,16 +87,19 @@ export const DashboardPage: React.FC = () => {
           <span className="gradient-text">Executive Dashboard</span>
         </h1>
         <p>Real-time supply chain monitoring across all 18 AI agents</p>
-        <button
-          className="btn btn-ghost btn-sm mt-4"
-          onClick={() => {
-            setLoading(true);
-            setRefreshKey((k) => k + 1);
-          }}
-          disabled={loading}
-        >
-          ↻ Refresh Data
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => fetchDashboardData(false)}
+            disabled={isUpdating}
+          >
+            {isUpdating ? '↻ Refreshing…' : '↻ Refresh Data'}
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+            Live Auto-Sync (3.5s) • Updated {lastUpdated.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
 
       {/* KPI Grid */}

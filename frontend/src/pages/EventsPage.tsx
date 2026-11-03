@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { eventsApi } from '../services/api';
 import type { EventRecord } from '../types';
 import {
@@ -11,6 +11,8 @@ export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [eventTypes, setEventTypes] = useState<{ type: string; producer: string; layer: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const isMountedRef = useRef(true);
   const [form, setForm] = useState({
     event_type: 'InventoryLow',
     source_agent: 'manual',
@@ -20,20 +22,51 @@ export const EventsPage: React.FC = () => {
   const [injecting, setInjecting] = useState(false);
   const [lastInjected, setLastInjected] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const [evRes, typesRes] = await Promise.all([
         eventsApi.list({ limit: 50 }),
         eventsApi.getTypes(),
       ]);
-      setEvents(evRes.items);
-      setEventTypes(typesRes.event_types);
+      if (isMountedRef.current) {
+        setEvents(evRes.items);
+        setEventTypes(typesRes.event_types);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error('Events load error:', err);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && !isSilent) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    isMountedRef.current = true;
+    load(false);
+
+    // Live auto-sync every 3 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        load(true);
+      }
+    }, 3000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        load(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [load]);
 
   const inject = async () => {
     setInjecting(true);
@@ -48,8 +81,7 @@ export const EventsPage: React.FC = () => {
         workflow_id: form.workflow_id || undefined,
       });
       setLastInjected(result.event_id);
-      setLoading(true);
-      await load();
+      await load(false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -68,6 +100,19 @@ export const EventsPage: React.FC = () => {
       <div className="page-header">
         <h1><span className="gradient-text">Event Bus Monitor</span></h1>
         <p>Inject synthetic events and monitor the supply chain event stream</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => load(false)}
+            disabled={loading}
+          >
+            ↻ Refresh Stream
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+            Live Event Stream (3s) • Updated {lastUpdated.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
 
       <div className="grid-2">

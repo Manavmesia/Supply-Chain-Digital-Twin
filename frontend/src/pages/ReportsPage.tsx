@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { reportsApi } from '../services/api';
 import type { Report } from '../types';
 import { formatReportId, formatWorkflowId } from '../utils/formatters';
@@ -15,20 +15,70 @@ export const ReportsPage: React.FC = () => {
   const [selected, setSelected] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const isMountedRef = useRef(true);
+
+  const fetchReports = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    try {
+      const res = await reportsApi.list({ limit: 50 });
+      if (isMountedRef.current) {
+        setReports(res.items);
+        setTotal(res.total);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error('Reports load error:', err);
+    } finally {
+      if (isMountedRef.current && !isSilent) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    reportsApi.list({ limit: 50 }).then((res) => {
-      setReports(res.items);
-      setTotal(res.total);
-      setLoading(false);
-    });
-  }, []);
+    isMountedRef.current = true;
+    fetchReports(false);
+
+    // Auto-sync reports every 4 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchReports(true);
+      }
+    }, 4000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchReports(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchReports]);
 
   return (
     <div className="page-content animate-fade-in">
       <div className="page-header">
         <h1><span className="gradient-text">Reports & Analytics</span></h1>
         <p>ADS-18 Reporting Agent generates executive reports after every workflow</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => fetchReports(false)}
+            disabled={loading}
+          >
+            ↻ Refresh Reports
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+            Live Auto-Sync (4s) • Updated {lastUpdated.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
 
       <div className="grid-2">

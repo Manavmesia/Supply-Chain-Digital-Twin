@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { analyticsApi } from '../services/api';
 import { AgentPipeline } from '../components/dashboard/AgentPipeline';
 import type { AgentDefinition } from '../types';
@@ -13,13 +13,50 @@ export const AgentsPage: React.FC = () => {
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<AgentDefinition | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const isMountedRef = useRef(true);
+
+  const fetchAgents = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    try {
+      const res = await analyticsApi.getAgents();
+      if (isMountedRef.current) {
+        setAgents(res.agents);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error('Agents load error:', err);
+    } finally {
+      if (isMountedRef.current && !isSilent) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    analyticsApi.getAgents().then((res) => {
-      setAgents(res.agents);
-      setLoading(false);
-    });
-  }, []);
+    isMountedRef.current = true;
+    fetchAgents(false);
+
+    // Auto-sync agents every 5 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAgents(true);
+      }
+    }, 5000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAgents(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchAgents]);
 
   const LAYER_STYLE: Record<string, { color: string; bg: string }> = {
     operational:  { color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
@@ -34,6 +71,19 @@ export const AgentsPage: React.FC = () => {
       <div className="page-header">
         <h1><span className="gradient-text">Agent Control Centre</span></h1>
         <p>All 18 autonomous AI agents — their roles, layers, and responsibilities</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => fetchAgents(false)}
+            disabled={loading}
+          >
+            ↻ Refresh Agents
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+            Live Auto-Sync (5s) • Updated {lastUpdated.toLocaleTimeString()}
+          </div>
+        </div>
       </div>
 
       {/* Summary cards */}
