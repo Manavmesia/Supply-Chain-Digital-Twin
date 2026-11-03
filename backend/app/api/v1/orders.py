@@ -23,54 +23,24 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.customer import Customer
 
+from app.core.catalog import BASELINE_ORDERS
+
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 _FALLBACK_ORDERS: list[dict[str, Any]] = [
     {
-        "order_id": "ord00000-0000-0000-0000-000000000001",
-        "customer_id": "cust0000-0000-0000-0000-000000000001",
-        "customer_name": "Tesla Energy Solutions",
-        "status": "delivered",
-        "priority": "high",
-        "total_amount": "45200.00",
-        "currency": "USD",
-        "workflow_id": "wf000000-0000-0000-0000-000000000001",
-        "created_at": "2026-11-02T08:00:00Z",
-    },
-    {
-        "order_id": "ord00000-0000-0000-0000-000000000002",
-        "customer_id": "cust0000-0000-0000-0000-000000000002",
-        "customer_name": "Siemens Robotics Global",
-        "status": "in_transit",
-        "priority": "medium",
-        "total_amount": "28400.00",
-        "currency": "USD",
-        "workflow_id": "wf000000-0000-0000-0000-000000000002",
-        "created_at": "2026-11-02T09:30:00Z",
-    },
-    {
-        "order_id": "ord00000-0000-0000-0000-000000000003",
-        "customer_id": "cust0000-0000-0000-0000-000000000003",
-        "customer_name": "Schneider Power Grid",
-        "status": "pending",
-        "priority": "high",
-        "total_amount": "89000.00",
-        "currency": "USD",
-        "workflow_id": None,
-        "created_at": "2026-11-02T10:15:00Z",
-    },
-    {
-        "order_id": "ord00000-0000-0000-0000-000000000004",
-        "customer_id": "cust0000-0000-0000-0000-000000000004",
-        "customer_name": "Honeywell Industrial Automations",
-        "status": "delivered",
-        "priority": "low",
-        "total_amount": "14300.00",
-        "currency": "USD",
-        "workflow_id": "wf000000-0000-0000-0000-000000000003",
-        "created_at": "2026-11-01T15:45:00Z",
-    },
+        "order_id": o[0],
+        "customer_id": o[1],
+        "customer_name": o[2],
+        "status": o[3],
+        "priority": o[4],
+        "total_amount": o[5],
+        "currency": o[6],
+        "workflow_id": o[7],
+        "created_at": o[8],
+    }
+    for o in BASELINE_ORDERS
 ]
 
 

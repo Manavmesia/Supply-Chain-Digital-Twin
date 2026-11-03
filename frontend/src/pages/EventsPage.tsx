@@ -23,7 +23,6 @@ export const EventsPage: React.FC = () => {
   const [lastInjected, setLastInjected] = useState<string | null>(null);
 
   const load = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
     try {
       const [evRes, typesRes] = await Promise.all([
         eventsApi.list({ limit: 50 }),
@@ -44,8 +43,23 @@ export const EventsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
     isMountedRef.current = true;
-    load(false);
+
+    Promise.all([
+      eventsApi.list({ limit: 50 }),
+      eventsApi.getTypes(),
+    ]).then(([evRes, typesRes]) => {
+      if (!ignore && isMountedRef.current) {
+        setEvents(evRes.items);
+        setEventTypes(typesRes.event_types);
+        setLastUpdated(new Date());
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Events load error:', err);
+      if (!ignore && isMountedRef.current) setLoading(false);
+    });
 
     // Live auto-sync every 3 seconds
     const interval = setInterval(() => {
@@ -62,6 +76,7 @@ export const EventsPage: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      ignore = true;
       isMountedRef.current = false;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -226,7 +241,7 @@ export const EventsPage: React.FC = () => {
       <div className="card mt-6 animate-fade-in">
         <div className="section-header">
           <h3 className="section-title">📋 Injected Event Log</h3>
-          <button className="btn btn-ghost btn-sm" onClick={() => load()} disabled={loading}>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setLoading(true); load(false); }} disabled={loading}>
             ↻ Refresh
           </button>
         </div>

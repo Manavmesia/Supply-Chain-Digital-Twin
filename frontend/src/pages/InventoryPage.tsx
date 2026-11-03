@@ -18,7 +18,6 @@ export const InventoryPage: React.FC = () => {
   const isMountedRef = useRef(true);
 
   const fetchInventory = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
     try {
       const [invRes, sumRes] = await Promise.all([
         inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
@@ -39,8 +38,23 @@ export const InventoryPage: React.FC = () => {
   }, [lowOnly]);
 
   useEffect(() => {
+    let ignore = false;
     isMountedRef.current = true;
-    fetchInventory(false);
+
+    Promise.all([
+      inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
+      inventoryApi.getSummary(),
+    ]).then(([invRes, sumRes]) => {
+      if (!ignore && isMountedRef.current) {
+        setItems(invRes.items);
+        setSummary(sumRes);
+        setLastUpdated(new Date());
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Inventory load failed:', err);
+      if (!ignore && isMountedRef.current) setLoading(false);
+    });
 
     // Auto-sync inventory every 3.5 seconds
     const interval = setInterval(() => {
@@ -57,11 +71,12 @@ export const InventoryPage: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      ignore = true;
       isMountedRef.current = false;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchInventory]);
+  }, [fetchInventory, lowOnly]);
 
   const filtered = items.filter(
     (item) =>
@@ -78,7 +93,7 @@ export const InventoryPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => fetchInventory(false)}
+            onClick={() => { setLoading(true); fetchInventory(false); }}
             disabled={loading}
           >
             ↻ Refresh Inventory

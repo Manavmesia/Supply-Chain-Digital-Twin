@@ -721,10 +721,10 @@ export const WorkflowPage: React.FC = () => {
       ),
     );
 
-  const orderData = (status?.order || null) as Record<string, any> | null;
-  const shipmentData = (status?.shipment || null) as Record<string, any> | null;
-  const execDecision = (status?.executive_decision || null) as Record<string, any> | null;
-  const orderItems: Array<Record<string, any>> = Array.isArray(orderData?.items) ? orderData!.items : [];
+  const orderData = (status?.order || null) as Record<string, unknown> | null;
+  const shipmentData = (status?.shipment || null) as Record<string, unknown> | null;
+  const execDecision = (status?.executive_decision || null) as Record<string, unknown> | null;
+  const orderItems: Array<Record<string, unknown>> = Array.isArray(orderData?.items) ? (orderData.items as Array<Record<string, unknown>>) : [];
 
   const calculatedItemsTotal = orderItems.reduce((acc, it) => {
     const pInfo = getProductInfo(String(it.product_id || ''));
@@ -908,9 +908,9 @@ export const WorkflowPage: React.FC = () => {
                   <span className="badge badge-info" style={{ fontFamily: 'var(--font-mono)' }}>
                     {formatWorkflowId(workflowId)}
                   </span>
-                  {orderData?.order_id && (
+                  {Boolean(orderData?.order_id) && (
                     <span className="badge badge-success" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {formatOrderId(String(orderData.order_id))}
+                      {formatOrderId(String(orderData?.order_id))}
                     </span>
                   )}
                   {status && (
@@ -1025,7 +1025,7 @@ export const WorkflowPage: React.FC = () => {
                 {String(shipmentData?.carrier || 'Global Intermodal Logistics')}
               </p>
               <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
-                Tracking: <code title={shipmentData?.tracking_id ? String(shipmentData.tracking_id) : undefined}>{formatTrackingId(shipmentData?.tracking_id)}</code> • Mode: {String(shipmentData?.freight_mode || 'ROAD').toUpperCase()}
+                Tracking: <code title={shipmentData?.tracking_id ? String(shipmentData.tracking_id) : undefined}>{formatTrackingId(shipmentData?.tracking_id ? String(shipmentData.tracking_id) : undefined)}</code> • Mode: {String(shipmentData?.freight_mode || 'ROAD').toUpperCase()}
               </span>
             </div>
             <div style={{ background: 'var(--c-bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--c-border)' }}>
@@ -1053,7 +1053,7 @@ export const WorkflowPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {orderItems.map((it: Record<string, any>, idx: number) => {
+                  {orderItems.map((it: Record<string, unknown>, idx: number) => {
                     const pInfo = getProductInfo(String(it.product_id || ''));
                     const unitP = parseFloat(String(it.unit_price || pInfo.price));
                     const qty = Number(it.quantity) || 1;

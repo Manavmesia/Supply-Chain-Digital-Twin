@@ -24,47 +24,20 @@ from app.models.purchase_order import PurchaseOrder
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
+from app.core.catalog import BASELINE_SUPPLIERS
+
 _FALLBACK_SUPPLIERS: list[dict[str, Any]] = [
     {
-        "supplier_id": "sup00000-0000-0000-0000-000000000001",
-        "name": "Apex Microelectronics Inc.",
-        "country": "Japan",
-        "lead_time_days": 4,
-        "reliability_score": 96.5,
-        "rating": 4.9,
-        "status": "active",
-        "risk_tier": "low",
-    },
-    {
-        "supplier_id": "sup00000-0000-0000-0000-000000000002",
-        "name": "Global Precision Systems GmbH",
-        "country": "Germany",
-        "lead_time_days": 7,
-        "reliability_score": 91.2,
-        "rating": 4.7,
-        "status": "active",
-        "risk_tier": "low",
-    },
-    {
-        "supplier_id": "sup00000-0000-0000-0000-000000000003",
-        "name": "Nexus Advanced Circuits",
-        "country": "USA",
-        "lead_time_days": 3,
-        "reliability_score": 88.0,
-        "rating": 4.5,
-        "status": "active",
-        "risk_tier": "medium",
-    },
-    {
-        "supplier_id": "sup00000-0000-0000-0000-000000000004",
-        "name": "Pacific Freight Logistics Ltd.",
-        "country": "Singapore",
-        "lead_time_days": 12,
-        "reliability_score": 82.4,
-        "rating": 4.2,
-        "status": "active",
-        "risk_tier": "medium",
-    },
+        "supplier_id": s[0],
+        "name": s[1],
+        "country": s[2],
+        "lead_time_days": s[3],
+        "reliability_score": s[4],
+        "rating": s[5],
+        "status": s[6],
+        "risk_tier": "low" if s[4] >= 90 else ("medium" if s[4] >= 80 else "high"),
+    }
+    for s in BASELINE_SUPPLIERS[:4]
 ]
 
 

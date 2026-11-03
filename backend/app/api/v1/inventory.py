@@ -22,50 +22,30 @@ from app.models.inventory import Inventory
 from app.models.product import Product
 from app.models.warehouse import Warehouse
 
+from app.core.catalog import BASELINE_INVENTORY, BASELINE_WAREHOUSES, PRODUCT_MAP
+
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
+_WH_MAP = {w[0]: (w[1], w[2]) for w in BASELINE_WAREHOUSES}
+
 _FALLBACK_INVENTORY: list[dict[str, Any]] = [
-    # ELEC-001 Industrial Sensor Module
-    {"inventory_id": "11111111-2222-3333-4444-555555555501", "product_id": "30000000-0000-0000-0000-000000000001", "product_name": "Industrial Sensor Module", "sku": "ELEC-001", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 500, "reserved_qty": 50, "net_available": 450, "safety_stock": 100, "reorder_point": 150, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555502", "product_id": "30000000-0000-0000-0000-000000000001", "product_name": "Industrial Sensor Module", "sku": "ELEC-001", "warehouse_id": "10000000-0000-0000-0000-000000000002", "warehouse_name": "Birmingham Fulfilment Hub", "warehouse_city": "Birmingham", "available_qty": 300, "reserved_qty": 30, "net_available": 270, "safety_stock": 80, "reorder_point": 120, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555503", "product_id": "30000000-0000-0000-0000-000000000001", "product_name": "Industrial Sensor Module", "sku": "ELEC-001", "warehouse_id": "10000000-0000-0000-0000-000000000003", "warehouse_name": "Frankfurt Logistics Centre", "warehouse_city": "Frankfurt", "available_qty": 250, "reserved_qty": 20, "net_available": 230, "safety_stock": 80, "reorder_point": 120, "status": "ok"},
-
-    # ELEC-002 High-Torque Servo Motor
-    {"inventory_id": "11111111-2222-3333-4444-555555555504", "product_id": "30000000-0000-0000-0000-000000000002", "product_name": "High-Torque Servo Motor", "sku": "ELEC-002", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 200, "reserved_qty": 10, "net_available": 190, "safety_stock": 50, "reorder_point": 80, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555505", "product_id": "30000000-0000-0000-0000-000000000002", "product_name": "High-Torque Servo Motor", "sku": "ELEC-002", "warehouse_id": "10000000-0000-0000-0000-000000000002", "warehouse_name": "Birmingham Fulfilment Hub", "warehouse_city": "Birmingham", "available_qty": 150, "reserved_qty": 0, "net_available": 150, "safety_stock": 40, "reorder_point": 60, "status": "ok"},
-
-    # ELEC-003 IoT Gateway Device
-    {"inventory_id": "11111111-2222-3333-4444-555555555506", "product_id": "30000000-0000-0000-0000-000000000003", "product_name": "IoT Gateway Device", "sku": "ELEC-003", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 80, "reserved_qty": 5, "net_available": 75, "safety_stock": 20, "reorder_point": 30, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555507", "product_id": "30000000-0000-0000-0000-000000000003", "product_name": "IoT Gateway Device", "sku": "ELEC-003", "warehouse_id": "10000000-0000-0000-0000-000000000003", "warehouse_name": "Frankfurt Logistics Centre", "warehouse_city": "Frankfurt", "available_qty": 60, "reserved_qty": 0, "net_available": 60, "safety_stock": 20, "reorder_point": 30, "status": "ok"},
-
-    # MECH-001 Precision Ball Bearing Set
-    {"inventory_id": "11111111-2222-3333-4444-555555555508", "product_id": "30000000-0000-0000-0000-000000000004", "product_name": "Precision Ball Bearing Set", "sku": "MECH-001", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 2000, "reserved_qty": 200, "net_available": 1800, "safety_stock": 500, "reorder_point": 700, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555509", "product_id": "30000000-0000-0000-0000-000000000004", "product_name": "Precision Ball Bearing Set", "sku": "MECH-001", "warehouse_id": "10000000-0000-0000-0000-000000000002", "warehouse_name": "Birmingham Fulfilment Hub", "warehouse_city": "Birmingham", "available_qty": 1500, "reserved_qty": 100, "net_available": 1400, "safety_stock": 400, "reorder_point": 600, "status": "ok"},
-
-    # MECH-002 Hydraulic Actuator Cylinder (low & critical stock)
-    {"inventory_id": "11111111-2222-3333-4444-555555555510", "product_id": "30000000-0000-0000-0000-000000000005", "product_name": "Hydraulic Actuator Cylinder", "sku": "MECH-002", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 15, "reserved_qty": 5, "net_available": 10, "safety_stock": 20, "reorder_point": 30, "status": "low"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555511", "product_id": "30000000-0000-0000-0000-000000000005", "product_name": "Hydraulic Actuator Cylinder", "sku": "MECH-002", "warehouse_id": "10000000-0000-0000-0000-000000000003", "warehouse_name": "Frankfurt Logistics Centre", "warehouse_city": "Frankfurt", "available_qty": 10, "reserved_qty": 10, "net_available": 0, "safety_stock": 20, "reorder_point": 30, "status": "critical"},
-
-    # MECH-003 Stainless Steel Valve Assembly
-    {"inventory_id": "11111111-2222-3333-4444-555555555512", "product_id": "30000000-0000-0000-0000-000000000006", "product_name": "Stainless Steel Valve Assembly", "sku": "MECH-003", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 300, "reserved_qty": 20, "net_available": 280, "safety_stock": 60, "reorder_point": 90, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555513", "product_id": "30000000-0000-0000-0000-000000000006", "product_name": "Stainless Steel Valve Assembly", "sku": "MECH-003", "warehouse_id": "10000000-0000-0000-0000-000000000002", "warehouse_name": "Birmingham Fulfilment Hub", "warehouse_city": "Birmingham", "available_qty": 200, "reserved_qty": 10, "net_available": 190, "safety_stock": 50, "reorder_point": 70, "status": "ok"},
-
-    # CHEM-001 Industrial Lubricant (20L)
-    {"inventory_id": "11111111-2222-3333-4444-555555555514", "product_id": "30000000-0000-0000-0000-000000000007", "product_name": "Industrial Lubricant (20L)", "sku": "CHEM-001", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 100, "reserved_qty": 5, "net_available": 95, "safety_stock": 30, "reorder_point": 40, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555515", "product_id": "30000000-0000-0000-0000-000000000007", "product_name": "Industrial Lubricant (20L)", "sku": "CHEM-001", "warehouse_id": "10000000-0000-0000-0000-000000000003", "warehouse_name": "Frankfurt Logistics Centre", "warehouse_city": "Frankfurt", "available_qty": 80, "reserved_qty": 0, "net_available": 80, "safety_stock": 25, "reorder_point": 35, "status": "ok"},
-
-    # CHEM-002 Epoxy Adhesive Kit
-    {"inventory_id": "11111111-2222-3333-4444-555555555516", "product_id": "30000000-0000-0000-0000-000000000008", "product_name": "Epoxy Adhesive Kit", "sku": "CHEM-002", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 500, "reserved_qty": 50, "net_available": 450, "safety_stock": 100, "reorder_point": 150, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555517", "product_id": "30000000-0000-0000-0000-000000000008", "product_name": "Epoxy Adhesive Kit", "sku": "CHEM-002", "warehouse_id": "10000000-0000-0000-0000-000000000002", "warehouse_name": "Birmingham Fulfilment Hub", "warehouse_city": "Birmingham", "available_qty": 400, "reserved_qty": 20, "net_available": 380, "safety_stock": 80, "reorder_point": 120, "status": "ok"},
-
-    # SAFE-001 Safety Relay Module
-    {"inventory_id": "11111111-2222-3333-4444-555555555518", "product_id": "30000000-0000-0000-0000-000000000009", "product_name": "Safety Relay Module", "sku": "SAFE-001", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 200, "reserved_qty": 10, "net_available": 190, "safety_stock": 50, "reorder_point": 70, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555519", "product_id": "30000000-0000-0000-0000-000000000009", "product_name": "Safety Relay Module", "sku": "SAFE-001", "warehouse_id": "10000000-0000-0000-0000-000000000002", "warehouse_name": "Birmingham Fulfilment Hub", "warehouse_city": "Birmingham", "available_qty": 150, "reserved_qty": 0, "net_available": 150, "safety_stock": 40, "reorder_point": 60, "status": "ok"},
-
-    # SAFE-002 Emergency Stop Assembly
-    {"inventory_id": "11111111-2222-3333-4444-555555555520", "product_id": "30000000-0000-0000-0000-000000000010", "product_name": "Emergency Stop Assembly", "sku": "SAFE-002", "warehouse_id": "10000000-0000-0000-0000-000000000001", "warehouse_name": "Newark Distribution Center", "warehouse_city": "Newark", "available_qty": 800, "reserved_qty": 100, "net_available": 700, "safety_stock": 200, "reorder_point": 300, "status": "ok"},
-    {"inventory_id": "11111111-2222-3333-4444-555555555521", "product_id": "30000000-0000-0000-0000-000000000010", "product_name": "Emergency Stop Assembly", "sku": "SAFE-002", "warehouse_id": "10000000-0000-0000-0000-000000000003", "warehouse_name": "Frankfurt Logistics Centre", "warehouse_city": "Frankfurt", "available_qty": 600, "reserved_qty": 50, "net_available": 550, "safety_stock": 150, "reorder_point": 220, "status": "ok"},
+    {
+        "inventory_id": inv[0],
+        "product_id": inv[1],
+        "product_name": PRODUCT_MAP.get(inv[1], ("Industrial Component", ""))[0],
+        "sku": PRODUCT_MAP.get(inv[1], ("", "ELEC-001"))[1],
+        "warehouse_id": inv[2],
+        "warehouse_name": _WH_MAP.get(inv[2], ("Distribution Center", ""))[0],
+        "warehouse_city": _WH_MAP.get(inv[2], ("", "Newark"))[1],
+        "available_qty": inv[3],
+        "reserved_qty": inv[4],
+        "net_available": inv[3] - inv[4],
+        "safety_stock": inv[5],
+        "reorder_point": inv[6],
+        "status": inv[7],
+    }
+    for inv in BASELINE_INVENTORY
 ]
 
 

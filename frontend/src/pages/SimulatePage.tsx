@@ -52,11 +52,11 @@ export const SimulatePage: React.FC = () => {
   const [recentSims, setRecentSims] = useState<SimulationResult[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPoll = () => {
+  const stopPoll = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  };
+  }, []);
 
-  const loadSimulation = async (id: string) => {
+  const loadSimulation = useCallback(async (id: string) => {
     try {
       setSimulationId(id);
       localStorage.setItem('active_sim_id', id);
@@ -91,7 +91,7 @@ export const SimulatePage: React.FC = () => {
     } catch (err) {
       console.error('Failed to load simulation:', err);
     }
-  };
+  }, [stopPoll]);
 
   const fetchSimHistory = useCallback(async () => {
     try {

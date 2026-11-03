@@ -17,7 +17,6 @@ export const AgentsPage: React.FC = () => {
   const isMountedRef = useRef(true);
 
   const fetchAgents = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
     try {
       const res = await analyticsApi.getAgents();
       if (isMountedRef.current) {
@@ -34,8 +33,19 @@ export const AgentsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
     isMountedRef.current = true;
-    fetchAgents(false);
+
+    analyticsApi.getAgents().then((res) => {
+      if (!ignore && isMountedRef.current) {
+        setAgents(res.agents);
+        setLastUpdated(new Date());
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Agents load error:', err);
+      if (!ignore && isMountedRef.current) setLoading(false);
+    });
 
     // Auto-sync agents every 5 seconds
     const interval = setInterval(() => {
@@ -52,6 +62,7 @@ export const AgentsPage: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      ignore = true;
       isMountedRef.current = false;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -74,7 +85,7 @@ export const AgentsPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => fetchAgents(false)}
+            onClick={() => { setLoading(true); fetchAgents(false); }}
             disabled={loading}
           >
             ↻ Refresh Agents

@@ -16,31 +16,7 @@ logger = structlog.get_logger(__name__)
 
 # ── Standby Domain Objects ───────────────────────────────────────────────────
 
-STANDBY_CUSTOMERS: dict[str, tuple[str, str]] = {
-    "50000000-0000-0000-0000-000000000001": ("Siemens Global Automations", "enterprise"),
-    "50000000-0000-0000-0000-000000000002": ("Tesla Energy & Storage", "premium"),
-    "50000000-0000-0000-0000-000000000003": ("Schneider Electric Grid", "enterprise"),
-    "50000000-0000-0000-0000-000000000004": ("Honeywell Aerospace", "standard"),
-    "00000000-0000-0000-0000-000000000001": ("Siemens Global Automations", "enterprise"),
-    "cust0000-0000-0000-0000-000000000001": ("Tesla Energy Solutions", "enterprise"),
-    "cust0000-0000-0000-0000-000000000002": ("Siemens Robotics Global", "premium"),
-    "cust0000-0000-0000-0000-000000000003": ("Schneider Power Grid", "enterprise"),
-    "cust0000-0000-0000-0000-000000000004": ("Honeywell Industrial", "standard"),
-}
-
-STANDBY_PRODUCT_DATA: dict[str, tuple[str, str, Decimal]] = {
-    "30000000-0000-0000-0000-000000000001": ("Industrial Sensor Module", "ELEC-001", Decimal("150.00")),
-    "30000000-0000-0000-0000-000000000002": ("High-Torque Servo Motor", "ELEC-002", Decimal("280.00")),
-    "30000000-0000-0000-0000-000000000003": ("IoT Gateway Device", "ELEC-003", Decimal("1249.99")),
-    "30000000-0000-0000-0000-000000000004": ("Precision Ball Bearing Set", "MECH-001", Decimal("95.00")),
-    "30000000-0000-0000-0000-000000000005": ("Hydraulic Actuator Cylinder", "MECH-002", Decimal("3450.00")),
-    "30000000-0000-0000-0000-000000000006": ("Stainless Steel Valve Assembly", "MECH-003", Decimal("575.00")),
-    "30000000-0000-0000-0000-000000000007": ("Industrial Lubricant (20L)", "CHEM-001", Decimal("185.00")),
-    "30000000-0000-0000-0000-000000000008": ("Epoxy Adhesive Kit", "CHEM-002", Decimal("95.00")),
-    "30000000-0000-0000-0000-000000000009": ("Safety Relay Module", "SAFE-001", Decimal("120.00")),
-    "30000000-0000-0000-0000-000000000010": ("Emergency Stop Assembly", "SAFE-002", Decimal("145.00")),
-    "00000000-0000-0000-0000-000000000002": ("Industrial IoT Sensor Hub v2", "ELEC-001", Decimal("150.00")),
-}
+from app.core.catalog import CUSTOMER_MAP as STANDBY_CUSTOMERS, PRODUCT_MAP as STANDBY_PRODUCT_DATA
 
 
 class StandbyCustomer:

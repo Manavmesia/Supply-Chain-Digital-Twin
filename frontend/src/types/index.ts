@@ -110,6 +110,9 @@ export interface DashboardData {
 
 export interface RecentOrder {
   order_id: string;
+  customer_id?: string;
+  customer_name?: string;
+  workflow_id?: string | null;
   status: string;
   priority: string;
   total_amount: string;

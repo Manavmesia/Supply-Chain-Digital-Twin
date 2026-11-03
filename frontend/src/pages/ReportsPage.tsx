@@ -19,7 +19,6 @@ export const ReportsPage: React.FC = () => {
   const isMountedRef = useRef(true);
 
   const fetchReports = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
     try {
       const res = await reportsApi.list({ limit: 50 });
       if (isMountedRef.current) {
@@ -37,8 +36,20 @@ export const ReportsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
     isMountedRef.current = true;
-    fetchReports(false);
+
+    reportsApi.list({ limit: 50 }).then((res) => {
+      if (!ignore && isMountedRef.current) {
+        setReports(res.items);
+        setTotal(res.total);
+        setLastUpdated(new Date());
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Reports load error:', err);
+      if (!ignore && isMountedRef.current) setLoading(false);
+    });
 
     // Auto-sync reports every 4 seconds
     const interval = setInterval(() => {
@@ -55,6 +66,7 @@ export const ReportsPage: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      ignore = true;
       isMountedRef.current = false;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -69,7 +81,7 @@ export const ReportsPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => fetchReports(false)}
+            onClick={() => { setLoading(true); fetchReports(false); }}
             disabled={loading}
           >
             ↻ Refresh Reports

@@ -41,8 +41,23 @@ export const DashboardPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
     isMountedRef.current = true;
-    fetchDashboardData(false);
+
+    Promise.all([
+      analyticsApi.getDashboard(),
+      analyticsApi.getAgents(),
+    ]).then(([dash, agentsRes]) => {
+      if (!ignore && isMountedRef.current) {
+        setDashboard(dash);
+        setAgents(agentsRes.agents);
+        setLastUpdated(new Date());
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Dashboard load failed:', err);
+      if (!ignore && isMountedRef.current) setLoading(false);
+    });
 
     // Live auto-sync every 3.5 seconds
     const interval = setInterval(() => {
@@ -59,6 +74,7 @@ export const DashboardPage: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      ignore = true;
       isMountedRef.current = false;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -90,7 +106,7 @@ export const DashboardPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => fetchDashboardData(false)}
+            onClick={() => { setIsUpdating(true); fetchDashboardData(false); }}
             disabled={isUpdating}
           >
             {isUpdating ? '↻ Refreshing…' : '↻ Refresh Data'}
@@ -226,7 +242,7 @@ export const DashboardPage: React.FC = () => {
                     </td>
                     <td>
                       <span style={{ fontWeight: 600, color: 'var(--c-text-primary)' }}>
-                        {getCustomerName((order as any).customer_id || order.order_id)}
+                        {getCustomerName(order.customer_id || order.order_id)}
                       </span>
                     </td>
                     <td>
@@ -263,7 +279,7 @@ export const DashboardPage: React.FC = () => {
                     </td>
                     <td>
                       <a
-                        href={`/workflow${(order as any).workflow_id ? `?id=${(order as any).workflow_id}` : ''}`}
+                        href={`/workflow${order.workflow_id ? `?id=${order.workflow_id}` : ''}`}
                         className="btn btn-ghost btn-sm"
                         style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                       >

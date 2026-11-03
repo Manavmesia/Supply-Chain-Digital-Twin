@@ -35,19 +35,7 @@ logger = structlog.get_logger(__name__)
 
 _PRIORITY_HIGH_AMOUNT_THRESHOLD = Decimal("50000.00")
 
-_PRODUCT_CATALOG: dict[uuid.UUID, tuple[str, str, Decimal]] = {
-    uuid.UUID("30000000-0000-0000-0000-000000000001"): ("Industrial Sensor Module", "ELEC-001", Decimal("150.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000002"): ("High-Torque Servo Motor", "ELEC-002", Decimal("280.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000003"): ("IoT Gateway Device", "ELEC-003", Decimal("1249.99")),
-    uuid.UUID("30000000-0000-0000-0000-000000000004"): ("Precision Ball Bearing Set", "MECH-001", Decimal("95.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000005"): ("Hydraulic Actuator Cylinder", "MECH-002", Decimal("3450.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000006"): ("Stainless Steel Valve Assembly", "MECH-003", Decimal("575.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000007"): ("Industrial Lubricant (20L)", "CHEM-001", Decimal("185.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000008"): ("Epoxy Adhesive Kit", "CHEM-002", Decimal("95.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000009"): ("Safety Relay Module", "SAFE-001", Decimal("120.00")),
-    uuid.UUID("30000000-0000-0000-0000-000000000010"): ("Emergency Stop Assembly", "SAFE-002", Decimal("145.00")),
-    uuid.UUID("00000000-0000-0000-0000-000000000002"): ("Industrial IoT Sensor Hub v2", "ELEC-001", Decimal("150.00")),
-}
+from app.core.catalog import PRODUCT_UUID_MAP as _PRODUCT_CATALOG
 
 
 def _derive_priority(customer_tier: str, total_amount: Decimal) -> str:
