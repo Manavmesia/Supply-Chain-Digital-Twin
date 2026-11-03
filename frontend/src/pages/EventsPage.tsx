@@ -226,7 +226,7 @@ export const EventsPage: React.FC = () => {
       <div className="card mt-6 animate-fade-in">
         <div className="section-header">
           <h3 className="section-title">📋 Injected Event Log</h3>
-          <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
+          <button className="btn btn-ghost btn-sm" onClick={() => load()} disabled={loading}>
             ↻ Refresh
           </button>
         </div>

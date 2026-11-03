@@ -2,6 +2,8 @@
 
 Provides SQLite-backed persistence so workflows, simulations, orders, and
 events survive server reloads, worker restarts, and browser page refreshes.
+Maintains live database tables for customers, products, warehouses, inventory,
+suppliers, carriers, routes, orders, order items, workflows, and events.
 """
 
 from __future__ import annotations
@@ -30,6 +32,89 @@ def _get_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = WAL;")
     conn.execute("PRAGMA synchronous = NORMAL;")
     return conn
+
+
+# ── Baseline Data Sets ────────────────────────────────────────────────────────
+
+_BASELINE_CUSTOMERS = [
+    ("50000000-0000-0000-0000-000000000001", "Siemens Global Automations", "enterprise", "procure@siemens.com"),
+    ("50000000-0000-0000-0000-000000000002", "Tesla Energy & Storage", "premium", "orders@tesla.com"),
+    ("50000000-0000-0000-0000-000000000003", "Schneider Electric Grid", "enterprise", "supply@schneider.com"),
+    ("50000000-0000-0000-0000-000000000004", "Honeywell Aerospace", "standard", "procure@honeywell.com"),
+    ("cust0000-0000-0000-0000-000000000001", "Tesla Energy Solutions", "enterprise", "procure@tesla.com"),
+    ("cust0000-0000-0000-0000-000000000002", "Siemens Robotics Global", "premium", "orders@siemens.com"),
+    ("cust0000-0000-0000-0000-000000000003", "Schneider Power Grid", "enterprise", "supply@schneider.com"),
+    ("cust0000-0000-0000-0000-000000000004", "Honeywell Industrial Automations", "standard", "procure@honeywell.com"),
+]
+
+_BASELINE_PRODUCTS = [
+    ("30000000-0000-0000-0000-000000000001", "ELEC-001", "Industrial Sensor Module", "Electronics", "Sensors", 150.00, 0.45, 0.001),
+    ("30000000-0000-0000-0000-000000000002", "ELEC-002", "High-Torque Servo Motor", "Electronics", "Motors", 280.00, 2.80, 0.005),
+    ("30000000-0000-0000-0000-000000000003", "ELEC-003", "IoT Gateway Device", "Electronics", "Networking", 1249.99, 1.20, 0.003),
+    ("30000000-0000-0000-0000-000000000004", "MECH-001", "Precision Ball Bearing Set", "Mechanical", "Bearings", 95.00, 0.85, 0.002),
+    ("30000000-0000-0000-0000-000000000005", "MECH-002", "Hydraulic Actuator Cylinder", "Mechanical", "Actuators", 3450.00, 18.50, 0.045),
+    ("30000000-0000-0000-0000-000000000006", "MECH-003", "Stainless Steel Valve Assembly", "Mechanical", "Valves", 575.00, 4.30, 0.008),
+    ("30000000-0000-0000-0000-000000000007", "CHEM-001", "Industrial Lubricant (20L)", "Chemicals", "Lubricants", 185.00, 19.00, 0.025),
+    ("30000000-0000-0000-0000-000000000008", "CHEM-002", "Epoxy Adhesive Kit", "Chemicals", "Adhesives", 95.00, 2.10, 0.004),
+    ("30000000-0000-0000-0000-000000000009", "SAFE-001", "Safety Relay Module", "Safety", "Relays", 120.00, 0.60, 0.001),
+    ("30000000-0000-0000-0000-000000000010", "SAFE-002", "Emergency Stop Assembly", "Safety", "Switches", 145.00, 0.90, 0.002),
+]
+
+_BASELINE_WAREHOUSES = [
+    ("10000000-0000-0000-0000-000000000001", "Newark Distribution Center", "Newark", "US", 50000, 12500, "active"),
+    ("10000000-0000-0000-0000-000000000002", "Birmingham Fulfilment Hub", "Birmingham", "GB", 35000, 8200, "active"),
+    ("10000000-0000-0000-0000-000000000003", "Frankfurt Logistics Centre", "Frankfurt", "DE", 40000, 9100, "active"),
+    ("22222222-0000-0000-0000-000000000001", "Pacific Northwest MegaHub", "Seattle", "US", 50000, 12500, "active"),
+]
+
+_BASELINE_INVENTORY = [
+    # ELEC-001 Industrial Sensor Module
+    ("11111111-2222-3333-4444-555555555501", "30000000-0000-0000-0000-000000000001", "10000000-0000-0000-0000-000000000001", 500, 50, 100, 150, "ok"),
+    ("11111111-2222-3333-4444-555555555502", "30000000-0000-0000-0000-000000000001", "10000000-0000-0000-0000-000000000002", 300, 30, 80, 120, "ok"),
+    ("11111111-2222-3333-4444-555555555503", "30000000-0000-0000-0000-000000000001", "10000000-0000-0000-0000-000000000003", 250, 20, 80, 120, "ok"),
+    # ELEC-002 High-Torque Servo Motor
+    ("11111111-2222-3333-4444-555555555504", "30000000-0000-0000-0000-000000000002", "10000000-0000-0000-0000-000000000001", 200, 10, 50, 80, "ok"),
+    ("11111111-2222-3333-4444-555555555505", "30000000-0000-0000-0000-000000000002", "10000000-0000-0000-0000-000000000002", 150, 0, 40, 60, "ok"),
+    # ELEC-003 IoT Gateway Device
+    ("11111111-2222-3333-4444-555555555506", "30000000-0000-0000-0000-000000000003", "10000000-0000-0000-0000-000000000001", 80, 5, 20, 30, "ok"),
+    ("11111111-2222-3333-4444-555555555507", "30000000-0000-0000-0000-000000000003", "10000000-0000-0000-0000-000000000003", 60, 0, 20, 30, "ok"),
+    # MECH-001 Precision Ball Bearing Set
+    ("11111111-2222-3333-4444-555555555508", "30000000-0000-0000-0000-000000000004", "10000000-0000-0000-0000-000000000001", 2000, 200, 500, 700, "ok"),
+    ("11111111-2222-3333-4444-555555555509", "30000000-0000-0000-0000-000000000004", "10000000-0000-0000-0000-000000000002", 1500, 100, 400, 600, "ok"),
+    # MECH-002 Hydraulic Actuator Cylinder (low & critical)
+    ("11111111-2222-3333-4444-555555555510", "30000000-0000-0000-0000-000000000005", "10000000-0000-0000-0000-000000000001", 15, 5, 20, 30, "low"),
+    ("11111111-2222-3333-4444-555555555511", "30000000-0000-0000-0000-000000000005", "10000000-0000-0000-0000-000000000003", 10, 10, 20, 30, "critical"),
+    # MECH-003 Stainless Steel Valve Assembly
+    ("11111111-2222-3333-4444-555555555512", "30000000-0000-0000-0000-000000000006", "10000000-0000-0000-0000-000000000001", 300, 20, 60, 90, "ok"),
+    ("11111111-2222-3333-4444-555555555513", "30000000-0000-0000-0000-000000000006", "10000000-0000-0000-0000-000000000002", 200, 10, 50, 70, "ok"),
+    # CHEM-001 Industrial Lubricant (20L)
+    ("11111111-2222-3333-4444-555555555514", "30000000-0000-0000-0000-000000000007", "10000000-0000-0000-0000-000000000001", 100, 5, 30, 40, "ok"),
+    ("11111111-2222-3333-4444-555555555515", "30000000-0000-0000-0000-000000000007", "10000000-0000-0000-0000-000000000003", 80, 0, 25, 35, "ok"),
+    # CHEM-002 Epoxy Adhesive Kit
+    ("11111111-2222-3333-4444-555555555516", "30000000-0000-0000-0000-000000000008", "10000000-0000-0000-0000-000000000001", 500, 50, 100, 150, "ok"),
+    ("11111111-2222-3333-4444-555555555517", "30000000-0000-0000-0000-000000000008", "10000000-0000-0000-0000-000000000002", 400, 20, 80, 120, "ok"),
+    # SAFE-001 Safety Relay Module
+    ("11111111-2222-3333-4444-555555555518", "30000000-0000-0000-0000-000000000009", "10000000-0000-0000-0000-000000000001", 200, 10, 50, 70, "ok"),
+    ("11111111-2222-3333-4444-555555555519", "30000000-0000-0000-0000-000000000009", "10000000-0000-0000-0000-000000000002", 150, 0, 40, 60, "ok"),
+    # SAFE-002 Emergency Stop Assembly
+    ("11111111-2222-3333-4444-555555555520", "30000000-0000-0000-0000-000000000010", "10000000-0000-0000-0000-000000000001", 800, 100, 200, 300, "ok"),
+    ("11111111-2222-3333-4444-555555555521", "30000000-0000-0000-0000-000000000010", "10000000-0000-0000-0000-000000000003", 600, 50, 150, 220, "ok"),
+]
+
+_BASELINE_SUPPLIERS = [
+    ("33333333-0000-0000-0000-000000000001", "Apex Microelectronics Inc.", "US", 4, 96.5, 4.9, "active"),
+    ("33333333-0000-0000-0000-000000000002", "Precision Dynamics Corp.", "DE", 6, 92.0, 4.7, "active"),
+    ("33333333-0000-0000-0000-000000000003", "EuroMech Components Ltd.", "GB", 5, 88.0, 4.5, "active"),
+    ("33333333-0000-0000-0000-000000000004", "Pacific Tech Supplies", "JP", 10, 81.5, 4.2, "active"),
+]
+
+_BASELINE_CARRIERS = [
+    ("44444444-0000-0000-0000-000000000001", "Global Intermodal Logistics", "GIL-01", '["road", "air", "ocean"]', 95.0, "active"),
+]
+
+_BASELINE_ROUTES = [
+    ("route000-0000-0000-0000-000000000001", "44444444-0000-0000-0000-000000000001", "Seattle, US", "Dallas, US", "road", 3, 350.00, 1),
+]
 
 
 def init_db() -> None:
@@ -67,6 +152,80 @@ def init_db() -> None:
                 status TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS customers (
+                customer_id TEXT PRIMARY KEY,
+                name TEXT,
+                customer_tier TEXT,
+                email TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS products (
+                product_id TEXT PRIMARY KEY,
+                sku TEXT UNIQUE,
+                name TEXT,
+                category TEXT,
+                subcategory TEXT,
+                unit_price REAL,
+                weight_kg REAL,
+                volume_m3 REAL,
+                active INTEGER DEFAULT 1,
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS warehouses (
+                warehouse_id TEXT PRIMARY KEY,
+                name TEXT,
+                city TEXT,
+                country TEXT,
+                capacity_units INTEGER,
+                current_load INTEGER,
+                status TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS inventory (
+                inventory_id TEXT PRIMARY KEY,
+                product_id TEXT,
+                warehouse_id TEXT,
+                available_qty INTEGER,
+                reserved_qty INTEGER,
+                safety_stock INTEGER,
+                reorder_point INTEGER,
+                status TEXT,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS suppliers (
+                supplier_id TEXT PRIMARY KEY,
+                name TEXT,
+                country TEXT,
+                lead_time_days INTEGER,
+                reliability_score REAL,
+                rating REAL,
+                status TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS carriers (
+                carrier_id TEXT PRIMARY KEY,
+                name TEXT,
+                code TEXT,
+                modes_json TEXT,
+                reliability_score REAL,
+                status TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS transportation_routes (
+                route_id TEXT PRIMARY KEY,
+                carrier_id TEXT,
+                origin_location TEXT,
+                destination TEXT,
+                freight_mode TEXT,
+                transit_days INTEGER,
+                base_cost REAL,
+                is_active INTEGER DEFAULT 1
+            );
+
             CREATE TABLE IF NOT EXISTS orders (
                 order_id TEXT PRIMARY KEY,
                 customer_id TEXT,
@@ -78,13 +237,79 @@ def init_db() -> None:
                 workflow_id TEXT,
                 created_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS order_items (
+                order_item_id TEXT PRIMARY KEY,
+                order_id TEXT,
+                product_id TEXT,
+                sku TEXT,
+                product_name TEXT,
+                quantity INTEGER,
+                unit_price REAL,
+                line_total REAL
+            );
             """
         )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # Seed customers if empty
+        if conn.execute("SELECT COUNT(*) as count FROM customers").fetchone()["count"] == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO customers (customer_id, name, customer_tier, email, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)",
+                [(c[0], c[1], c[2], c[3], now_iso) for c in _BASELINE_CUSTOMERS],
+            )
+
+        # Seed products if empty
+        if conn.execute("SELECT COUNT(*) as count FROM products").fetchone()["count"] == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO products (product_id, sku, name, category, subcategory, unit_price, weight_kg, volume_m3, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
+                [(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], now_iso) for p in _BASELINE_PRODUCTS],
+            )
+
+        # Seed warehouses if empty
+        if conn.execute("SELECT COUNT(*) as count FROM warehouses").fetchone()["count"] == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO warehouses (warehouse_id, name, city, country, capacity_units, current_load, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                _BASELINE_WAREHOUSES,
+            )
+
+        # Seed inventory if empty
+        if conn.execute("SELECT COUNT(*) as count FROM inventory").fetchone()["count"] == 0:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO inventory (
+                    inventory_id, product_id, warehouse_id, available_qty, reserved_qty,
+                    safety_stock, reorder_point, status, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7], now_iso) for i in _BASELINE_INVENTORY],
+            )
+
+        # Seed suppliers if empty
+        if conn.execute("SELECT COUNT(*) as count FROM suppliers").fetchone()["count"] == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO suppliers (supplier_id, name, country, lead_time_days, reliability_score, rating, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                _BASELINE_SUPPLIERS,
+            )
+
+        # Seed carriers if empty
+        if conn.execute("SELECT COUNT(*) as count FROM carriers").fetchone()["count"] == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO carriers (carrier_id, name, code, modes_json, reliability_score, status) VALUES (?, ?, ?, ?, ?, ?)",
+                _BASELINE_CARRIERS,
+            )
+
+        # Seed routes if empty
+        if conn.execute("SELECT COUNT(*) as count FROM transportation_routes").fetchone()["count"] == 0:
+            conn.executemany(
+                "INSERT OR IGNORE INTO transportation_routes (route_id, carrier_id, origin_location, destination, freight_mode, transit_days, base_cost, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                _BASELINE_ROUTES,
+            )
 
         # Seed baseline orders if table is empty
         cur = conn.execute("SELECT COUNT(*) as count FROM orders")
         if cur.fetchone()["count"] == 0:
-            now_iso = datetime.now(timezone.utc).isoformat()
             baseline_orders = [
                 (
                     "ord00000-0000-0000-0000-000000000001",
@@ -144,7 +369,6 @@ def init_db() -> None:
         # Seed baseline events if empty
         cur = conn.execute("SELECT COUNT(*) as count FROM events")
         if cur.fetchone()["count"] == 0:
-            now_iso = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 """
                 INSERT OR IGNORE INTO events (
@@ -168,6 +392,295 @@ def init_db() -> None:
 init_db()
 
 
+# ── Inventory Live Persistence ────────────────────────────────────────────────
+
+def list_inventory(
+    skip: int = 0,
+    limit: int = 50,
+    low_stock_only: bool = False,
+) -> dict[str, Any]:
+    """Retrieve live inventory levels joined with product and warehouse records."""
+    with _get_connection() as conn:
+        where_clause = "WHERE (i.available_qty - i.reserved_qty) < i.safety_stock" if low_stock_only else ""
+
+        count_sql = f"SELECT COUNT(*) as total FROM inventory i {where_clause}"
+        total = conn.execute(count_sql).fetchone()["total"]
+
+        sql = f"""
+            SELECT 
+                i.inventory_id,
+                i.product_id,
+                COALESCE(p.name, 'Industrial Sensor Module') as product_name,
+                COALESCE(p.sku, 'ELEC-001') as sku,
+                i.warehouse_id,
+                COALESCE(w.name, 'Distribution Center') as warehouse_name,
+                COALESCE(w.city, 'Newark') as warehouse_city,
+                i.available_qty,
+                i.reserved_qty,
+                (i.available_qty - i.reserved_qty) as net_available,
+                i.safety_stock,
+                i.reorder_point,
+                CASE
+                    WHEN (i.available_qty - i.reserved_qty) <= 0 THEN 'critical'
+                    WHEN (i.available_qty - i.reserved_qty) < i.safety_stock THEN 'low'
+                    ELSE 'ok'
+                END as derived_status
+            FROM inventory i
+            LEFT JOIN products p ON i.product_id = p.product_id
+            LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+            {where_clause}
+            ORDER BY i.product_id, i.warehouse_id
+            LIMIT ? OFFSET ?
+        """
+        rows = conn.execute(sql, (limit, skip)).fetchall()
+
+        items = [
+            {
+                "inventory_id": r["inventory_id"],
+                "product_id": r["product_id"],
+                "product_name": r["product_name"],
+                "sku": r["sku"],
+                "warehouse_id": r["warehouse_id"],
+                "warehouse_name": r["warehouse_name"],
+                "warehouse_city": r["warehouse_city"],
+                "available_qty": int(r["available_qty"]),
+                "reserved_qty": int(r["reserved_qty"]),
+                "net_available": int(r["net_available"]),
+                "safety_stock": int(r["safety_stock"]),
+                "reorder_point": int(r["reorder_point"]) if r["reorder_point"] is not None else None,
+                "status": r["derived_status"],
+            }
+            for r in rows
+        ]
+
+        low_count_sql = """
+            SELECT COUNT(*) as cnt 
+            FROM inventory 
+            WHERE (available_qty - reserved_qty) < safety_stock
+        """
+        low_count = conn.execute(low_count_sql).fetchone()["cnt"]
+
+        return {
+            "items": items,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "low_stock_count": low_count,
+        }
+
+
+def get_inventory_summary() -> dict[str, Any]:
+    """Calculate exact aggregate inventory metrics directly from live SQLite database."""
+    with _get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT 
+                COUNT(*) as total_records,
+                COALESCE(SUM(available_qty), 0) as total_available,
+                COALESCE(SUM(reserved_qty), 0) as total_reserved,
+                COUNT(CASE WHEN (available_qty - reserved_qty) < safety_stock AND (available_qty - reserved_qty) > 0 THEN 1 END) as low_stock_count,
+                COUNT(CASE WHEN (available_qty - reserved_qty) <= 0 THEN 1 END) as out_of_stock_count
+            FROM inventory
+            """
+        ).fetchone()
+
+        total_records = int(row["total_records"])
+        total_available = int(row["total_available"])
+        total_reserved = int(row["total_reserved"])
+        net_available = total_available - total_reserved
+        low_stock = int(row["low_stock_count"])
+        out_of_stock = int(row["out_of_stock_count"])
+        fill_rate = round(100.0 * (1 - out_of_stock / max(total_records, 1)), 1)
+
+        return {
+            "total_sku_locations": total_records,
+            "total_available_units": total_available,
+            "total_reserved_units": total_reserved,
+            "net_available_units": net_available,
+            "low_stock_locations": low_stock,
+            "out_of_stock_locations": out_of_stock,
+            "fill_rate_pct": fill_rate,
+        }
+
+
+def get_inventory_for_product(product_id: str) -> list[dict[str, Any]]:
+    """Fetch live inventory records for a specific product."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT 
+                i.inventory_id,
+                i.product_id,
+                COALESCE(p.name, 'Product') as product_name,
+                COALESCE(p.sku, 'SKU') as sku,
+                i.warehouse_id,
+                COALESCE(w.name, 'Warehouse') as warehouse_name,
+                COALESCE(w.city, '') as warehouse_city,
+                i.available_qty,
+                i.reserved_qty,
+                (i.available_qty - i.reserved_qty) as net_available,
+                i.safety_stock,
+                i.reorder_point,
+                CASE
+                    WHEN (i.available_qty - i.reserved_qty) <= 0 THEN 'critical'
+                    WHEN (i.available_qty - i.reserved_qty) < i.safety_stock THEN 'low'
+                    ELSE 'ok'
+                END as status
+            FROM inventory i
+            LEFT JOIN products p ON i.product_id = p.product_id
+            LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+            WHERE i.product_id = ?
+            """,
+            (product_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_inventory_for_warehouse(warehouse_id: str) -> list[dict[str, Any]]:
+    """Fetch live inventory records for a specific warehouse."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT 
+                i.inventory_id,
+                i.product_id,
+                COALESCE(p.name, 'Product') as product_name,
+                COALESCE(p.sku, 'SKU') as sku,
+                i.warehouse_id,
+                COALESCE(w.name, 'Warehouse') as warehouse_name,
+                COALESCE(w.city, '') as warehouse_city,
+                i.available_qty,
+                i.reserved_qty,
+                (i.available_qty - i.reserved_qty) as net_available,
+                i.safety_stock,
+                i.reorder_point,
+                CASE
+                    WHEN (i.available_qty - i.reserved_qty) <= 0 THEN 'critical'
+                    WHEN (i.available_qty - i.reserved_qty) < i.safety_stock THEN 'low'
+                    ELSE 'ok'
+                END as status
+            FROM inventory i
+            LEFT JOIN products p ON i.product_id = p.product_id
+            LEFT JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+            WHERE i.warehouse_id = ?
+            """,
+            (warehouse_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def reserve_inventory_units(
+    product_id: str,
+    quantity: int,
+    warehouse_id: str | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    """Reserve required units in live inventory table when an order is placed."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if conn is not None:
+        return _do_reserve(conn, product_id, quantity, warehouse_id, now_iso)
+    with _get_connection() as c:
+        return _do_reserve(c, product_id, quantity, warehouse_id, now_iso)
+
+
+def _do_reserve(
+    conn: sqlite3.Connection,
+    product_id: str,
+    quantity: int,
+    warehouse_id: str | None,
+    now_iso: str,
+) -> bool:
+    if warehouse_id:
+        row = conn.execute(
+            "SELECT inventory_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ? AND warehouse_id = ?",
+            (product_id, warehouse_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """
+            SELECT inventory_id, available_qty, reserved_qty, safety_stock 
+            FROM inventory 
+            WHERE product_id = ? AND (available_qty - reserved_qty) >= ?
+            ORDER BY (available_qty - reserved_qty) DESC
+            LIMIT 1
+            """,
+            (product_id, quantity),
+        ).fetchone()
+        if not row:
+            row = conn.execute(
+                "SELECT inventory_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ? LIMIT 1",
+                (product_id,),
+            ).fetchone()
+
+    if row:
+        inv_id = row["inventory_id"]
+        new_reserved = int(row["reserved_qty"]) + int(quantity)
+        net = int(row["available_qty"]) - new_reserved
+        st = "critical" if net <= 0 else ("low" if net < int(row["safety_stock"]) else "ok")
+        conn.execute(
+            """
+            UPDATE inventory 
+            SET reserved_qty = ?, status = ?, updated_at = ?
+            WHERE inventory_id = ?
+            """,
+            (new_reserved, st, now_iso, inv_id),
+        )
+        return True
+    return False
+
+
+def fulfill_inventory_units(
+    product_id: str,
+    quantity: int,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Commit and deduct fulfilled units from live available and reserved stock."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if conn is not None:
+        _do_fulfill(conn, product_id, quantity, now_iso)
+    else:
+        with _get_connection() as c:
+            _do_fulfill(c, product_id, quantity, now_iso)
+
+
+def _do_fulfill(
+    conn: sqlite3.Connection,
+    product_id: str,
+    quantity: int,
+    now_iso: str,
+) -> None:
+    row = conn.execute(
+        """
+        SELECT inventory_id, available_qty, reserved_qty, safety_stock 
+        FROM inventory 
+        WHERE product_id = ? AND reserved_qty >= ?
+        LIMIT 1
+        """,
+        (product_id, quantity),
+    ).fetchone()
+
+    if not row:
+        row = conn.execute(
+            "SELECT inventory_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ? LIMIT 1",
+            (product_id,),
+        ).fetchone()
+
+    if row:
+        inv_id = row["inventory_id"]
+        new_avail = max(0, int(row["available_qty"]) - int(quantity))
+        new_res = max(0, int(row["reserved_qty"]) - int(quantity))
+        net = new_avail - new_res
+        st = "critical" if net <= 0 else ("low" if net < int(row["safety_stock"]) else "ok")
+        conn.execute(
+            """
+            UPDATE inventory 
+            SET available_qty = ?, reserved_qty = ?, status = ?, updated_at = ?
+            WHERE inventory_id = ?
+            """,
+            (new_avail, new_res, st, now_iso, inv_id),
+        )
+
+
 # ── Workflow Persistence ───────────────────────────────────────────────────────
 
 def save_workflow(
@@ -180,6 +693,9 @@ def save_workflow(
     status_val = str(state.get("workflow_status") or "running")
     correlation_id = str(state.get("correlation_id") or "")
     state_str = json.dumps(state, default=str)
+
+    order = state.get("order") if isinstance(state.get("order"), dict) else None
+    items = (order.get("items") or []) if order else []
 
     with _get_connection() as conn:
         if trace is not None:
@@ -209,17 +725,16 @@ def save_workflow(
                 (workflow_id, correlation_id, status_val, state_str, now_iso, now_iso),
             )
 
-        # If order exists in state, persist to orders table
-        order = state.get("order")
-        if order and isinstance(order, dict) and order.get("order_id"):
-            items = order.get("items") or []
+        # If order exists in state, persist to orders and order_items tables
+        if order and order.get("order_id"):
+            ord_id = str(order.get("order_id"))
             calc_tot = sum(
                 float(it.get("line_total") or (float(it.get("unit_price") or 150) * float(it.get("quantity") or 1)))
                 for it in items
             )
             raw_tot = order.get("total_amount")
             final_total_amt = f"{float(raw_tot):.2f}" if raw_tot is not None and float(raw_tot) > 0 else (f"{calc_tot:.2f}" if calc_tot > 0 else "0.00")
-            derived_status = str(order.get("status") or ("delivered" if state.get("workflow_status") == "completed" else "in_transit"))
+            derived_status = str(order.get("status") or ("delivered" if status_val == "completed" else "in_transit"))
             derived_priority = str(order.get("priority") or "standard")
             cust_name = state.get("customer", {}).get("name") if isinstance(state.get("customer"), dict) else "Enterprise Customer"
 
@@ -233,7 +748,7 @@ def save_workflow(
                     total_amount = excluded.total_amount
                 """,
                 (
-                    str(order.get("order_id")),
+                    ord_id,
                     str(order.get("customer_id") or "00000000-0000-0000-0000-000000000001"),
                     cust_name,
                     derived_status,
@@ -244,6 +759,31 @@ def save_workflow(
                     now_iso,
                 ),
             )
+
+            # Persist line items
+            for idx, item in enumerate(items):
+                item_id = item.get("order_item_id") or f"item-{ord_id[:8]}-{idx+1}"
+                p_id = str(item.get("product_id") or "30000000-0000-0000-0000-000000000001")
+                sku = str(item.get("sku") or "ELEC-001")
+                p_name = str(item.get("product_name") or "Industrial Sensor Module")
+                qty = int(item.get("quantity") or 1)
+                u_price = float(item.get("unit_price") or 150.0)
+                l_tot = float(item.get("line_total") or (u_price * qty))
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO order_items (
+                        order_item_id, order_id, product_id, sku, product_name, quantity, unit_price, line_total
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (item_id, ord_id, p_id, sku, p_name, qty, u_price, l_tot),
+                )
+
+        # Live inventory updates when order transitions
+        if order and items and (status_val == "completed" or order.get("status") == "delivered"):
+            for item in items:
+                p_id = str(item.get("product_id"))
+                qty = int(item.get("quantity") or 1)
+                fulfill_inventory_units(p_id, qty, conn=conn)
 
         # Persist event history if present
         events = state.get("event_history")
@@ -523,9 +1063,31 @@ def get_order(order_id: str) -> dict[str, Any] | None:
         if not row:
             return None
 
-        # If order was created by a workflow, recover line items from workflow state
-        items: list[dict[str, Any]] = []
-        if row["workflow_id"]:
+        # Read line items from order_items table
+        items_rows = conn.execute(
+            """
+            SELECT order_item_id, product_id, sku, product_name, quantity, unit_price, line_total
+            FROM order_items
+            WHERE order_id = ?
+            """,
+            (order_id,),
+        ).fetchall()
+
+        items = [
+            {
+                "order_item_id": r["order_item_id"],
+                "product_id": r["product_id"],
+                "sku": r["sku"],
+                "product_name": r["product_name"],
+                "quantity": int(r["quantity"]),
+                "unit_price": f"{float(r['unit_price']):.2f}",
+                "line_total": f"{float(r['line_total']):.2f}",
+            }
+            for r in items_rows
+        ]
+
+        # If order_items table had no rows, recover line items from workflow state
+        if not items and row["workflow_id"]:
             wf_row = conn.execute(
                 "SELECT state_json FROM workflows WHERE workflow_id = ?",
                 (row["workflow_id"],),
@@ -550,7 +1112,7 @@ def get_order(order_id: str) -> dict[str, Any] | None:
                 except Exception:
                     pass
 
-        # Fallback line items if no workflow state was found
+        # Fallback line item
         if not items:
             tot = float(row["total_amount"] or 0)
             items = [
@@ -558,7 +1120,7 @@ def get_order(order_id: str) -> dict[str, Any] | None:
                     "order_item_id": f"item-{row['order_id'][:8]}-1",
                     "product_id": "30000000-0000-0000-0000-000000000001",
                     "product_name": "Industrial Component System",
-                    "sku": "SKU-001",
+                    "sku": "ELEC-001",
                     "quantity": 1,
                     "unit_price": f"{tot:.2f}",
                     "line_total": f"{tot:.2f}",
@@ -669,8 +1231,11 @@ def get_dashboard_metrics() -> dict[str, Any]:
             for r in recent_orders_rows
         ]
 
-        from app.api.v1.inventory import compute_inventory_summary, _FALLBACK_INVENTORY
-        inv_summary = compute_inventory_summary(_FALLBACK_INVENTORY)
+        inv_summary = get_inventory_summary()
+        tot_locs = inv_summary["total_sku_locations"]
+        l_stock = inv_summary["low_stock_locations"]
+        o_stock = inv_summary["out_of_stock_locations"]
+        h_stock = max(0, tot_locs - l_stock - o_stock)
 
         return {
             "kpis": {
@@ -680,13 +1245,19 @@ def get_dashboard_metrics() -> dict[str, Any]:
                 "fill_rate_pct": fill_rate,
                 "active_suppliers": 4,
                 "avg_supplier_reliability": 89.5,
-                "low_stock_alerts": inv_summary["low_stock_locations"],
-                "out_of_stock_alerts": inv_summary["out_of_stock_locations"],
-                "total_inventory_locations": inv_summary["total_sku_locations"],
+                "low_stock_alerts": l_stock,
+                "out_of_stock_alerts": o_stock,
+                "total_inventory_locations": tot_locs,
                 "sku_availability_pct": inv_summary["fill_rate_pct"],
                 "total_agents": 18,
             },
             "orders_by_status": status_counts,
             "orders_by_priority": priority_counts,
             "recent_orders": recent_orders,
+            "inventory_health": {
+                "total_locations": tot_locs,
+                "low_stock": l_stock,
+                "out_of_stock": o_stock,
+                "healthy": h_stock,
+            },
         }

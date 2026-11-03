@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import persistence
 from app.core.database import get_db_session
 from app.models.inventory import Inventory
 from app.models.product import Product
@@ -154,18 +155,8 @@ async def list_inventory(
             "low_stock_count": sum(1 for i in items if i["status"] in ("low", "critical")),
         }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DB query failed in list_inventory, returning fallback", error=str(exc))
-        filtered = _FALLBACK_INVENTORY
-        if low_stock_only:
-            filtered = [i for i in filtered if i["status"] in ("low", "critical")]
-        sliced = filtered[skip : skip + limit]
-        return {
-            "items": sliced,
-            "total": len(filtered),
-            "skip": skip,
-            "limit": limit,
-            "low_stock_count": sum(1 for i in filtered if i["status"] in ("low", "critical")),
-        }
+        logger.warning("DB query failed in list_inventory, returning persistent live data", error=str(exc))
+        return persistence.list_inventory(skip=skip, limit=limit, low_stock_only=low_stock_only)
 
 
 @router.get(
@@ -216,8 +207,8 @@ async def get_inventory_summary(
             ),
         }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DB query failed in get_inventory_summary, returning fallback", error=str(exc))
-        return compute_inventory_summary(_FALLBACK_INVENTORY)
+        logger.warning("DB query failed in get_inventory_summary, returning persistent live data", error=str(exc))
+        return persistence.get_inventory_summary()
 
 
 @router.get(
@@ -270,10 +261,10 @@ async def get_product_inventory(
                 "locations": locations,
             }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DB query failed in get_product_inventory, checking fallback", error=str(exc))
+        logger.warning("DB query failed in get_product_inventory, checking persistent storage", error=str(exc))
 
     str_pid = str(product_id)
-    matches = [i for i in _FALLBACK_INVENTORY if i["product_id"] == str_pid]
+    matches = persistence.get_inventory_for_product(str_pid)
     if matches:
         first = matches[0]
         return {
@@ -283,20 +274,7 @@ async def get_product_inventory(
             "total_available": sum(m["available_qty"] for m in matches),
             "total_reserved": sum(m["reserved_qty"] for m in matches),
             "total_net": sum(m["net_available"] for m in matches),
-            "locations": [
-                {
-                    "inventory_id": m["inventory_id"],
-                    "warehouse_id": m["warehouse_id"],
-                    "warehouse_name": m["warehouse_name"],
-                    "warehouse_city": m["warehouse_city"],
-                    "available_qty": m["available_qty"],
-                    "reserved_qty": m["reserved_qty"],
-                    "net_available": m["net_available"],
-                    "safety_stock": m["safety_stock"],
-                    "status": m["status"],
-                }
-                for m in matches
-            ],
+            "locations": matches,
         }
 
     raise HTTPException(

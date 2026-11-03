@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { simulateApi } from '../services/api';
 import type { SimulationResult } from '../types';
 import { formatSimulationId } from '../utils/formatters';

@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import structlog
 
+from app.core import persistence
+
 logger = structlog.get_logger(__name__)
 
 
@@ -94,8 +96,9 @@ class StandbyInventory:
         available: int = 5000,
         reserved: int = 150,
         safety: int = 200,
+        inventory_id: uuid.UUID | None = None,
     ) -> None:
-        self.inventory_id = uuid.uuid4()
+        self.inventory_id = inventory_id or uuid.uuid4()
         self.product_id = product_id
         self.warehouse_id = warehouse_id
         self.available_qty = available
@@ -260,7 +263,51 @@ def create_standby_session(
         for v in kwargs.values():
             param_uuids.add(str(v).lower())
 
+        if "update inventory" in q:
+            try:
+                compile_params = query.compile().params if hasattr(query, "compile") else {}
+                p_id = None
+                w_id = None
+                qty_val = 0
+                for k, v in compile_params.items():
+                    if "product_id" in k:
+                        p_id = str(v)
+                    elif "warehouse_id" in k:
+                        w_id = str(v)
+                    elif "reserved_qty" in k and isinstance(v, (int, float)):
+                        qty_val = int(v)
+                if p_id:
+                    persistence.reserve_inventory_units(p_id, qty_val, w_id)
+            except Exception as e:
+                logger.warning("Failed to execute live standby update inventory", error=str(e))
+            m = MagicMock()
+            m.rowcount = 1
+            return m
+
         if "from customers" in q or "customers." in q or "customer_id" in q:
+            try:
+                target_cid = None
+                for cid in param_uuids:
+                    if cid in STANDBY_CUSTOMERS or len(cid) == 36:
+                        target_cid = cid
+                        break
+                if not target_cid and customer_id:
+                    target_cid = str(customer_id)
+                if target_cid:
+                    with persistence._get_connection() as conn:
+                        row = conn.execute(
+                            "SELECT customer_id, name, customer_tier, email, is_active FROM customers WHERE customer_id = ?",
+                            (target_cid,)
+                        ).fetchone()
+                        if row:
+                            return _scalar(StandbyCustomer(
+                                customer_id=row["customer_id"],
+                                name=row["name"],
+                                tier=row["customer_tier"],
+                                is_active=bool(row["is_active"]),
+                            ))
+            except Exception:
+                pass
             for cid in param_uuids:
                 if cid in STANDBY_CUSTOMERS:
                     return _scalar(StandbyCustomer(customer_id=cid))
@@ -285,6 +332,34 @@ def create_standby_session(
                     break
                 except Exception:
                     pass
+
+            try:
+                with persistence._get_connection() as conn:
+                    if target_pid:
+                        rows = conn.execute(
+                            "SELECT inventory_id, product_id, warehouse_id, available_qty, reserved_qty, safety_stock FROM inventory WHERE product_id = ?",
+                            (str(target_pid),)
+                        ).fetchall()
+                    else:
+                        rows = conn.execute(
+                            "SELECT inventory_id, product_id, warehouse_id, available_qty, reserved_qty, safety_stock FROM inventory"
+                        ).fetchall()
+                    if rows:
+                        inv_objs = [
+                            StandbyInventory(
+                                product_id=uuid.UUID(r["product_id"]),
+                                warehouse_id=uuid.UUID(r["warehouse_id"]),
+                                available=int(r["available_qty"]),
+                                reserved=int(r["reserved_qty"]),
+                                safety=int(r["safety_stock"]),
+                                inventory_id=uuid.UUID(r["inventory_id"]),
+                            )
+                            for r in rows
+                        ]
+                        return _scalars(inv_objs)
+            except Exception as e:
+                logger.warning("Failed to query live inventory for standby session", error=str(e))
+
             inv = StandbyInventory(product_id=target_pid or uuid.uuid4(), warehouse_id=wh.warehouse_id)
             return _scalars([inv])
 
@@ -304,14 +379,34 @@ def create_standby_session(
             return _scalar(25)
 
         if "from products" in q or "products." in q or "product_id" in q:
-            # Check if any known product ID appears in bound params or query string
+            try:
+                target_pid = None
+                for pid in param_uuids:
+                    if pid in STANDBY_PRODUCT_DATA or len(pid) == 36:
+                        target_pid = pid
+                        break
+                if target_pid:
+                    with persistence._get_connection() as conn:
+                        row = conn.execute(
+                            "SELECT product_id, sku, name, unit_price, active FROM products WHERE product_id = ?",
+                            (target_pid,)
+                        ).fetchone()
+                        if row:
+                            return _scalar(StandbyProduct(
+                                product_id=row["product_id"],
+                                name=row["name"],
+                                sku=row["sku"],
+                                price=Decimal(str(row["unit_price"])),
+                                active=bool(row["active"]),
+                            ))
+            except Exception:
+                pass
             for pid in param_uuids:
                 if pid in STANDBY_PRODUCT_DATA:
                     return _scalar(StandbyProduct(product_id=pid))
             for pid, (pname, psku, pprice) in STANDBY_PRODUCT_DATA.items():
                 if str(pid).lower() in q:
                     return _scalar(StandbyProduct(pid, pname, psku, pprice))
-            # If items were provided in workflow request, resolve matching item
             if items:
                 for it in items:
                     pid_str = str(it.get("product_id", "")).lower()

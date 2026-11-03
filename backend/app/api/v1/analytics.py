@@ -271,25 +271,14 @@ async def get_dashboard_data(
     except Exception as exc:  # noqa: BLE001
         logger.warning("DB query failed in dashboard, returning persistent dashboard data", error=str(exc))
         from datetime import datetime, timezone
-        from app.api.v1.inventory import compute_inventory_summary, _FALLBACK_INVENTORY
         now_str = datetime.now(timezone.utc).isoformat()
         metrics = persistence.get_dashboard_metrics()
-        inv_summary = compute_inventory_summary(_FALLBACK_INVENTORY)
-        tot_locs = inv_summary["total_sku_locations"]
-        l_stock = inv_summary["low_stock_locations"]
-        o_stock = inv_summary["out_of_stock_locations"]
-        h_stock = tot_locs - l_stock - o_stock
 
         return {
             "kpis": metrics["kpis"],
             "orders_by_status": metrics["orders_by_status"],
             "recent_orders": metrics["recent_orders"],
-            "inventory_health": {
-                "total_locations": tot_locs,
-                "low_stock": l_stock,
-                "out_of_stock": o_stock,
-                "healthy": h_stock,
-            },
+            "inventory_health": metrics["inventory_health"],
             "recent_reports": [
                 {
                     "report_id": "70000000-0000-0000-0000-000000000001",
