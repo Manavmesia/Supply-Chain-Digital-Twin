@@ -74,7 +74,38 @@ class ReportingAgent(BaseAgent):
             "total_decisions": len(decisions),
         }
 
-        # ── 2. Create immutable Report DB record ──────────────────────────────
+        # ── 2. Create immutable Report DB record (LLM-synthesized when active)
+        from pydantic import BaseModel
+
+        class ReportDecisionSchema(BaseModel):
+            executive_narrative: str
+            audit_verdict: str
+            rationale: str
+
+        def _fallback_report() -> ReportDecisionSchema:
+            return ReportDecisionSchema(
+                executive_narrative=f"Order #{str(order_id_str)[:8]} completed with status '{order.get('status')}'. Margin: {finance.get('gross_margin_pct')}%, Risk: {risk.get('level')}.",
+                audit_verdict="compliant",
+                rationale=f"Generated executive report for order {order_id_str}",
+            )
+
+        llm_rep_dec, rep_src = await self.decide_with_llm(
+            decision_topic="Synthesize executive audit report and narrative KPI summary",
+            context=payload_summary,
+            rules=[
+                "Synthesize a clear, professional executive narrative summarizing fulfillment, revenue, margin health, risk, and delivery timeline.",
+                "Verify audit compliance against company supply chain criteria.",
+                "Audit verdict must be 'compliant' if CEO approved and no critical errors.",
+            ],
+            schema=ReportDecisionSchema,
+            fallback_callable=_fallback_report,
+            state=state,
+        )
+
+        payload_summary["executive_narrative"] = llm_rep_dec.executive_narrative
+        payload_summary["audit_verdict"] = llm_rep_dec.audit_verdict
+        payload_summary["decision_source"] = rep_src
+
         report_id = uuid.uuid4()
         if session:
             try:
@@ -112,8 +143,9 @@ class ReportingAgent(BaseAgent):
         decisions_list = self._record_decision(
             decisions_list,
             "report_generated",
-            f"Generated executive report {report_id} for order {order_id_str}",
+            llm_rep_dec.rationale or f"Generated executive report {report_id} for order {order_id_str}",
             report_event_payload,
+            source=rep_src,
         )
 
         logger.info(

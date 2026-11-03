@@ -119,7 +119,42 @@ class InventoryAgent(BaseAgent):
             event_history = self._append_event(event_history, "InventoryLow", payload)
             logger.warning("Safety stock breach", product_id=pid)
 
-        # ── Route based on stock outcome ──────────────────────────────────────
+        # ── Route based on stock outcome (LLM-driven if API key present) ──────
+        from pydantic import BaseModel
+
+        class InventoryDecisionSchema(BaseModel):
+            rationale: str
+
+        def _fallback_inventory() -> InventoryDecisionSchema:
+            if not all_reserved:
+                return InventoryDecisionSchema(
+                    rationale=f"Products {out_of_stock_products} unavailable — routing to Supplier for procurement"
+                )
+            return InventoryDecisionSchema(
+                rationale=f"All {len(items)} items reserved from warehouse {selected_warehouse_id}"
+            )
+
+        inv_context = {
+            "all_reserved": all_reserved,
+            "out_of_stock_products": out_of_stock_products,
+            "low_stock_products": low_stock_products,
+            "selected_warehouse_id": selected_warehouse_id,
+            "item_count": len(items),
+        }
+        inv_rules = [
+            "If any items cannot be reserved, route must escalate to supplier for replenishment.",
+            "If all items are reserved, route to warehouse for picking and packing.",
+            "Rationale must detail the reservation status and warehouse assignment.",
+        ]
+
+        llm_inv_dec, inv_src = await self.decide_with_llm(
+            decision_topic="Evaluate multi-facility inventory allocation and reservation",
+            context=inv_context,
+            rules=inv_rules,
+            schema=InventoryDecisionSchema,
+            fallback_callable=_fallback_inventory,
+        )
+
         if not all_reserved:
             # At least one product is out of stock — route to supplier
             payload = {
@@ -130,8 +165,9 @@ class InventoryAgent(BaseAgent):
             event_history = self._append_event(event_history, "InventoryOutOfStock", payload)
             decisions = self._record_decision(
                 decisions, "out_of_stock",
-                f"Products {out_of_stock_products} unavailable — routing to Supplier",
+                llm_inv_dec.rationale or f"Products {out_of_stock_products} unavailable — routing to Supplier",
                 {"out_of_stock_products": out_of_stock_products},
+                source=inv_src,
             )
             logger.info(
                 "Inventory out of stock",
@@ -155,8 +191,9 @@ class InventoryAgent(BaseAgent):
         event_history = self._append_event(event_history, "InventoryAllocated", payload)
         decisions = self._record_decision(
             decisions, "inventory_allocated",
-            f"All {len(items)} items reserved from warehouse {selected_warehouse_id}",
+            llm_inv_dec.rationale or f"All {len(items)} items reserved from warehouse {selected_warehouse_id}",
             payload,
+            source=inv_src,
         )
         logger.info(
             "Inventory allocated",

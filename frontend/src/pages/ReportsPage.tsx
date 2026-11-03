@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { reportsApi } from '../services/api';
 import type { Report } from '../types';
+import { formatReportId, formatWorkflowId } from '../utils/formatters';
 
 const STATUS_CONFIG: Record<string, { color: string; badge: string }> = {
   generated:   { color: '#10b981', badge: 'badge-success' },
@@ -72,7 +73,7 @@ export const ReportsPage: React.FC = () => {
                     </div>
                     <div className="flex gap-3 mt-2" style={{ fontSize: '0.75rem', color: '#64748b' }}>
                       <span>🔖 {r.report_type}</span>
-                      {r.workflow_id && <span>⚡ {r.workflow_id.slice(0, 8)}…</span>}
+                      {r.workflow_id && <span>⚡ {formatWorkflowId(r.workflow_id)}</span>}
                       {r.created_at && (
                         <span>🕐 {new Date(r.created_at).toLocaleString()}</span>
                       )}
@@ -112,17 +113,17 @@ export const ReportsPage: React.FC = () => {
               <div className="divider" />
 
               <div className="form-group">
-                <p className="form-label">Report ID</p>
-                <code className="tag" style={{ fontSize: '0.75rem' }}>
-                  {selected.report_id}
+                <p className="form-label">Report Code</p>
+                <code className="tag" style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }} title={selected.report_id}>
+                  {formatReportId(selected.report_id)}
                 </code>
               </div>
 
               {selected.workflow_id && (
                 <div className="form-group mt-4">
-                  <p className="form-label">Workflow ID</p>
-                  <code className="tag" style={{ fontSize: '0.75rem' }}>
-                    {selected.workflow_id}
+                  <p className="form-label">Associated Workflow</p>
+                  <code className="tag" style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#3b82f6' }} title={selected.workflow_id}>
+                    {formatWorkflowId(selected.workflow_id)}
                   </code>
                 </div>
               )}

@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { eventsApi } from '../services/api';
 import type { EventRecord } from '../types';
+import {
+  formatEventId,
+  formatWorkflowId,
+  formatTimeAgo,
+} from '../utils/formatters';
 
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventRecord[]>([]);
@@ -16,17 +21,19 @@ export const EventsPage: React.FC = () => {
   const [lastInjected, setLastInjected] = useState<string | null>(null);
 
   const load = async () => {
-    setLoading(true);
-    const [evRes, typesRes] = await Promise.all([
-      eventsApi.list({ limit: 50 }),
-      eventsApi.getTypes(),
-    ]);
-    setEvents(evRes.items);
-    setEventTypes(typesRes.event_types);
-    setLoading(false);
+    try {
+      const [evRes, typesRes] = await Promise.all([
+        eventsApi.list({ limit: 50 }),
+        eventsApi.getTypes(),
+      ]);
+      setEvents(evRes.items);
+      setEventTypes(typesRes.event_types);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   const inject = async () => {
     setInjecting(true);
@@ -41,6 +48,7 @@ export const EventsPage: React.FC = () => {
         workflow_id: form.workflow_id || undefined,
       });
       setLastInjected(result.event_id);
+      setLoading(true);
       await load();
     } catch (err) {
       console.error(err);
@@ -91,12 +99,12 @@ export const EventsPage: React.FC = () => {
           </div>
 
           <div className="form-group mb-3">
-            <label className="form-label">Workflow ID (optional)</label>
+            <label className="form-label">Workflow Reference (optional)</label>
             <input
               className="form-input"
               value={form.workflow_id}
               onChange={(e) => setForm({ ...form, workflow_id: e.target.value })}
-              placeholder="UUID of related workflow"
+              placeholder="e.g. #WF-63B555BE or leave blank for system-wide"
             />
           </div>
 
@@ -120,7 +128,7 @@ export const EventsPage: React.FC = () => {
               fontSize: '0.8125rem',
               color: '#10b981',
             }}>
-              ✅ Event injected: <code style={{ fontFamily: 'var(--font-mono)' }}>{lastInjected.slice(0, 16)}…</code>
+              ✅ Event injected: <code style={{ fontFamily: 'var(--font-mono)' }}>{formatEventId(lastInjected)}</code>
             </div>
           )}
 
@@ -146,9 +154,9 @@ export const EventsPage: React.FC = () => {
                 className="flex items-center gap-3"
                 style={{
                   padding: '0.5rem 0.75rem',
-                  background: 'rgba(12,18,32,0.5)',
+                  background: 'var(--c-bg-subtle)',
                   borderRadius: '6px',
-                  border: '1px solid rgba(56,90,155,0.15)',
+                  border: '1px solid var(--c-border)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}
@@ -161,8 +169,8 @@ export const EventsPage: React.FC = () => {
                     flexShrink: 0,
                   }}
                 />
-                <span style={{ fontSize: '0.8125rem', color: '#f0f4ff', flex: 1 }}>{et.type}</span>
-                <span className="tag" style={{ fontSize: '0.65rem', color: '#64748b' }}>{et.producer}</span>
+                <span style={{ fontSize: '0.8125rem', color: 'var(--c-text-primary)', flex: 1 }}>{et.type}</span>
+                <span className="tag" style={{ fontSize: '0.65rem' }}>{et.producer}</span>
               </div>
             ))}
           </div>
@@ -193,22 +201,28 @@ export const EventsPage: React.FC = () => {
               <thead>
                 <tr>
                   <th>Event Type</th>
-                  <th>Source</th>
+                  <th>Event Ref</th>
+                  <th>Source Agent</th>
                   <th>Status</th>
-                  <th>Timestamp</th>
-                  <th>Workflow</th>
+                  <th>Timeline</th>
+                  <th>Linked Workflow</th>
                 </tr>
               </thead>
               <tbody>
                 {events.map((e) => (
                   <tr key={e.event_id}>
                     <td>
-                      <span style={{ color: '#a78bfa', fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
+                      <span style={{ color: 'var(--c-brand-1)', fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', fontWeight: 600 }}>
                         {e.event_type}
                       </span>
                     </td>
                     <td>
-                      <span className="tag">{e.source_agent}</span>
+                      <span className="tag" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+                        {formatEventId(e.event_id)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="badge badge-info">{e.source_agent}</span>
                     </td>
                     <td>
                       <span
@@ -217,20 +231,27 @@ export const EventsPage: React.FC = () => {
                           background: e.status === 'replayed' ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)',
                           color: e.status === 'replayed' ? '#60a5fa' : '#10b981',
                           border: e.status === 'replayed' ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(16,185,129,0.3)',
+                          textTransform: 'uppercase',
                         }}
                       >
                         {e.status}
                       </span>
                     </td>
-                    <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      {new Date(e.timestamp).toLocaleTimeString()}
+                    <td style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
+                      {formatTimeAgo(e.timestamp)}
                     </td>
                     <td>
                       {e.workflow_id ? (
-                        <span className="tag" style={{ fontSize: '0.7rem' }}>
-                          {e.workflow_id.slice(0, 8)}…
-                        </span>
-                      ) : '—'}
+                        <a
+                          href={`/workflow?id=${e.workflow_id}`}
+                          className="tag"
+                          style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', textDecoration: 'none' }}
+                        >
+                          {formatWorkflowId(e.workflow_id)} ↗
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--c-text-muted)', fontSize: '0.75rem' }}>System-Wide</span>
+                      )}
                     </td>
                   </tr>
                 ))}

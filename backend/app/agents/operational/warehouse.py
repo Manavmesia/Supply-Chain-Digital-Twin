@@ -111,11 +111,44 @@ class WarehouseAgent(BaseAgent):
         }
         await self._publish(state, "ShipmentReady", payload)
         event_history = self._append_event(state, "ShipmentReady", payload)
+        from pydantic import BaseModel
+
+        class WarehouseDecisionSchema(BaseModel):
+            rationale: str
+
+        def _fallback_warehouse() -> WarehouseDecisionSchema:
+            return WarehouseDecisionSchema(
+                rationale=f"Order assigned to {warehouse.name} ({warehouse.city}, {warehouse.country})"
+            )
+
+        wh_context = {
+            "warehouse_name": warehouse.name,
+            "warehouse_location": f"{warehouse.city}, {warehouse.country}",
+            "previous_load": warehouse.current_load,
+            "new_load": new_load,
+            "capacity": warehouse.capacity_units,
+            "order_units": total_units,
+        }
+        wh_rules = [
+            "Warehouse load must never exceed capacity_units.",
+            "If load fits, confirm assignment to the selected facility.",
+            "Rationale must detail the assigned warehouse, location, and resulting capacity load.",
+        ]
+
+        llm_wh_dec, wh_src = await self.decide_with_llm(
+            decision_topic="Confirm warehouse assignment and capacity headroom",
+            context=wh_context,
+            rules=wh_rules,
+            schema=WarehouseDecisionSchema,
+            fallback_callable=_fallback_warehouse,
+        )
+
         decisions = self._record_decision(
             state,
             "warehouse_assigned",
-            f"Order assigned to {warehouse.name} ({warehouse.city}, {warehouse.country})",
+            llm_wh_dec.rationale or f"Order assigned to {warehouse.name} ({warehouse.city}, {warehouse.country})",
             payload,
+            source=wh_src,
         )
 
         logger.info(

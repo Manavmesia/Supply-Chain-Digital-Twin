@@ -106,54 +106,92 @@ class NegotiationAgent(BaseAgent):
             reliability_score = float(latest.get("reliability_score", 90.0))
             min_order_qty = int(latest.get("minimum_order_qty", 1))
 
-        # ── 3. Apply negotiation rules ────────────────────────────────────────
-        strategy = "standard"
-        discount_pct = 0.0
-        terms_proposed: list[str] = []
-        final_price = unit_cost
+        # ── 3. Apply negotiation rules (LLM-driven if API key present) ────────
+        from pydantic import BaseModel
 
-        # Rule A: Volume discount
-        if order_qty >= min_order_qty * _VOLUME_DISCOUNT_MULTIPLIER:
-            # Scale discount based on volume
-            volume_ratio = order_qty / max(min_order_qty, 1)
-            discount_pct = min(
-                _VOLUME_DISCOUNT_MIN + (volume_ratio - 3) * 0.01,
-                _VOLUME_DISCOUNT_MAX,
-            )
-            final_price = unit_cost * Decimal(str(1 - discount_pct))
-            final_price = final_price.quantize(Decimal("0.01"))
-            strategy = "volume_discount"
-            terms_proposed.append(
-                f"Volume discount of {discount_pct*100:.1f}% applied for {order_qty} units"
-            )
+        class NegotiationDecisionSchema(BaseModel):
+            strategy: str
+            discount_pct: float
+            final_unit_cost: str
+            terms_proposed: list[str]
+            rationale: str
 
-        # Rule B: Bulk strategy amplifies discount
         procurement_strategy = procurement_state.get("strategy", "standard")
-        if procurement_strategy == "bulk" and discount_pct == 0.0:
-            discount_pct = _VOLUME_DISCOUNT_MIN
-            final_price = unit_cost * Decimal(str(1 - discount_pct))
-            final_price = final_price.quantize(Decimal("0.01"))
-            strategy = "bulk_pricing"
-            terms_proposed.append(
-                f"Bulk procurement discount of {discount_pct*100:.1f}% for strategic reorder"
+
+        def _fallback_negotiation() -> NegotiationDecisionSchema:
+            strat = "standard"
+            disc = 0.0
+            terms = []
+            fp = unit_cost
+
+            if order_qty >= min_order_qty * _VOLUME_DISCOUNT_MULTIPLIER:
+                v_ratio = order_qty / max(min_order_qty, 1)
+                disc = min(_VOLUME_DISCOUNT_MIN + (v_ratio - 3) * 0.01, _VOLUME_DISCOUNT_MAX)
+                fp = (unit_cost * Decimal(str(1 - disc))).quantize(Decimal("0.01"))
+                strat = "volume_discount"
+                terms.append(f"Volume discount of {disc*100:.1f}% applied for {order_qty} units")
+            elif procurement_strategy == "bulk" and disc == 0.0:
+                disc = _VOLUME_DISCOUNT_MIN
+                fp = (unit_cost * Decimal(str(1 - disc))).quantize(Decimal("0.01"))
+                strat = "bulk_pricing"
+                terms.append(f"Bulk procurement discount of {disc*100:.1f}% for strategic reorder")
+
+            if reliability_score < _LOW_RELIABILITY_THRESHOLD:
+                p_clause = (
+                    f"SLA penalty clause: {_PENALTY_RATE_PCT}% of PO value per calendar day "
+                    f"of delivery delay beyond agreed lead time. Applied due to supplier reliability score of {reliability_score:.1f} < 85"
+                )
+                terms.append(p_clause)
+                strat = f"{strat}_with_penalty" if strat != "standard" else "penalty_clause"
+
+            return NegotiationDecisionSchema(
+                strategy=strat,
+                discount_pct=disc,
+                final_unit_cost=str(fp),
+                terms_proposed=terms,
+                rationale=f"Negotiation complete: strategy={strat}, discount={round(disc*100, 1)}%",
             )
 
-        # Rule C: Penalty clause for low reliability
-        if reliability_score < _LOW_RELIABILITY_THRESHOLD:
-            penalty_clause = (
-                f"SLA penalty clause: {_PENALTY_RATE_PCT}% of PO value per calendar day "
-                f"of delivery delay beyond agreed lead time. "
-                f"Applied due to supplier reliability score of {reliability_score:.1f} < 85"
-            )
-            terms_proposed.append(penalty_clause)
-            strategy = f"{strategy}_with_penalty" if strategy != "standard" else "penalty_clause"
+        neg_context = {
+            "order_id": order.get("order_id"),
+            "order_qty": order_qty,
+            "min_order_qty": min_order_qty,
+            "original_unit_cost": str(unit_cost),
+            "procurement_strategy": procurement_strategy,
+            "supplier_reliability_score": reliability_score,
+            "reorder_urgency": reorder_urgency,
+        }
+        neg_rules = [
+            f"If order_qty >= min_order_qty * {_VOLUME_DISCOUNT_MULTIPLIER}: volume discount between 5% and 12% is applied.",
+            "If procurement_strategy == 'bulk' and discount is 0: 5% strategic reorder discount is applied.",
+            f"If supplier_reliability_score < {_LOW_RELIABILITY_THRESHOLD}: an SLA delay penalty clause ({_PENALTY_RATE_PCT}%/day) must strictly be added.",
+            "final_unit_cost must equal original_unit_cost * (1 - discount_pct) rounded to 2 decimals.",
+            "Rationale must detail the discounts and contractual terms negotiated.",
+        ]
+
+        llm_neg_dec, neg_src = await self.decide_with_llm(
+            decision_topic="Negotiate procurement pricing and contractual SLA terms",
+            context=neg_context,
+            rules=neg_rules,
+            schema=NegotiationDecisionSchema,
+            fallback_callable=_fallback_negotiation,
+            state=state,
+        )
+
+        strategy = llm_neg_dec.strategy
+        discount_pct = round(float(llm_neg_dec.discount_pct), 4)
+        if discount_pct > 0.0:
+            final_price = (unit_cost * (Decimal("1.0000") - Decimal(str(discount_pct)))).quantize(Decimal("0.01"))
+        else:
+            final_price = unit_cost.quantize(Decimal("0.01"))
+        terms_proposed = llm_neg_dec.terms_proposed
 
         # ── 4. Publish events ─────────────────────────────────────────────────
         negotiation_payload = {
             "order_id": order.get("order_id"),
             "strategy": strategy,
-            "original_unit_cost": str(unit_cost),
-            "final_unit_cost": str(final_price),
+            "original_unit_cost": f"{unit_cost:.2f}",
+            "final_unit_cost": f"{final_price:.2f}",
             "discount_pct": round(discount_pct * 100, 2),
             "terms_proposed": terms_proposed,
             "outcome": "agreed" if terms_proposed else "no_change",
@@ -170,9 +208,9 @@ class NegotiationAgent(BaseAgent):
         decisions = self._record_decision(
             decisions,
             "negotiation_completed",
-            f"Negotiation complete: strategy={strategy}, discount={round(discount_pct*100,1)}%, "
-            f"terms proposed: {len(terms_proposed)}",
+            llm_neg_dec.rationale,
             negotiation_payload,
+            source=neg_src,
         )
 
         logger.info(

@@ -108,7 +108,49 @@ class ProcurementStrategyAgent(BaseAgent):
                 recommended_qty = max(recommended_qty, int(forecast_qty * 1.2))  # 20% buffer
                 reorder_urgency = "high"
 
-        # ── 3. Build and publish procurement plan ─────────────────────────────
+        # ── 3. Build and publish procurement plan (LLM-driven if API key present) ─
+        from pydantic import BaseModel
+
+        class ProcurementDecisionSchema(BaseModel):
+            strategy: str
+            reorder_urgency: str
+            recommended_qty: int
+            rationale: str
+
+        def _fallback_procurement() -> ProcurementDecisionSchema:
+            return ProcurementDecisionSchema(
+                strategy=strategy,
+                reorder_urgency=reorder_urgency,
+                recommended_qty=recommended_qty,
+                rationale=f"Procurement strategy: {strategy}, urgency: {reorder_urgency}, contract alerts: {len(contract_alerts)}",
+            )
+
+        proc_context = {
+            "order_id": order.get("order_id"),
+            "strategy": strategy,
+            "reorder_urgency": reorder_urgency,
+            "recommended_qty": recommended_qty,
+            "lead_time_risk": lead_time_risk,
+            "contract_alerts": contract_alerts,
+        }
+        proc_rules = [
+            "If forecast_qty >= ordered_qty * 3, strategy must be 'bulk' with a 20% safety buffer.",
+            "If supplier lead time > 14 days, lead_time_risk is True and reorder_urgency must be 'high'.",
+            "Rationale must detail the replenishment strategy and contract risk status.",
+        ]
+
+        llm_proc_dec, proc_src = await self.decide_with_llm(
+            decision_topic="Determine strategic procurement posture and bulk reorder volume",
+            context=proc_context,
+            rules=proc_rules,
+            schema=ProcurementDecisionSchema,
+            fallback_callable=_fallback_procurement,
+        )
+
+        strategy = llm_proc_dec.strategy
+        reorder_urgency = llm_proc_dec.reorder_urgency
+        recommended_qty = llm_proc_dec.recommended_qty
+
         plan_payload = {
             "order_id": order.get("order_id"),
             "strategy": strategy,
@@ -125,9 +167,9 @@ class ProcurementStrategyAgent(BaseAgent):
         decisions = self._record_decision(
             decisions,
             "procurement_strategy_set",
-            f"Procurement strategy: {strategy}, urgency: {reorder_urgency}, "
-            f"contract alerts: {len(contract_alerts)}",
+            llm_proc_dec.rationale or f"Procurement strategy: {strategy}, urgency: {reorder_urgency}, contract alerts: {len(contract_alerts)}",
             plan_payload,
+            source=proc_src,
         )
 
         logger.info(

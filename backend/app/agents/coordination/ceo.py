@@ -36,36 +36,102 @@ class CEOAgent(BaseAgent):
         priority = order.get("priority") or "standard"
         risk_score = float(risk.get("score", 0.0) or 0.0)
 
-        approved = True
-        approval_tier = "auto"
-        requires_human_approval = bool(state.get("requires_human_approval"))
-        workflow_status = state.get("workflow_status") if state.get("workflow_status") in {"escalated", "failed"} else "completed"
-        rationale = "Order satisfied standard approval criteria."
-        order_status = str(order.get("status") or "")
+        from pydantic import BaseModel
 
-        if workflow_status == "escalated" or requires_human_approval:
-            approval_tier = "human_required"
-            requires_human_approval = True
-            rationale = "Workflow escalated for human review and approval."
-        elif risk_score > 85.0:
-            approved = False
-            approval_tier = "risk_denied"
-            workflow_status = "failed"
-            rationale = f"Risk score {risk_score} exceeds policy limit."
-        elif errors and priority != "critical":
-            approved = False
-            approval_tier = "error_denied"
-            workflow_status = "failed"
-            rationale = "Standard workflow contains unresolved errors."
-        elif total_amount >= Decimal("500000.00"):
-            approved = True
-            approval_tier = "human_required"
-            requires_human_approval = True
-            rationale = "Very high-value order requires human oversight."
-        elif total_amount >= Decimal("10000.00"):
-            approved = True
-            approval_tier = "finance_review"
-            rationale = "Mid-value order requires finance review."
+        class CEODecisionSchema(BaseModel):
+            approved: bool
+            approval_tier: str
+            requires_human_approval: bool
+            workflow_status: str
+            rationale: str
+
+        def _fallback_ceo() -> CEODecisionSchema:
+            wf_st = state.get("workflow_status") if state.get("workflow_status") in {"escalated", "failed"} else "completed"
+            req_h = bool(state.get("requires_human_approval"))
+            if risk_score > 85.0:
+                return CEODecisionSchema(
+                    approved=False,
+                    approval_tier="risk_denied",
+                    requires_human_approval=False,
+                    workflow_status="failed",
+                    rationale=f"Risk score {risk_score} exceeds policy limit of 85.0.",
+                )
+            elif errors and priority != "critical":
+                return CEODecisionSchema(
+                    approved=False,
+                    approval_tier="error_denied",
+                    requires_human_approval=False,
+                    workflow_status="failed",
+                    rationale="Standard workflow contains unresolved errors.",
+                )
+            elif total_amount >= Decimal("500000.00"):
+                return CEODecisionSchema(
+                    approved=True,
+                    approval_tier="human_required",
+                    requires_human_approval=True,
+                    workflow_status=wf_st,
+                    rationale="Very high-value order requires human executive oversight.",
+                )
+            elif (wf_st == "escalated" or req_h) and not (
+                state.get("planning", {}).get("remanufacture_required") and "ADS-07" in (state.get("active_agents") or [])
+            ):
+                return CEODecisionSchema(
+                    approved=True,
+                    approval_tier="human_required",
+                    requires_human_approval=True,
+                    workflow_status="escalated",
+                    rationale="Workflow escalated for human review and approval.",
+                )
+            elif total_amount >= Decimal("10000.00"):
+                return CEODecisionSchema(
+                    approved=True,
+                    approval_tier="finance_review",
+                    requires_human_approval=False,
+                    workflow_status="completed",
+                    rationale="Mid-value order requires finance review.",
+                )
+            else:
+                return CEODecisionSchema(
+                    approved=True,
+                    approval_tier="auto",
+                    requires_human_approval=False,
+                    workflow_status="completed",
+                    rationale="Order satisfied standard approval criteria.",
+                )
+
+        ceo_context = {
+            "order_id": order.get("order_id"),
+            "total_amount": str(total_amount),
+            "priority": priority,
+            "risk_score": risk_score,
+            "error_count": len(errors),
+            "requires_human_approval": bool(state.get("requires_human_approval")),
+            "workflow_status": state.get("workflow_status"),
+        }
+        ceo_rules = [
+            "If risk_score > 85.0: approved must be False, approval_tier must be 'risk_denied', workflow_status must be 'failed'.",
+            "If errors exist and priority is not 'critical': approved must be False, approval_tier must be 'error_denied', workflow_status must be 'failed'.",
+            "If total_amount >= 500000.00: approved must be True, approval_tier must be 'human_required', requires_human_approval must be True.",
+            "If total_amount >= 10000.00: approved must be True, approval_tier must be 'finance_review', workflow_status must be 'completed'.",
+            "Otherwise: approved must be True, approval_tier must be 'auto', workflow_status must be 'completed'.",
+            "Rationale must clearly justify the approval tier based on order value, risk, and error constraints.",
+        ]
+
+        llm_ceo_dec, ceo_src = await self.decide_with_llm(
+            decision_topic="Execute executive peer review and final order sign-off",
+            context=ceo_context,
+            rules=ceo_rules,
+            schema=CEODecisionSchema,
+            fallback_callable=_fallback_ceo,
+            state=state,
+        )
+
+        approved = llm_ceo_dec.approved
+        approval_tier = llm_ceo_dec.approval_tier
+        requires_human_approval = llm_ceo_dec.requires_human_approval
+        workflow_status = llm_ceo_dec.workflow_status
+        rationale = llm_ceo_dec.rationale
+        order_status = str(order.get("status") or "")
 
         if approved:
             order_status = "delivered" if order_status not in {"delivered", "cancelled", "failed"} else order_status
@@ -81,6 +147,7 @@ class CEOAgent(BaseAgent):
                 "requires_human_approval": requires_human_approval,
                 "rationale": rationale,
             },
+            source=ceo_src,
         )
 
         result = {

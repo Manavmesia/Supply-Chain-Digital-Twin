@@ -15,23 +15,23 @@ export const InventoryPage: React.FC = () => {
   const [lowOnly, setLowOnly] = useState(false);
   const [search, setSearch] = useState('');
 
-  const load = async (low: boolean) => {
-    setLoading(true);
-    try {
-      const [invRes, sumRes] = await Promise.all([
-        inventoryApi.list({ limit: 100, low_stock_only: low }),
-        inventoryApi.getSummary(),
-      ]);
-      setItems(invRes.items);
-      setSummary(sumRes);
-    } catch (err) {
+  useEffect(() => {
+    let ignore = false;
+    Promise.all([
+      inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
+      inventoryApi.getSummary(),
+    ]).then(([invRes, sumRes]) => {
+      if (!ignore) {
+        setItems(invRes.items);
+        setSummary(sumRes);
+        setLoading(false);
+      }
+    }).catch((err) => {
       console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(lowOnly); }, [lowOnly]);
+      if (!ignore) setLoading(false);
+    });
+    return () => { ignore = true; };
+  }, [lowOnly]);
 
   const filtered = items.filter(
     (item) =>
@@ -69,18 +69,20 @@ export const InventoryPage: React.FC = () => {
             icon: '⚠️',
           },
           {
-            label: 'Fill Rate',
+            label: 'Stock Availability',
             value: summary ? `${summary.fill_rate_pct}%` : '—',
+            sub: 'Target: ≥ 95%',
             color: summary && summary.fill_rate_pct >= 95 ? '#10b981' : '#ef4444',
             icon: '🎯',
           },
-        ].map(({ label, value, color, icon }) => (
+        ].map(({ label, value, sub, color, icon }) => (
           <div key={label} className="card" style={{ borderTop: `2px solid ${color}` }}>
             <span style={{ fontSize: '1.5rem' }}>{icon}</span>
             <div className="kpi-value" style={{ color, fontSize: '1.75rem', margin: '0.5rem 0' }}>
               {loading ? <div className="skeleton" style={{ height: '28px', width: '80px' }} /> : value}
             </div>
             <div className="kpi-label">{label}</div>
+            {sub && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>{sub}</div>}
           </div>
         ))}
       </div>
@@ -99,7 +101,10 @@ export const InventoryPage: React.FC = () => {
             <input
               type="checkbox"
               checked={lowOnly}
-              onChange={(e) => setLowOnly(e.target.checked)}
+              onChange={(e) => {
+                setLoading(true);
+                setLowOnly(e.target.checked);
+              }}
               style={{ accentColor: '#f59e0b' }}
             />
             Show low-stock only

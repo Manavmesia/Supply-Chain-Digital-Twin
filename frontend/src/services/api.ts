@@ -4,6 +4,7 @@ import type {
   WorkflowAccepted,
   WorkflowStatus,
   WorkflowTrace,
+  WorkflowSummary,
   DashboardData,
   PaginatedResponse,
   Order,
@@ -65,6 +66,13 @@ export const authApi = {
 // ── Workflows ─────────────────────────────────────────────────────────────────
 
 export const workflowApi = {
+  list: async (limit = 50): Promise<{ items: WorkflowSummary[]; total: number }> => {
+    try {
+      const { data } = await apiClient.get<{ items: WorkflowSummary[]; total: number }>('/workflows', { params: { limit } });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
   start: async (req: WorkflowRequest): Promise<WorkflowAccepted> => {
     try {
       const { data } = await apiClient.post<WorkflowAccepted>('/workflows/orders', req);
@@ -86,9 +94,23 @@ export const workflowApi = {
     } catch (err) { return handleError(err); }
   },
 
-  overrideDecision: async (id: string, req: { topic: string; action: 'pin' | 'revert'; value: any }): Promise<{ status: string; message: string }> => {
+  overrideDecision: async (id: string, req: { topic: string; action: 'pin' | 'revert'; value: unknown }): Promise<{ status: string; message: string }> => {
     try {
       const { data } = await apiClient.post<{ status: string; message: string }>(`/workflows/${id}/override`, req);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  approve: async (id: string, notes?: string): Promise<{ workflow_id: string; status: string; message: string }> => {
+    try {
+      const { data } = await apiClient.post<{ workflow_id: string; status: string; message: string }>(`/workflows/${id}/approve`, { notes });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  reject: async (id: string, notes?: string): Promise<{ workflow_id: string; status: string; message: string }> => {
+    try {
+      const { data } = await apiClient.post<{ workflow_id: string; status: string; message: string }>(`/workflows/${id}/reject`, { notes });
       return data;
     } catch (err) { return handleError(err); }
   },

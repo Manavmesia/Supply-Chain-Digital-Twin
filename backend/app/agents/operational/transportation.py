@@ -62,11 +62,9 @@ class TransportationAgent(BaseAgent):
         # ── 2. Find active carriers ───────────────────────────────────────────
         carrier_query = select(Carrier).where(Carrier.status == "active")
         if required_mode:
-            from sqlalchemy import cast, String
-            from sqlalchemy.dialects.postgresql import ARRAY
             # Filter carriers that include the required freight mode in their array
             carrier_query = carrier_query.where(
-                Carrier.freight_modes.any(required_mode)  # type: ignore[arg-type]
+                Carrier.freight_modes.contains([required_mode])
             )
         carrier_result = await session.execute(carrier_query)
         carriers = carrier_result.scalars().all()
@@ -91,7 +89,16 @@ class TransportationAgent(BaseAgent):
         route_result = await session.execute(route_query)
         routes = route_result.scalars().all()
 
-        # ── 4. Select optimal route + carrier ─────────────────────────────────
+        # ── 4. Select optimal route + carrier (LLM-driven if API key present) ─
+        from pydantic import BaseModel
+
+        class TransportDecisionSchema(BaseModel):
+            selected_carrier_id: str
+            selected_route_id: str
+            freight_mode: str
+            transit_days: int
+            rationale: str
+
         selected_route: TransportationRoute | None = None
         selected_carrier: Carrier | None = None
 
@@ -99,19 +106,84 @@ class TransportationAgent(BaseAgent):
             carrier_ids = {c.carrier_id for c in carriers}
             eligible_routes = [r for r in routes if r.carrier_id in carrier_ids]
 
-            if eligible_routes:
+            def _fallback_transport() -> TransportDecisionSchema:
+                if eligible_routes:
+                    if priority in ("high", "critical"):
+                        s_route = min(eligible_routes, key=lambda r: r.transit_days)
+                    else:
+                        s_route = min(eligible_routes, key=lambda r: r.base_cost)
+                    s_carrier = next((c for c in carriers if c.carrier_id == s_route.carrier_id), carriers[0])
+                    return TransportDecisionSchema(
+                        selected_carrier_id=str(s_carrier.carrier_id),
+                        selected_route_id=str(s_route.route_id),
+                        freight_mode=s_route.freight_mode,
+                        transit_days=s_route.transit_days,
+                        rationale=f"Selected {s_carrier.name} ({s_route.freight_mode}) with {s_route.transit_days} days transit based on priority '{priority}'",
+                    )
+                c0 = max(carriers, key=lambda c: c.reliability_score)
+                return TransportDecisionSchema(
+                    selected_carrier_id=str(c0.carrier_id),
+                    selected_route_id="",
+                    freight_mode=required_mode or "road",
+                    transit_days=5,
+                    rationale=f"Fallback carrier {c0.name}",
+                )
+
+            transport_context = {
+                "order_priority": priority,
+                "origin": origin_location,
+                "eligible_routes": [
+                    {
+                        "route_id": str(r.route_id),
+                        "carrier_id": str(r.carrier_id),
+                        "mode": r.freight_mode,
+                        "transit_days": r.transit_days,
+                        "base_cost": str(r.base_cost),
+                    }
+                    for r in eligible_routes
+                ],
+                "carriers": [
+                    {"carrier_id": str(c.carrier_id), "name": c.name, "reliability": float(c.reliability_score)}
+                    for c in carriers
+                ],
+            }
+            transport_rules = [
+                "Priority 'critical' requires the fastest route (mandatory air mode if available).",
+                "Priority 'high' prioritizes the fastest transit days.",
+                "Priority 'standard' prioritizes the lowest base cost.",
+                "Rationale must clearly detail the transit duration, freight mode, and carrier chosen.",
+            ]
+
+            llm_trans_decision, trans_src = await self.decide_with_llm(
+                decision_topic="Select optimal logistics route and carrier",
+                context=transport_context,
+                rules=transport_rules,
+                schema=TransportDecisionSchema,
+                fallback_callable=_fallback_transport,
+                state=state,
+                candidate_id_whitelist={
+                    "selected_route_id": [str(r.route_id) for r in eligible_routes],
+                    "selected_carrier_id": [str(c.carrier_id) for c in carriers],
+                },
+            )
+
+            # Match chosen route by route_id
+            for r in eligible_routes:
+                if str(r.route_id) == llm_trans_decision.selected_route_id:
+                    selected_route = r
+                    break
+            if selected_route is None and eligible_routes:
                 if priority in ("high", "critical"):
-                    # Fastest route
                     selected_route = min(eligible_routes, key=lambda r: r.transit_days)
                 else:
-                    # Cheapest route
                     selected_route = min(eligible_routes, key=lambda r: r.base_cost)
 
-                # Find carrier for selected route
-                for c in carriers:
-                    if c.carrier_id == selected_route.carrier_id:
-                        selected_carrier = c
-                        break
+            for c in carriers:
+                if selected_route and c.carrier_id == selected_route.carrier_id:
+                    selected_carrier = c
+                    break
+        else:
+            trans_src = "rule_engine"
 
         # Fallback if no route found — use first available carrier
         if selected_carrier is None and carriers:
@@ -173,9 +245,9 @@ class TransportationAgent(BaseAgent):
 
         decisions = self._record_decision(
             state, "shipment_dispatched",
-            f"Shipment {shipment_id} dispatched via {selected_carrier.name if selected_carrier else 'Unknown'} "
-            f"(ETA {eta.strftime('%Y-%m-%d')})",
+            f"Shipment {shipment_id} dispatched via {selected_carrier.name if selected_carrier else 'Unknown'} (ETA {eta.strftime('%Y-%m-%d')})",
             created_payload,
+            source=trans_src,
         )
 
         logger.info(

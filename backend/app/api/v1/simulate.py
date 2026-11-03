@@ -9,13 +9,15 @@ GET  /api/v1/simulate            — list recent simulations
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.core import persistence
 from app.core.database import AsyncSessionLocal
+from app.core.standby_session import create_standby_session, is_database_connected
 from app.graph.state import SupplyChainState
 from app.graph.workflow import compile_workflow
 
@@ -23,29 +25,47 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/simulate", tags=["simulate"])
 
 # ---------------------------------------------------------------------------
-# In-process simulation store
+# Bounded in-process simulation store (prevents memory leak DoS)
 # ---------------------------------------------------------------------------
 
 _SIM_STORE: dict[str, dict[str, Any]] = {}
+_MAX_SIM_STORE_SIZE = 500
+
+
+def _save_sim_state(sim_id: str, data: dict[str, Any]) -> None:
+    if len(_SIM_STORE) >= _MAX_SIM_STORE_SIZE and sim_id not in _SIM_STORE:
+        oldest_key = next(iter(_SIM_STORE))
+        _SIM_STORE.pop(oldest_key, None)
+    _SIM_STORE[sim_id] = data
+    try:
+        persistence.save_simulation(sim_id, data)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to persist simulation state", simulation_id=sim_id, error=str(exc))
 
 
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
 
+ScenarioType = Literal[
+    "demand_spike",
+    "supplier_outage",
+    "logistics_delay",
+    "bulk_order",
+    "quality_crisis",
+]
+
+
+class SimulationItemRequest(BaseModel):
+    product_id: str = Field(min_length=1, max_length=100)
+    quantity: int = Field(default=1, gt=0, le=1_000_000)
+
+
 class SimulationScenario(BaseModel):
-    scenario_type: str
-    """
-    One of:
-      - demand_spike        — 2x demand for all products
-      - supplier_outage     — primary supplier unavailable
-      - logistics_delay     — transit days doubled, air freight forced
-      - bulk_order          — large-value enterprise order (critical priority)
-      - quality_crisis      — QA agent will flag all batches as failed
-    """
-    customer_id: str
-    items: list[dict[str, Any]]
-    description: str | None = None
+    scenario_type: ScenarioType
+    customer_id: str = Field(min_length=1, max_length=100)
+    items: list[SimulationItemRequest] = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
 
 
 class SimulationAccepted(BaseModel):
@@ -73,12 +93,15 @@ def _build_initial_state(
     scenario: SimulationScenario,
 ) -> SupplyChainState:
     """Build the initial state with scenario-specific overrides."""
-    items = scenario.items
+    items = [
+        {"product_id": str(i.product_id), "quantity": int(i.quantity)}
+        for i in scenario.items
+    ]
 
     # Demand spike: double all quantities
     if scenario.scenario_type == "demand_spike":
         items = [
-            {**item, "quantity": item.get("quantity", 1) * 2}
+            {**item, "quantity": item["quantity"] * 2}
             for item in items
         ]
 
@@ -94,10 +117,7 @@ def _build_initial_state(
         "retries": {},
         "order": {
             "customer_id": scenario.customer_id,
-            "items": [
-                {"product_id": str(i.get("product_id")), "quantity": i.get("quantity", 1)}
-                for i in items
-            ],
+            "items": items,
         },
     }
 
@@ -121,36 +141,76 @@ async def _run_simulation(
     scenario: SimulationScenario,
 ) -> None:
     """Run the full workflow in simulation mode and store the result."""
-    _SIM_STORE[simulation_id]["status"] = "running"
+    _save_sim_state(simulation_id, {
+        "status": "running",
+        "scenario_type": scenario.scenario_type,
+        "description": _SCENARIO_DESCRIPTIONS.get(scenario.scenario_type, ""),
+        "agents_executed": 0,
+        "trace": [],
+    })
 
-    initial_state = _build_initial_state(simulation_id, scenario)
     trace: list[dict[str, Any]] = []
 
     try:
+        initial_state = _build_initial_state(simulation_id, scenario)
         config = {"configurable": {"thread_id": simulation_id}}
+        final_state: dict[str, Any] = {}
 
-        async with AsyncSessionLocal() as session:
-            # _make_node expects an async zero-arg callable that returns a session
-            async def _session_factory():
-                return session
+        db_available = await is_database_connected()
+        if db_available:
+            try:
+                async with AsyncSessionLocal() as session:
+                    async def _session_factory():
+                        return session
 
+                    compiled = compile_workflow(
+                        session_factory=_session_factory,
+                        trace_collector=trace,
+                    )
+                    final_state = await compiled.ainvoke(initial_state, config=config)
+                    await session.rollback()
+
+                    has_connection_error = any(
+                        "connection" in str(e).lower() or "errno 61" in str(e).lower()
+                        for e in final_state.get("errors", [])
+                    )
+                    if has_connection_error:
+                        raise ConnectionRefusedError("Database lost mid-run")
+            except (OSError, ConnectionRefusedError, Exception) as db_exc:
+                logger.warning("DB failure during simulation, falling back to standby session", error=str(db_exc))
+                db_available = False
+
+        if not db_available:
+            standby_session = create_standby_session(
+                customer_id=uuid.UUID(str(initial_state["order"]["customer_id"])) if initial_state.get("order", {}).get("customer_id") else None,
+                items=initial_state.get("order", {}).get("items"),
+            )
+            async def _standby_factory():
+                return standby_session
+
+            trace.clear()
+            fallback_initial_state = dict(initial_state)
+            fallback_initial_state["errors"] = []
             compiled = compile_workflow(
-                session_factory=_session_factory,
+                session_factory=_standby_factory,
                 trace_collector=trace,
             )
-            final_state = await compiled.ainvoke(initial_state, config=config)
+            final_state = await compiled.ainvoke(fallback_initial_state, config=config)
 
-            if not final_state.get("errors"):
-                final_state["workflow_status"] = "completed"
+        sim_status = "completed"
+        if final_state.get("workflow_status") == "failed" or bool(final_state.get("errors")):
+            sim_status = "failed"
+        elif final_state.get("workflow_status") != "escalated":
+            final_state["workflow_status"] = "completed"
 
-            await session.rollback()
-
-        _SIM_STORE[simulation_id].update({
-            "status": "completed",
+        _save_sim_state(simulation_id, {
+            "simulation_id": simulation_id,
+            "scenario_type": scenario.scenario_type,
+            "status": sim_status,
+            "description": _SCENARIO_DESCRIPTIONS.get(scenario.scenario_type, ""),
             "final_state": final_state,
             "trace": trace,
             "agents_executed": len(trace),
-            "scenario_description": _SCENARIO_DESCRIPTIONS.get(scenario.scenario_type, ""),
         })
 
         logger.info(
@@ -158,14 +218,18 @@ async def _run_simulation(
             simulation_id=simulation_id,
             scenario=scenario.scenario_type,
             agents=len(trace),
+            status=sim_status,
         )
 
     except Exception as exc:  # noqa: BLE001
         logger.error("Simulation failed", simulation_id=simulation_id, error=str(exc))
-        _SIM_STORE[simulation_id].update({
+        _save_sim_state(simulation_id, {
+            "simulation_id": simulation_id,
+            "scenario_type": scenario.scenario_type,
             "status": "failed",
             "error": str(exc),
             "trace": trace,
+            "description": _SCENARIO_DESCRIPTIONS.get(scenario.scenario_type, ""),
         })
 
 
@@ -198,14 +262,14 @@ async def start_simulation(
     """
     simulation_id = str(uuid.uuid4())
 
-    _SIM_STORE[simulation_id] = {
+    _save_sim_state(simulation_id, {
         "simulation_id": simulation_id,
         "scenario_type": scenario.scenario_type,
         "status": "queued",
         "description": scenario.description or _SCENARIO_DESCRIPTIONS.get(
             scenario.scenario_type, ""
         ),
-    }
+    })
 
     background_tasks.add_task(_run_simulation, simulation_id, scenario)
 
@@ -230,9 +294,10 @@ async def list_simulations(
     limit: int = Query(20, ge=1, le=100),
 ) -> dict[str, Any]:
     """List recent simulation runs and their statuses."""
-    sims = list(reversed(list(_SIM_STORE.values())))[:limit]
-    return {
-        "items": [
+    items = persistence.list_simulations(limit=limit)
+    if not items:
+        sims = list(reversed(list(_SIM_STORE.values())))[:limit]
+        items = [
             {
                 "simulation_id": s["simulation_id"],
                 "scenario_type": s["scenario_type"],
@@ -241,8 +306,10 @@ async def list_simulations(
                 "agents_executed": s.get("agents_executed", 0),
             }
             for s in sims
-        ],
-        "total": len(_SIM_STORE),
+        ]
+    return {
+        "items": items,
+        "total": len(items),
     }
 
 
@@ -271,7 +338,7 @@ async def get_simulation(simulation_id: str) -> dict[str, Any]:
     Poll this endpoint after posting to `/simulate` — status goes:
     `queued` → `running` → `completed` | `failed`
     """
-    sim = _SIM_STORE.get(simulation_id)
+    sim = _SIM_STORE.get(simulation_id) or persistence.get_simulation(simulation_id)
     if sim is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

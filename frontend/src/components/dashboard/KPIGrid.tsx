@@ -53,7 +53,7 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ kpis, loading }) => {
   }
 
   const revenue = parseFloat(kpis.total_revenue).toLocaleString('en-US', {
-    style: 'currency', currency: 'USD', maximumFractionDigits: 0,
+    style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2,
   });
 
   const cards: KPICardProps[] = [
@@ -108,7 +108,7 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ kpis, loading }) => {
     },
     {
       label: 'Inventory Health',
-      value: `${Math.round((1 - kpis.out_of_stock_alerts / Math.max(kpis.total_orders, 1)) * 100)}%`,
+      value: `${kpis.sku_availability_pct ?? Math.max(0, Math.min(100, Math.round((1 - (kpis.out_of_stock_alerts || 0) / (kpis.total_inventory_locations || 30)) * 100)))}%`,
       sub: 'SKU availability',
       color: '#10b981',
       icon: '🏪',

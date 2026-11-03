@@ -237,6 +237,7 @@ class BaseAgent(abc.ABC):
         action: str,
         reason: str,
         data: dict[str, Any] | None = None,
+        source: str = "rule_engine",
     ) -> list[dict[str, Any]]:
         """
         Return an updated decisions list with this agent's decision appended.
@@ -252,10 +253,39 @@ class BaseAgent(abc.ABC):
                 "action": action,
                 "reason": reason,
                 "data": data or {},
+                "decision_source": source,
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
         return decisions
+
+    async def decide_with_llm(
+        self,
+        decision_topic: str,
+        context: dict[str, Any],
+        rules: list[str],
+        schema: Any,
+        fallback_callable: Any,
+        state: SupplyChainState | None = None,
+        candidate_id_whitelist: list[str] | set[str] | dict[str, list[str]] | None = None,
+    ) -> tuple[Any, str]:
+        """
+        Executes a grounded, multi-agent-informed structured decision with an LLM when an API key is present,
+        synthesizing peer agent signals, blackboard status, and tool data with zero hallucination.
+        Seamlessly executes fallback_callable when offline.
+        """
+        from app.core.llm import make_llm_decision
+        return await make_llm_decision(
+            agent_code=self.agent_code,
+            agent_name=self.agent_name,
+            decision_topic=decision_topic,
+            context=context,
+            rules=rules,
+            schema=schema,
+            fallback_callable=fallback_callable,
+            state=state,
+            candidate_id_whitelist=candidate_id_whitelist,
+        )
 
     def _append_event(
         self,

@@ -134,7 +134,61 @@ class SupplierAgent(BaseAgent):
                     + _W_PRICE    * price_norm
                 )
 
+            # ── LLM Multi-Criteria Supplier Selection ─────────────────────────
+            from pydantic import BaseModel
+
+            class SupplierDecisionSchema(BaseModel):
+                selected_supplier_id: str
+                selected_supplier_name: str
+                composite_score: float
+                rationale: str
+
+            candidate_suppliers_data = [
+                {
+                    "supplier_id": str(s.supplier_id),
+                    "name": s.name,
+                    "reliability_score": float(s.reliability_score),
+                    "lead_time_days": s.lead_time_days,
+                    "contract_price": str(sp.contract_price),
+                    "minimum_order_qty": int(sp.minimum_order_qty),
+                    "algorithmic_score": round(_score(sp, s), 4),
+                }
+                for sp, s in rows
+            ]
+
+            supplier_rules = [
+                "Score formula: 0.40 * (reliability / max_reliability) + 0.30 * (min_lead_time / lead_time) + 0.30 * (min_price / price).",
+                "Higher reliability is strictly preferred; lower lead time and lower price are strictly preferred.",
+                "Select the candidate with the highest composite score.",
+                "Rationale must cite the specific scores, lead time, and price comparison.",
+            ]
+
+            def _fallback_supplier() -> SupplierDecisionSchema:
+                b_sp, b_sup = max(rows, key=lambda row: _score(row[0], row[1]))
+                sc = _score(b_sp, b_sup)
+                return SupplierDecisionSchema(
+                    selected_supplier_id=str(b_sup.supplier_id),
+                    selected_supplier_name=str(b_sup.name),
+                    composite_score=round(sc, 4),
+                    rationale=f"Selected {str(b_sup.name)} based on multi-criteria score {sc:.2f}",
+                )
+
+            llm_sup_decision, sup_src = await self.decide_with_llm(
+                decision_topic="Evaluate and select optimal procurement supplier",
+                context={"candidates": candidate_suppliers_data, "product_id": str(product_id), "needed_qty": needed_qty},
+                rules=supplier_rules,
+                schema=SupplierDecisionSchema,
+                fallback_callable=_fallback_supplier,
+                state=state,
+                candidate_id_whitelist=[str(s.supplier_id) for _, s in rows],
+            )
+
+            # Map back to matching row
             best_sp, best_supplier = max(rows, key=lambda row: _score(row[0], row[1]))
+            for sp, s in rows:
+                if str(s.supplier_id) == llm_sup_decision.selected_supplier_id:
+                    best_sp, best_supplier = sp, s
+                    break
 
             # ── Create PurchaseOrder ──────────────────────────────────────────
             po_id = uuid.uuid4()
@@ -142,6 +196,8 @@ class SupplierAgent(BaseAgent):
 
             # Determine order quantity: max(needed_qty, minimum_order_qty)
             order_qty = max(needed_qty, best_sp.minimum_order_qty)
+            unit_cost_dec = Decimal(str(best_sp.contract_price)).quantize(Decimal("0.01"))
+            total_cost_dec = (unit_cost_dec * Decimal(str(order_qty))).quantize(Decimal("0.01"))
 
             po = PurchaseOrder(
                 po_id=po_id,
@@ -149,7 +205,8 @@ class SupplierAgent(BaseAgent):
                 product_id=product_id,
                 warehouse_id=uuid.UUID(warehouse_id_str) if warehouse_id_str else uuid.uuid4(),
                 quantity=order_qty,
-                unit_cost=best_sp.contract_price,
+                unit_cost=unit_cost_dec,
+                total_cost=total_cost_dec,
                 currency="USD",
                 status="draft",
                 requested_delivery=requested_delivery,
@@ -172,7 +229,8 @@ class SupplierAgent(BaseAgent):
                 "supplier_id": str(best_supplier.supplier_id),
                 "product_id": str(product_id),
                 "quantity": order_qty,
-                "unit_cost": str(best_sp.contract_price),
+                "unit_cost": str(unit_cost_dec),
+                "total_cost": str(total_cost_dec),
                 "requested_delivery": str(requested_delivery),
             }
 
@@ -196,9 +254,9 @@ class SupplierAgent(BaseAgent):
 
             decisions = self._record_decision(
                 decisions, "supplier_selected",
-                f"Selected {best_supplier.name} for product {product_id} "
-                f"(score: {_score(best_sp, best_supplier):.2f})",
+                llm_sup_decision.rationale or f"Selected {best_supplier.name} for product {product_id} (score: {_score(best_sp, best_supplier):.2f})",
                 selected_payload,
+                source=sup_src,
             )
 
             all_purchase_orders.append(po_payload)

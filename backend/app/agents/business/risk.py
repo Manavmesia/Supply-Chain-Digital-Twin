@@ -75,17 +75,65 @@ class RiskAgent(BaseAgent):
             risk_score += 30.0
             risk_factors.append({"factor": "low_margin_exposure", "points": 30.0})
 
-        risk_score = min(100.0, round(risk_score, 1))
+        risk_score_calc = min(100.0, round(risk_score, 1))
 
-        # Determine Risk Level per AIS-10 spec
-        if risk_score >= 90.0:
-            risk_level = "Critical"
-        elif risk_score >= 70.0:
-            risk_level = "High"
-        elif risk_score >= 40.0:
-            risk_level = "Medium"
-        else:
-            risk_level = "Low"
+        # ── LLM Risk Synthesis & Level Classification ─────────────────────────
+        from pydantic import BaseModel
+
+        class RiskDecisionSchema(BaseModel):
+            risk_score: float
+            risk_level: str
+            mitigation_recommended: bool
+            action: str
+            rationale: str
+
+        def _fallback_risk_level(score: float) -> tuple[str, str, str]:
+            if score >= 90.0:
+                return "Critical", "executive_escalation", f"Critical risk score {score} requires executive escalation to CEO Agent"
+            elif score >= 70.0:
+                return "High", "risk_detected", f"High risk score {score} (High) — mitigation recommended"
+            elif score >= 40.0:
+                return "Medium", "risk_evaluated", f"Risk evaluated at {score} (Medium)"
+            else:
+                return "Low", "risk_evaluated", f"Risk evaluated at {score} (Low)"
+
+        def _fallback_risk() -> RiskDecisionSchema:
+            lvl, act, rat = _fallback_risk_level(risk_score_calc)
+            return RiskDecisionSchema(
+                risk_score=risk_score_calc,
+                risk_level=lvl,
+                mitigation_recommended=risk_score_calc >= 70.0,
+                action=act,
+                rationale=rat,
+            )
+
+        risk_context = {
+            "order_id": order.get("order_id"),
+            "calculated_score": risk_score_calc,
+            "freight_mode": shipment_state.get("freight_mode"),
+            "transit_days": transit_days,
+            "gross_margin_pct": margin_pct,
+            "risk_factors": risk_factors,
+        }
+        risk_rules = [
+            "Score >= 90.0 must be categorized as 'Critical' with action 'executive_escalation'.",
+            "Score 70.0 to 89.9 must be categorized as 'High' with action 'risk_detected' and mitigation_recommended=True.",
+            "Score 40.0 to 69.9 must be categorized as 'Medium' with action 'risk_evaluated'.",
+            "Score < 40.0 must be categorized as 'Low' with action 'risk_evaluated'.",
+            "Rationale must detail the primary contributing risk factors and recommended mitigation posture.",
+        ]
+
+        llm_risk_dec, risk_src = await self.decide_with_llm(
+            decision_topic="Synthesize composite supply chain risk and determine escalation needs",
+            context=risk_context,
+            rules=risk_rules,
+            schema=RiskDecisionSchema,
+            fallback_callable=_fallback_risk,
+            state=state,
+        )
+
+        risk_score = llm_risk_dec.risk_score
+        risk_level = llm_risk_dec.risk_level
 
         event_history = list(state.get("event_history") or [])
         decisions = list(state.get("decisions") or [])
@@ -95,7 +143,7 @@ class RiskAgent(BaseAgent):
             "score": risk_score,
             "level": risk_level,
             "factors": risk_factors,
-            "mitigation_recommended": risk_score >= 70.0,
+            "mitigation_recommended": llm_risk_dec.mitigation_recommended,
         }
 
         if risk_score >= 90.0:
@@ -103,8 +151,9 @@ class RiskAgent(BaseAgent):
             event_history = self._append_event(event_history, "ExecutiveEscalation", risk_payload)
             decisions = self._record_decision(
                 decisions, "executive_escalation",
-                f"Critical risk score {risk_score} requires executive escalation to CEO Agent",
+                llm_risk_dec.rationale,
                 risk_payload,
+                source=risk_src,
             )
             logger.warning("Critical risk detected — escalating to CEO", score=risk_score)
 
@@ -113,15 +162,17 @@ class RiskAgent(BaseAgent):
             event_history = self._append_event(event_history, "RiskDetected", risk_payload)
             decisions = self._record_decision(
                 decisions, "risk_detected",
-                f"High risk score {risk_score} ({risk_level}) — mitigation recommended",
+                llm_risk_dec.rationale,
                 risk_payload,
+                source=risk_src,
             )
 
         else:
             decisions = self._record_decision(
                 decisions, "risk_evaluated",
-                f"Risk evaluated at {risk_score} ({risk_level})",
+                llm_risk_dec.rationale,
                 risk_payload,
+                source=risk_src,
             )
 
         logger.info(

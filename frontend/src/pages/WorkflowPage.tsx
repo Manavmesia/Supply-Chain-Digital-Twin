@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { workflowApi } from '../services/api';
-import type { WorkflowStatus, AgentTrace } from '../types';
+import type { WorkflowStatus, AgentTrace, WorkflowSummary } from '../types';
+import {
+  formatOrderId,
+  formatWorkflowId,
+  formatTrackingId,
+  getCustomerName,
+  getProductInfo,
+  formatCurrency,
+  CUSTOMER_DIRECTORY,
+} from '../utils/formatters';
 
 const SAMPLE_CUSTOMER_ID = '50000000-0000-0000-0000-000000000001';
 const SAMPLE_PRODUCTS = [
-  { id: '30000000-0000-0000-0000-000000000001', name: 'Industrial Sensor Module', sku: 'ELEC-001' },
-  { id: '30000000-0000-0000-0000-000000000002', name: 'High-Torque Servo Motor', sku: 'ELEC-002' },
-  { id: '30000000-0000-0000-0000-000000000004', name: 'Precision Ball Bearing Set', sku: 'MECH-001' },
-  { id: '30000000-0000-0000-0000-000000000009', name: 'Safety Relay Module', sku: 'SAFE-001' },
+  { id: '30000000-0000-0000-0000-000000000001', name: 'Industrial Sensor Module', sku: 'ELEC-001', price: 150.00 },
+  { id: '30000000-0000-0000-0000-000000000002', name: 'High-Torque Servo Motor', sku: 'ELEC-002', price: 280.00 },
+  { id: '30000000-0000-0000-0000-000000000004', name: 'Precision Ball Bearing Set', sku: 'MECH-001', price: 95.00 },
+  { id: '30000000-0000-0000-0000-000000000009', name: 'Safety Relay Module', sku: 'SAFE-001', price: 120.00 },
 ];
 
 interface OrderItem {
@@ -52,13 +61,13 @@ function JsonBlock({ data }: { data: unknown }) {
   return (
     <pre
       style={{
-        background: '#020617',
-        border: '1px solid #1e293b',
+        background: 'var(--c-bg-subtle)',
+        border: '1px solid var(--c-border)',
         borderRadius: '8px',
         padding: '1rem',
         fontSize: '0.72rem',
         lineHeight: '1.6',
-        color: '#94a3b8',
+        color: 'var(--c-text-primary)',
         overflowX: 'auto',
         maxHeight: '400px',
         overflowY: 'auto',
@@ -177,8 +186,8 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
       {/* Header */}
       <div style={{
         padding: '1.25rem 1.5rem',
-        borderBottom: '1px solid #1e293b',
-        background: 'rgba(15,23,42,0.8)',
+        borderBottom: '1px solid var(--c-border)',
+        background: 'var(--c-bg-subtle)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -186,7 +195,7 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
         gap: '0.75rem',
       }}>
         <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--c-text-primary)' }}>
             🔬 Exact Agent Trace
           </h3>
           <span className="badge badge-info">{trace.length} agents</span>
@@ -198,16 +207,16 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
               ✗ {failedCount} failed
             </span>
           )}
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
             Total: {totalDuration.toFixed(1)}ms
           </span>
         </div>
         <button
           onClick={toggleAll}
           style={{
-            background: 'rgba(59,130,246,0.12)',
-            border: '1px solid rgba(59,130,246,0.3)',
-            color: '#60a5fa',
+            background: 'rgba(37,99,235,0.08)',
+            border: '1px solid rgba(37,99,235,0.25)',
+            color: 'var(--c-brand-1)',
             borderRadius: '6px',
             padding: '4px 14px',
             fontSize: '0.75rem',
@@ -220,8 +229,8 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
       </div>
 
       {/* Timeline bar */}
-      <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #0f172a', background: 'rgba(2,6,23,0.6)' }}>
-        <p style={{ fontSize: '0.68rem', color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Execution Timeline</p>
+      <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid var(--c-border)', background: 'var(--c-bg-card)' }}>
+        <p style={{ fontSize: '0.68rem', color: 'var(--c-text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Execution Timeline</p>
         <div style={{ display: 'flex', gap: '2px', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
           {trace.map((t, i) => (
             <div
@@ -240,7 +249,7 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
             />
           ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#334155', marginTop: '0.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--c-text-muted)', marginTop: '0.25rem' }}>
           <span>0ms</span>
           <span>{totalDuration.toFixed(1)}ms</span>
         </div>
@@ -261,8 +270,8 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
             <div
               key={idx}
               style={{
-                borderBottom: '1px solid #0f172a',
-                background: open ? 'rgba(15,23,42,0.6)' : 'transparent',
+                borderBottom: '1px solid var(--c-border)',
+                background: open ? 'var(--c-bg-subtle)' : 'transparent',
                 transition: 'background 0.2s',
               }}
             >
@@ -306,11 +315,11 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                       fontFamily: 'monospace',
                       fontWeight: 700,
                       fontSize: '0.8rem',
-                      color: '#f8fafc',
+                      color: 'var(--c-text-primary)',
                     }}>{t.agent_code}</span>
                     <span style={{
                       fontSize: '0.75rem',
-                      color: '#94a3b8',
+                      color: 'var(--c-text-secondary)',
                     }}>{t.agent_name}</span>
                     <span style={{
                       fontSize: '0.62rem',
@@ -324,16 +333,16 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                   </div>
                   {/* Duration mini-bar */}
                   <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ flex: 1, height: 3, background: '#0f172a', borderRadius: 2, maxWidth: 200 }}>
+                    <div style={{ flex: 1, height: 3, background: 'var(--c-border)', borderRadius: 2, maxWidth: 200 }}>
                       <div style={{
                         width: `${pct}%`,
                         height: '100%',
                         background: layer.color,
                         borderRadius: 2,
-                        opacity: 0.7,
+                        opacity: 0.85,
                       }} />
                     </div>
-                    <span style={{ fontSize: '0.68rem', color: '#475569', fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--c-text-muted)', fontFamily: 'monospace' }}>
                       {t.duration_ms}ms
                     </span>
                   </div>
@@ -448,7 +457,7 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                               <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', fontFamily: 'monospace', fontWeight: 700 }}>
                                 {String(ev['event_type'] ?? '?')}
                               </span>
-                              {ev['timestamp'] && (
+                              {Boolean(ev['timestamp']) && (
                                 <span style={{ fontSize: '0.65rem', color: '#334155', fontFamily: 'monospace' }}>
                                   @ {String(ev['timestamp'])}
                                 </span>
@@ -485,14 +494,18 @@ export const WorkflowPage: React.FC = () => {
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
   const [trace, setTrace] = useState<AgentTrace[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [recentWorkflows, setRecentWorkflows] = useState<WorkflowSummary[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pollFailures = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    pollFailures.current = 0;
   }, []);
 
   const poll = useCallback(async (id: string) => {
@@ -501,6 +514,7 @@ export const WorkflowPage: React.FC = () => {
         workflowApi.getStatus(id),
         workflowApi.getTrace(id),
       ]);
+      pollFailures.current = 0;
       setStatus(statusRes);
       setTrace(traceRes.traces);
 
@@ -508,11 +522,90 @@ export const WorkflowPage: React.FC = () => {
       if (done) {
         stopPolling();
         setPhase(statusRes.workflow_status === 'completed' ? 'completed' : 'failed');
+        workflowApi.list(30).then((r) => setRecentWorkflows(r?.items || []));
       }
     } catch (err) {
+      pollFailures.current += 1;
       console.error('Polling failed:', err);
+      if (pollFailures.current > 30) {
+        stopPolling();
+        setError('Lost connection to backend server after repeated polling attempts.');
+        setPhase('failed');
+      }
     }
   }, [stopPolling]);
+
+  const loadWorkflow = useCallback(async (id: string, startPollIfActive = true) => {
+    try {
+      setWorkflowId(id);
+      localStorage.setItem('active_workflow_id', id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('id', id);
+      window.history.replaceState(null, '', url.toString());
+
+      setPhase('running');
+      const [statusRes, traceRes] = await Promise.all([
+        workflowApi.getStatus(id),
+        workflowApi.getTrace(id),
+      ]);
+      setStatus(statusRes);
+      setTrace(traceRes.traces || []);
+
+      const done = ['completed', 'failed'].includes(statusRes.workflow_status);
+      if (done) {
+        setPhase(statusRes.workflow_status === 'completed' ? 'completed' : 'failed');
+        stopPolling();
+      } else if (startPollIfActive) {
+        stopPolling();
+        pollRef.current = setInterval(() => poll(id), 2000);
+      }
+    } catch (err) {
+      console.error('Failed to load workflow:', err);
+    }
+  }, [poll, stopPolling]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchHistoryAndRestore = async () => {
+      setLoadingHistory(true);
+      try {
+        const res = await workflowApi.list(30);
+        const list = res?.items || [];
+        if (isMounted) {
+          setRecentWorkflows(list);
+        }
+        const params = new URLSearchParams(window.location.search);
+        const urlId = params.get('id');
+        const savedId = localStorage.getItem('active_workflow_id');
+        const targetId = urlId || savedId || (list.length > 0 ? list[0].workflow_id : null);
+        if (targetId && isMounted) {
+          await loadWorkflow(targetId);
+        }
+      } catch (err) {
+        console.error('Failed to load workflow history:', err);
+      } finally {
+        if (isMounted) setLoadingHistory(false);
+      }
+    };
+
+    fetchHistoryAndRestore();
+    return () => {
+      isMounted = false;
+      stopPolling();
+    };
+  }, [loadWorkflow, stopPolling]);
+
+  const resetForNewWorkflow = () => {
+    stopPolling();
+    setWorkflowId(null);
+    setStatus(null);
+    setTrace([]);
+    setPhase('idle');
+    localStorage.removeItem('active_workflow_id');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('id');
+    window.history.replaceState(null, '', url.toString());
+  };
 
   const submit = async () => {
     if (!customerId || items.length === 0) return;
@@ -528,17 +621,25 @@ export const WorkflowPage: React.FC = () => {
         items,
       });
       setWorkflowId(accepted.workflow_id);
+      localStorage.setItem('active_workflow_id', accepted.workflow_id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('id', accepted.workflow_id);
+      window.history.replaceState(null, '', url.toString());
+
       // Start polling every 2s
       pollRef.current = setInterval(() => poll(accepted.workflow_id), 2000);
       // Initial poll
       poll(accepted.workflow_id);
+
+      // Refresh recent list
+      workflowApi.list(30).then((r) => setRecentWorkflows(r?.items || []));
     } catch (err) {
       setError((err as Error).message);
       setPhase('failed');
     }
   };
 
-  const handleOverride = async (topic: string, action: 'pin' | 'revert', value: any) => {
+  const handleOverride = async (topic: string, action: 'pin' | 'revert', value: unknown) => {
     if (!workflowId) return;
     try {
       setError(null);
@@ -557,6 +658,33 @@ export const WorkflowPage: React.FC = () => {
     }
   };
 
+  const handleApprove = async () => {
+    if (!workflowId) return;
+    try {
+      setError(null);
+      await workflowApi.approve(workflowId, 'Executive manual approval granted via dashboard.');
+      setPhase('running');
+      stopPolling();
+      pollRef.current = setInterval(() => poll(workflowId), 2000);
+      poll(workflowId);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!workflowId) return;
+    try {
+      setError(null);
+      await workflowApi.reject(workflowId, 'Executive rejection issued via dashboard.');
+      stopPolling();
+      setPhase('failed');
+      poll(workflowId);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   useEffect(() => () => stopPolling(), [stopPolling]);
 
   const addItem = () =>
@@ -568,9 +696,37 @@ export const WorkflowPage: React.FC = () => {
   const updateItem = (idx: number, field: 'product_id' | 'quantity', val: string) =>
     setItems((prev) =>
       prev.map((item, i) =>
-        i === idx ? { ...item, [field]: field === 'quantity' ? parseInt(val, 10) : val } : item,
+        i === idx
+          ? {
+              ...item,
+              [field]:
+                field === 'quantity'
+                  ? Math.max(1, parseInt(val, 10) || 1)
+                  : val,
+            }
+          : item,
       ),
     );
+
+  const orderData = (status?.order || null) as Record<string, any> | null;
+  const shipmentData = (status?.shipment || null) as Record<string, any> | null;
+  const execDecision = (status?.executive_decision || null) as Record<string, any> | null;
+  const orderItems: Array<Record<string, any>> = Array.isArray(orderData?.items) ? orderData!.items : [];
+
+  const calculatedItemsTotal = orderItems.reduce((acc, it) => {
+    const pInfo = getProductInfo(String(it.product_id || ''));
+    const unitP = parseFloat(String(it.unit_price || pInfo.price));
+    const qty = Number(it.quantity) || 1;
+    const lineTotal = it.line_total != null ? parseFloat(String(it.line_total)) : unitP * qty;
+    return acc + lineTotal;
+  }, 0);
+  const totalOrderAmount = calculatedItemsTotal > 0 ? calculatedItemsTotal : (Number(orderData?.total_amount) || 0);
+  const totalOrderUnits = orderItems.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+
+  const estimatedFormTotal = items.reduce((acc, it) => {
+    const prod = SAMPLE_PRODUCTS.find((p) => p.id === it.product_id) || SAMPLE_PRODUCTS[0];
+    return acc + prod.price * (it.quantity || 1);
+  }, 0);
 
   return (
     <div className="page-content animate-fade-in">
@@ -579,22 +735,86 @@ export const WorkflowPage: React.FC = () => {
         <p>Submit orders to the 18-agent pipeline and watch decisions in real time</p>
       </div>
 
+      {/* Workflow History Bar / Switcher */}
+      {recentWorkflows.length > 0 && (
+        <div
+          className="card mb-4"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            padding: '0.75rem 1.25rem',
+            flexWrap: 'wrap',
+            background: 'var(--c-bg-card)',
+            border: '1px solid var(--c-border)',
+          }}
+        >
+          <div className="flex items-center gap-3" style={{ flexWrap: 'wrap', flex: 1 }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--c-text-primary)' }}>
+              📋 Workflow History ({recentWorkflows.length}):
+            </span>
+            {loadingHistory && <span className="loading-spinner" style={{ width: 14, height: 14 }} />}
+            <select
+              className="form-select"
+              style={{ maxWidth: '420px', fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+              value={workflowId || ''}
+              onChange={(e) => {
+                if (e.target.value) {
+                  loadWorkflow(e.target.value);
+                } else {
+                  resetForNewWorkflow();
+                }
+              }}
+            >
+              <option value="">＋ Start Fresh Order...</option>
+              {recentWorkflows.map((w) => (
+                <option key={w.workflow_id} value={w.workflow_id}>
+                  {formatOrderId(w.order_id)} • {getCustomerName(w.customer_id)} • {w.workflow_status.toUpperCase()} • {formatCurrency(w.total_amount)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {workflowId && (
+              <span className="badge badge-info" style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>
+                Active: {formatWorkflowId(workflowId)}
+              </span>
+            )}
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={resetForNewWorkflow}
+              style={{ fontSize: '0.8rem' }}
+            >
+              ＋ New Order Flow
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid-2">
         {/* Submit form */}
         <div className="card">
           <h3 className="section-title mb-4">🛒 New Order Workflow</h3>
 
           <div className="form-group mb-4">
-            <label className="form-label">Customer ID</label>
-            <input
-              className="form-input"
+            <label className="form-label">Client / Enterprise Account</label>
+            <select
+              className="form-select"
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              placeholder="UUID of customer"
-            />
-            <p style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.25rem' }}>
-              Try: <code style={{ color: '#60a5fa' }}>{SAMPLE_CUSTOMER_ID}</code> (Siemens — Enterprise)
-            </p>
+            >
+              <option value="50000000-0000-0000-0000-000000000001">🏢 Siemens Global Automations (Enterprise Tier)</option>
+              <option value="50000000-0000-0000-0000-000000000002">⚡ Tesla Energy & Storage (Strategic Partner)</option>
+              <option value="50000000-0000-0000-0000-000000000003">🏭 Schneider Electric Grid (Critical Infrastructure)</option>
+              <option value="50000000-0000-0000-0000-000000000004">✈️ Honeywell Aerospace (Commercial Tier)</option>
+            </select>
+            <div className="flex gap-2 items-center mt-2" style={{ fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>
+              <span>Account: <strong style={{ color: 'var(--c-brand-1)' }}>{CUSTOMER_DIRECTORY[customerId]?.code || 'CUST-SIEMENS'}</strong></span>
+              <span>•</span>
+              <span className="badge badge-info" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>{CUSTOMER_DIRECTORY[customerId]?.tier || 'Enterprise Tier'}</span>
+            </div>
           </div>
 
           <div className="form-group mb-4">
@@ -608,7 +828,7 @@ export const WorkflowPage: React.FC = () => {
                 >
                   {SAMPLE_PRODUCTS.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.sku} — {p.name}
+                      {p.name} ({p.sku}) — {formatCurrency(p.price)}
                     </option>
                   ))}
                 </select>
@@ -627,9 +847,17 @@ export const WorkflowPage: React.FC = () => {
                 >✕</button>
               </div>
             ))}
-            <button className="btn btn-ghost btn-sm mt-2" onClick={addItem}>
-              + Add Item
-            </button>
+            <div className="flex justify-between items-center mt-2">
+              <button className="btn btn-ghost btn-sm" onClick={addItem}>
+                + Add Item
+              </button>
+              <div style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
+                Estimated Total:{' '}
+                <strong style={{ color: '#10b981', fontSize: '0.9rem' }}>
+                  {formatCurrency(estimatedFormTotal)}
+                </strong>
+              </div>
+            </div>
           </div>
 
           {error && (
@@ -663,8 +891,15 @@ export const WorkflowPage: React.FC = () => {
 
             {workflowId && (
               <div>
-                <div className="flex gap-2 items-center mb-4">
-                  <span className="badge badge-info">ID: {workflowId.slice(0, 12)}…</span>
+                <div className="flex gap-2 items-center mb-4 flex-wrap">
+                  <span className="badge badge-info" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {formatWorkflowId(workflowId)}
+                  </span>
+                  {orderData?.order_id && (
+                    <span className="badge badge-success" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {formatOrderId(String(orderData.order_id))}
+                    </span>
+                  )}
                   {status && (
                     <span
                       className="badge"
@@ -672,6 +907,7 @@ export const WorkflowPage: React.FC = () => {
                         background: `${STATUS_COLORS[status.workflow_status] ?? '#64748b'}22`,
                         color: STATUS_COLORS[status.workflow_status] ?? '#64748b',
                         border: `1px solid ${STATUS_COLORS[status.workflow_status] ?? '#64748b'}44`,
+                        textTransform: 'uppercase',
                       }}
                     >
                       {status.workflow_status}
@@ -702,16 +938,144 @@ export const WorkflowPage: React.FC = () => {
             )}
           </div>
 
-          {status?.workflow_status === 'escalated' && (
-            <div className="alert-error" style={{ background: 'rgba(245,158,11,0.08)', borderColor: '#f59e0b', color: '#f59e0b' }}>
-              <strong>⚠️ Consensus Escalated</strong>
-              <p style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                Unresolved objections detected on the blackboard. The system is awaiting user intervention below.
-              </p>
+          {(status?.requires_human_approval || status?.workflow_status === 'escalated') && (
+            <div
+              className="alert-error mt-4"
+              style={{
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid #f59e0b',
+                color: '#f59e0b',
+                borderRadius: '8px',
+                padding: '1rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <strong>⚠️ Executive Approval Required</strong>
+                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: 'var(--c-text-secondary)' }}>
+                    High-risk or budget threshold reached. Awaiting executive governance verdict.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#10b981', color: '#fff', border: 'none', fontWeight: 600, padding: '6px 14px' }}
+                    onClick={handleApprove}
+                  >
+                    ✓ Approve Order
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    style={{ fontWeight: 600, padding: '6px 14px' }}
+                    onClick={handleReject}
+                  >
+                    ✕ Reject Order
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Commercial Fulfillment Manifest Card */}
+      {orderData && (
+        <div className="card mt-6 animate-fade-in" style={{ borderLeft: '4px solid #10b981' }}>
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div>
+              <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text-muted)' }}>
+                Commercial Order & Fulfillment Manifest
+              </span>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--c-text-primary)' }}>
+                Order {formatOrderId(String(orderData.order_id || ''))} — {getCustomerName(String(orderData.customer_id || ''))}
+              </h3>
+            </div>
+            <div className="flex gap-2 items-center">
+              <span className="badge badge-success" style={{ textTransform: 'uppercase' }}>
+                ✓ {String(orderData.status || 'delivered')}
+              </span>
+              <span className="badge badge-info">Priority: {String(orderData.priority || 'Standard')}</span>
+            </div>
+          </div>
+
+          <div className="grid-3 mb-4" style={{ gap: '0.75rem' }}>
+            <div style={{ background: 'var(--c-bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--c-border)' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--c-text-muted)', textTransform: 'uppercase' }}>Total Invoiced</span>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '1.25rem', fontWeight: 700, color: '#10b981' }}>
+                {formatCurrency(totalOrderAmount)}
+              </p>
+              <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>Terms: Net 30 Commercial</span>
+            </div>
+            <div style={{ background: 'var(--c-bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--c-border)' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--c-text-muted)', textTransform: 'uppercase' }}>Carrier & Freight Routing</span>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.95rem', fontWeight: 600, color: 'var(--c-text-primary)' }}>
+                {String(shipmentData?.carrier || 'Global Intermodal Logistics')}
+              </p>
+              <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
+                Tracking: <code title={shipmentData?.tracking_id ? String(shipmentData.tracking_id) : undefined}>{formatTrackingId(shipmentData?.tracking_id)}</code> • Mode: {String(shipmentData?.freight_mode || 'ROAD').toUpperCase()}
+              </span>
+            </div>
+            <div style={{ background: 'var(--c-bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--c-border)' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--c-text-muted)', textTransform: 'uppercase' }}>Executive Consensus</span>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.95rem', fontWeight: 600, color: '#3b82f6' }}>
+                {execDecision?.approved ? 'Executive Approved ✓' : 'Consensus Standard'}
+              </p>
+              <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
+                Approval Tier: {String(execDecision?.approval_tier || 'Auto Tier')}
+              </span>
+            </div>
+          </div>
+
+          {/* Line items table */}
+          {orderItems.length > 0 && (
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product Description</th>
+                    <th>SKU Code</th>
+                    <th>Unit Price</th>
+                    <th>Quantity</th>
+                    <th>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderItems.map((it: Record<string, any>, idx: number) => {
+                    const pInfo = getProductInfo(String(it.product_id || ''));
+                    const unitP = parseFloat(String(it.unit_price || pInfo.price));
+                    const qty = Number(it.quantity) || 1;
+                    const subtotal = it.line_total != null ? parseFloat(String(it.line_total)) : unitP * qty;
+                    return (
+                      <tr key={idx}>
+                        <td><strong>{String(it.product_name || pInfo.name)}</strong></td>
+                        <td><span className="tag">{String(it.sku || pInfo.sku)}</span></td>
+                        <td>{formatCurrency(unitP)}</td>
+                        <td><span className="badge badge-info">{qty} units</span></td>
+                        <td style={{ fontWeight: 600, color: '#10b981' }}>{formatCurrency(subtotal)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '2px solid var(--c-border)', background: 'var(--c-bg-subtle)' }}>
+                    <td colSpan={3} style={{ textAlign: 'right', fontWeight: 600, color: 'var(--c-text-primary)' }}>
+                      Total Commercial Value:
+                    </td>
+                    <td>
+                      <span className="badge badge-info" style={{ fontWeight: 700 }}>
+                        {totalOrderUnits} units
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 700, color: '#10b981', fontSize: '1rem' }}>
+                      {formatCurrency(totalOrderAmount)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Versioned Blackboard Monitor */}
       {status?.blackboard && Object.keys(status.blackboard).length > 0 && (
@@ -734,30 +1098,30 @@ export const WorkflowPage: React.FC = () => {
                   key={topic} 
                   className="flex justify-between items-center p-4 rounded-lg"
                   style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: `1px solid ${isContested ? '#f59e0b' : isAccepted ? '#10b981' : '#334155'}`,
+                    background: 'var(--c-bg-subtle)',
+                    border: `1px solid ${isContested ? 'var(--c-warning)' : isAccepted ? 'var(--c-success)' : 'var(--c-border)'}`,
                   }}
                 >
                   <div className="flex-1">
                     <div className="flex gap-2 items-center">
-                      <strong className="capitalize text-lg" style={{ color: '#f8fafc' }}>{topic}</strong>
+                      <strong className="capitalize text-lg" style={{ color: 'var(--c-text-primary)' }}>{topic}</strong>
                       <span 
                         className="badge" 
                         style={{
                           fontSize: '0.7rem',
-                          background: isContested ? 'rgba(245,158,11,0.15)' : isAccepted ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
-                          color: isContested ? '#f59e0b' : isAccepted ? '#10b981' : '#3b82f6',
-                          borderColor: isContested ? '#f59e0b44' : isAccepted ? '#10b98144' : '#3b82f644',
+                          background: isContested ? 'rgba(217,119,6,0.12)' : isAccepted ? 'rgba(5,150,105,0.12)' : 'rgba(37,99,235,0.12)',
+                          color: isContested ? 'var(--c-warning)' : isAccepted ? 'var(--c-success)' : 'var(--c-brand-1)',
+                          border: `1px solid ${isContested ? 'rgba(217,119,6,0.25)' : isAccepted ? 'rgba(5,150,105,0.25)' : 'rgba(37,99,235,0.25)'}`,
                         }}
                       >
                         {latest.status}
                       </span>
-                      {isPinned && <span className="tag" style={{ color: '#60a5fa' }}>PINNED BY USER</span>}
+                      {isPinned && <span className="tag" style={{ color: 'var(--c-brand-1)' }}>PINNED BY USER</span>}
                     </div>
-                    <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)', marginTop: '0.25rem' }}>
                       <strong>Agent:</strong> {latest.agent_id} • <strong>Confidence:</strong> {(latest.confidence * 100).toFixed(0)}%
                     </p>
-                    <p style={{ fontSize: '0.85rem', color: '#cbd5e1', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--c-text-secondary)', marginTop: '0.5rem', fontStyle: 'italic' }}>
                       &ldquo;{latest.rationale || 'No explanation provided.'}&rdquo;
                     </p>
                     <details className="mt-2">

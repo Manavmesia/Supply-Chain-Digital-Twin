@@ -14,7 +14,9 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.core import persistence
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/events", tags=["events"])
@@ -32,10 +34,10 @@ _MAX_LOG_SIZE = 500
 # ---------------------------------------------------------------------------
 
 class ManualEventRequest(BaseModel):
-    event_type: str
-    source_agent: str = "manual"
-    payload: dict[str, Any] = {}
-    workflow_id: str | None = None
+    event_type: str = Field(min_length=1, max_length=100)
+    source_agent: str = Field(default="manual", min_length=1, max_length=50)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    workflow_id: str | None = Field(default=None, max_length=100)
 
 
 class EventResponse(BaseModel):
@@ -77,11 +79,16 @@ async def inject_event(request: ManualEventRequest) -> dict[str, Any]:
         "status": "injected",
     }
 
-    # Append to in-memory log (rotating)
+    # Append to in-memory log (rotating) and persist
     global _EVENT_LOG
     _EVENT_LOG.append(event_record)
     if len(_EVENT_LOG) > _MAX_LOG_SIZE:
         _EVENT_LOG = _EVENT_LOG[-_MAX_LOG_SIZE:]
+
+    try:
+        persistence.save_event(event_record)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to persist event", event_id=event_id, error=str(exc))
 
     logger.info(
         "Manual event injected",
@@ -107,9 +114,16 @@ async def list_events(
     limit: int = Query(50, ge=1, le=200),
     event_type: str | None = Query(None),
 ) -> dict[str, Any]:
-    """Return the most recent events from the in-memory event log."""
-    events = list(reversed(_EVENT_LOG))
+    """Return the most recent events from persistent storage."""
+    persisted = persistence.list_events(limit=limit, event_type=event_type)
+    if persisted:
+        return {
+            "items": persisted,
+            "total": len(persisted),
+            "limit": limit,
+        }
 
+    events = list(reversed(_EVENT_LOG))
     if event_type:
         events = [e for e in events if e["event_type"] == event_type]
 

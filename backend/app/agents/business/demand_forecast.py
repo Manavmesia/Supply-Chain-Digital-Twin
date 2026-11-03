@@ -118,11 +118,34 @@ class DemandForecastAgent(BaseAgent):
 
             forecast_details[product_id_str] = forecast_payload
 
+        from pydantic import BaseModel
+
+        class ForecastDecisionSchema(BaseModel):
+            rationale: str
+
+        def _fallback_forecast() -> ForecastDecisionSchema:
+            return ForecastDecisionSchema(
+                rationale=f"Generated statistical demand forecast for {len(items)} products"
+            )
+
+        llm_fc_dec, fc_src = await self.decide_with_llm(
+            decision_topic="Synthesize 30-day product demand forecast and detect demand spikes",
+            context={"product_count": len(items), "details": forecast_details},
+            rules=[
+                "Assess forecast confidence based on historical moving averages and active promotions.",
+                "Flag demand spikes when adjusted forecast >= 2x the 12-month average.",
+                "Rationale must summarize forecasted volumes and any anomalies detected.",
+            ],
+            schema=ForecastDecisionSchema,
+            fallback_callable=_fallback_forecast,
+        )
+
         decisions = self._record_decision(
             decisions,
             "demand_forecast_generated",
-            f"Generated forecast for {len(items)} products",
+            llm_fc_dec.rationale or f"Generated forecast for {len(items)} products",
             {"product_count": len(items)},
+            source=fc_src,
         )
 
         logger.info(

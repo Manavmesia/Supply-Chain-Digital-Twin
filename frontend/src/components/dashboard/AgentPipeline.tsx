@@ -77,15 +77,15 @@ export const AgentPipeline: React.FC<AgentPipelineProps> = ({
                       key={agent.code}
                       className={`agent-chip ${isActive ? 'active' : ''}`}
                       style={{
-                        borderColor: isActive ? style.color : 'rgba(56,90,155,0.22)',
-                        background: isActive ? style.bg : 'rgba(12,18,32,0.6)',
+                        border: `1px solid ${isActive ? style.color : 'var(--c-border)'}`,
+                        background: isActive ? style.bg : 'var(--c-bg-card)',
                         animationDelay: `${i * 40}ms`,
                       }}
                       title={agent.description}
                     >
                       <span
                         className="agent-chip-code"
-                        style={{ color: isActive ? style.color : '#64748b' }}
+                        style={{ color: isActive ? style.color : 'var(--c-text-muted)' }}
                       >
                         {agent.code}
                       </span>

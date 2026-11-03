@@ -151,13 +151,57 @@ class PlannerAgent(BaseAgent):
         event_history = self._append_event(event_history, "ProductionPlanned", production_payload)
         event_history = self._append_event(event_history, "ExecutionPlanReady", plan_payload)
 
+        # ── LLM Plan Synthesis ───────────────────────────────────────────────
+        from pydantic import BaseModel
+
+        class PlannerDecisionSchema(BaseModel):
+            rationale: str
+
+        def _fallback_planner() -> PlannerDecisionSchema:
+            return PlannerDecisionSchema(
+                rationale=(
+                    f"Execution plan created with {len(plan_actions)} action(s). "
+                    f"Est. completion: {estimated_completion_days} days. "
+                    f"Quality failed: {quality_failed}. Risk: {risk_score}"
+                )
+            )
+
+        planner_context = {
+            "order_id": order.get("order_id"),
+            "action_count": len(plan_actions),
+            "priority_queue": priority_queue,
+            "estimated_completion_days": estimated_completion_days,
+            "quality_failed": quality_failed,
+            "risk_score": risk_score,
+            "reorder_urgency": reorder_urgency,
+            "spike_detected": spike_detected,
+        }
+        planner_rules = [
+            "If quality_failed is True, remanufacture action must be prioritized.",
+            "If reorder_urgency is 'high', expedite procurement must be prioritized.",
+            "If risk_score >= 70.0, risk mitigation must be scheduled.",
+            "Estimated days must be summed across active bottleneck actions.",
+        ]
+
+        llm_plan_dec, plan_src = await self.decide_with_llm(
+            decision_topic="Formulate multi-agent operational plan and bottleneck mitigation",
+            context=planner_context,
+            rules=planner_rules,
+            schema=PlannerDecisionSchema,
+            fallback_callable=_fallback_planner,
+            state=state,
+        )
+
         decisions = self._record_decision(
             decisions,
             "execution_plan_ready",
-            f"Execution plan created with {len(plan_actions)} action(s). "
-            f"Est. completion: {estimated_completion_days} days. "
-            f"Quality failed: {quality_failed}. Risk: {risk_score}",
+            llm_plan_dec.rationale or (
+                f"Execution plan created with {len(plan_actions)} action(s). "
+                f"Est. completion: {estimated_completion_days} days. "
+                f"Quality failed: {quality_failed}. Risk: {risk_score}"
+            ),
             plan_payload,
+            source=plan_src,
         )
 
         logger.info(

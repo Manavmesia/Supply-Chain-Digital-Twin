@@ -99,9 +99,49 @@ class QualityAssuranceAgent(BaseAgent):
             # ── 2. Calculate sample size and defect rate ──────────────────────
             sample_size = max(_DEFAULT_SAMPLE_SIZE, int(planned_qty * _SAMPLE_SIZE_RATIO))
             defect_rate = _deterministic_defect_rate(product_id_str, mo_id_str)
-            defect_count = int((defect_rate / 100.0) * sample_size)
-            passed = defect_rate <= _DEFECT_RATE_PASS_THRESHOLD
-            inspection_status = "passed" if passed else "failed"
+            defect_count = int(round((defect_rate / 100.0) * sample_size))
+
+            from pydantic import BaseModel
+
+            class QADecisionSchema(BaseModel):
+                passed: bool
+                inspection_status: str
+                rationale: str
+
+            def _fallback_qa() -> QADecisionSchema:
+                p = defect_rate <= _DEFECT_RATE_PASS_THRESHOLD
+                st = "passed" if p else "failed"
+                return QADecisionSchema(
+                    passed=p,
+                    inspection_status=st,
+                    rationale=f"Inspection: defect rate {defect_rate:.2f}% (threshold {_DEFECT_RATE_PASS_THRESHOLD}%) → {st}",
+                )
+
+            qa_context = {
+                "product_id": product_id_str,
+                "mo_id": mo_id_str,
+                "planned_qty": planned_qty,
+                "sample_size": sample_size,
+                "defect_count": defect_count,
+                "defect_rate_pct": defect_rate,
+                "pass_threshold_pct": _DEFECT_RATE_PASS_THRESHOLD,
+            }
+            qa_rules = [
+                f"If defect_rate_pct <= {_DEFECT_RATE_PASS_THRESHOLD}: passed must be True, inspection_status must be 'passed'.",
+                f"If defect_rate_pct > {_DEFECT_RATE_PASS_THRESHOLD}: passed must be False, inspection_status must be 'failed'.",
+                "Rationale must cite sample size, defects found, and pass/fail criterion.",
+            ]
+
+            llm_qa_dec, qa_src = await self.decide_with_llm(
+                decision_topic=f"Evaluate product quality inspection for product {product_id_str}",
+                context=qa_context,
+                rules=qa_rules,
+                schema=QADecisionSchema,
+                fallback_callable=_fallback_qa,
+            )
+
+            passed = llm_qa_dec.passed
+            inspection_status = llm_qa_dec.inspection_status
 
             if not passed:
                 overall_status = "failed"
@@ -117,7 +157,7 @@ class QualityAssuranceAgent(BaseAgent):
                         sample_size=sample_size,
                         defect_count=defect_count,
                         defect_rate=Decimal(str(defect_rate)),
-                        status=inspection_status,
+                        inspection_result="pass" if passed else "fail",
                         inspector_agent=self.agent_code,
                         inspected_at=now,
                         created_at=now,
@@ -164,8 +204,9 @@ class QualityAssuranceAgent(BaseAgent):
             decisions = self._record_decision(
                 decisions,
                 f"quality_{inspection_status}",
-                f"Inspection {inspection_id}: defect rate {defect_rate:.2f}% → {inspection_status}",
+                llm_qa_dec.rationale or f"Inspection {inspection_id}: defect rate {defect_rate:.2f}% → {inspection_status}",
                 inspection_payload,
+                source=qa_src,
             )
 
             inspection_results.append(inspection_payload)

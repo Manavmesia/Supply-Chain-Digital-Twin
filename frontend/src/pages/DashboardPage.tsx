@@ -1,8 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { analyticsApi } from '../services/api';
 import { KPIGrid } from '../components/dashboard/KPIGrid';
 import { AgentPipeline } from '../components/dashboard/AgentPipeline';
 import type { DashboardData, AgentDefinition, RecentOrder } from '../types';
+import {
+  formatOrderId,
+  getCustomerName,
+  formatCurrency,
+  formatTimeAgo,
+} from '../utils/formatters';
 
 export const DashboardPage: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -10,23 +16,23 @@ export const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [dash, agentsRes] = await Promise.all([
-        analyticsApi.getDashboard(),
-        analyticsApi.getAgents(),
-      ]);
-      setDashboard(dash);
-      setAgents(agentsRes.agents);
-    } catch (err) {
+  useEffect(() => {
+    let ignore = false;
+    Promise.all([
+      analyticsApi.getDashboard(),
+      analyticsApi.getAgents(),
+    ]).then(([dash, agentsRes]) => {
+      if (!ignore) {
+        setDashboard(dash);
+        setAgents(agentsRes.agents);
+        setLoading(false);
+      }
+    }).catch((err) => {
       console.error('Dashboard load failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load, refreshKey]);
+      if (!ignore) setLoading(false);
+    });
+    return () => { ignore = true; };
+  }, [refreshKey]);
 
   const statusColors: Record<string, string> = {
     pending:    '#f59e0b',
@@ -52,7 +58,10 @@ export const DashboardPage: React.FC = () => {
         <p>Real-time supply chain monitoring across all 18 AI agents</p>
         <button
           className="btn btn-ghost btn-sm mt-4"
-          onClick={() => setRefreshKey((k) => k + 1)}
+          onClick={() => {
+            setLoading(true);
+            setRefreshKey((k) => k + 1);
+          }}
           disabled={loading}
         >
           ↻ Refresh Data
@@ -154,8 +163,8 @@ export const DashboardPage: React.FC = () => {
       {/* Recent Orders */}
       <div className="card mt-6 animate-fade-in" style={{ animationDelay: '300ms' }}>
         <div className="section-header">
-          <h3 className="section-title">🛒 Recent Orders</h3>
-          <a href="/workflows" className="btn btn-ghost btn-sm">Submit Order →</a>
+          <h3 className="section-title">🛒 Recent Orders & Commercial Pipeline</h3>
+          <a href="/workflow" className="btn btn-ghost btn-sm">Manage Workflows →</a>
         </div>
         {loading ? (
           <div className="skeleton" style={{ height: '200px' }} />
@@ -164,18 +173,27 @@ export const DashboardPage: React.FC = () => {
             <table>
               <thead>
                 <tr>
-                  <th>Order ID</th>
+                  <th>Order Reference</th>
+                  <th>Client Account</th>
                   <th>Status</th>
                   <th>Priority</th>
-                  <th>Amount</th>
-                  <th>Created</th>
+                  <th>Total Amount</th>
+                  <th>Timeline</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {dashboard.recent_orders.map((order: RecentOrder) => (
                   <tr key={order.order_id}>
                     <td>
-                      <span className="tag">{order.order_id.slice(0, 8)}…</span>
+                      <span className="tag" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                        {formatOrderId(order.order_id)}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontWeight: 600, color: 'var(--c-text-primary)' }}>
+                        {getCustomerName((order as any).customer_id || order.order_id)}
+                      </span>
                     </td>
                     <td>
                       <span
@@ -184,6 +202,7 @@ export const DashboardPage: React.FC = () => {
                           background: `${statusColors[order.status] ?? '#64748b'}22`,
                           color: statusColors[order.status] ?? '#64748b',
                           border: `1px solid ${statusColors[order.status] ?? '#64748b'}44`,
+                          textTransform: 'uppercase',
                         }}
                       >
                         {order.status.replace('_', ' ')}
@@ -196,20 +215,26 @@ export const DashboardPage: React.FC = () => {
                           background: `${priorityColors[order.priority] ?? '#64748b'}22`,
                           color: priorityColors[order.priority] ?? '#64748b',
                           border: `1px solid ${priorityColors[order.priority] ?? '#64748b'}44`,
+                          textTransform: 'capitalize',
                         }}
                       >
                         {order.priority}
                       </span>
                     </td>
-                    <td>
-                      {parseFloat(order.total_amount).toLocaleString('en-US', {
-                        style: 'currency', currency: 'USD',
-                      })}
+                    <td style={{ fontWeight: 600, color: '#10b981' }}>
+                      {formatCurrency(order.total_amount)}
                     </td>
-                    <td style={{ color: '#64748b', fontSize: '0.8125rem' }}>
-                      {order.created_at
-                        ? new Date(order.created_at).toLocaleDateString()
-                        : '—'}
+                    <td style={{ color: 'var(--c-text-muted)', fontSize: '0.8125rem' }}>
+                      {formatTimeAgo(order.created_at)}
+                    </td>
+                    <td>
+                      <a
+                        href={`/workflow${(order as any).workflow_id ? `?id=${(order as any).workflow_id}` : ''}`}
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                      >
+                        View Flow →
+                      </a>
                     </td>
                   </tr>
                 ))}

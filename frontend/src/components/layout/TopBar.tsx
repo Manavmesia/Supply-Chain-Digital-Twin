@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RefreshCw, Database, Server, MessageSquare } from 'lucide-react';
+import { RefreshCw, Database, Server, MessageSquare, Sun, Moon } from 'lucide-react';
 import { healthApi } from '../../services/api';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -31,6 +31,18 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
   const location = useLocation();
   const title = PAGE_TITLES[location.pathname] ?? 'AI Supply Chain Digital Twin';
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -83,7 +95,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
         <div
           className="topbar-system-badge"
           style={{
-            borderColor: health?.status === 'ok' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)',
+            border: `1px solid ${health?.status === 'ok' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
             color: health?.status === 'ok' ? '#10b981' : '#ef4444',
           }}
         >
@@ -93,6 +105,18 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
           />
           {health?.status === 'ok' ? 'Healthy' : health ? 'Degraded' : 'Checking…'}
         </div>
+
+        <button
+          className="btn btn-ghost btn-sm topbar-theme-btn"
+          onClick={toggleTheme}
+          title={theme === 'light' ? 'Switch to Dark theme' : 'Switch to Light theme'}
+          aria-label="Toggle theme"
+        >
+          {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+          <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>
+            {theme === 'light' ? 'Light' : 'Dark'}
+          </span>
+        </button>
 
         {onRefresh && (
           <button

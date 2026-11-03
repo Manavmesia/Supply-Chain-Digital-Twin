@@ -336,7 +336,7 @@ class TestSimulateAPI:
                 product_id=product_id,
                 sku="ELEC-001",
                 name="Industrial Sensor Module",
-                unit_price=Decimal("249.99"),
+                unit_price=Decimal("150.00"),
             )
             db_session.add(product)
 

@@ -10,6 +10,9 @@ In production, replace with a real user table + bcrypt.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
@@ -24,26 +27,51 @@ from app.core.config import settings
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
+def hash_password(password: str, salt: bytes | None = None) -> str:
+    """Derives a PBKDF2-SHA256 password hash with 100,000 iterations."""
+    if salt is None:
+        salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
+    return f"{salt.hex()}:{dk.hex()}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Constant-time verification supporting PBKDF2 hashed and legacy dev passwords."""
+    if not stored_hash or not password:
+        return False
+    if ":" in stored_hash:
+        try:
+            salt_hex, dk_hex = stored_hash.split(":", 1)
+            salt = bytes.fromhex(salt_hex)
+            expected_dk = bytes.fromhex(dk_hex)
+            actual_dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
+            return hmac.compare_digest(actual_dk, expected_dk)
+        except Exception:
+            return False
+    return hmac.compare_digest(str(password), str(stored_hash))
+
+
 # ---------------------------------------------------------------------------
-# Dev user store — replace with DB in production
+# Secure in-memory user store
 # ---------------------------------------------------------------------------
 
 _DEV_USERS: dict[str, dict[str, Any]] = {
     "admin": {
         "username": "admin",
-        "password": "admin123",          # plaintext — dev only
+        "password_hash": hash_password("admin123"),
         "role": "admin",
         "full_name": "System Administrator",
     },
     "viewer": {
         "username": "viewer",
-        "password": "viewer123",
+        "password_hash": hash_password("viewer123"),
         "role": "viewer",
         "full_name": "Dashboard Viewer",
     },
     "analyst": {
         "username": "analyst",
-        "password": "analyst123",
+        "password_hash": hash_password("analyst123"),
         "role": "analyst",
         "full_name": "Supply Chain Analyst",
     },
@@ -127,7 +155,8 @@ async def login(form: Annotated[OAuth2PasswordRequestForm, Depends()]) -> TokenR
     - `viewer` / `viewer123`
     """
     user = _DEV_USERS.get(form.username)
-    if user is None or user["password"] != form.password:
+    stored_hash = user.get("password_hash") or user.get("password", "") if user else ""
+    if user is None or not verify_password(form.password, stored_hash):
         logger.warning("Failed login attempt", username=form.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

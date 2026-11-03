@@ -78,39 +78,81 @@ class SustainabilityAgent(BaseAgent):
         co2_kg = weight_tonnes * distance_km * _CO2_FACTORS[freight_mode]
         co2_kg = round(co2_kg, 3)
 
-        # ── 2. Calculate sustainability score (0–100; higher = greener) ───────
-        # Linear scale: 0 CO2 → 100 score; _MAX_CO2_REFERENCE_KG → 0 score
-        score = max(0.0, 100.0 - (co2_kg / _MAX_CO2_REFERENCE_KG) * 100.0)
-        score = round(score, 1)
+        # ── 2. Calculate sustainability score (0–100) & Green alternative (LLM-driven if API key present) ──
+        score_calc = max(0.0, 100.0 - (co2_kg / _MAX_CO2_REFERENCE_KG) * 100.0)
+        score_calc = round(score_calc, 1)
+
+        from pydantic import BaseModel
+
+        class SustainabilityDecisionSchema(BaseModel):
+            score: float
+            recommend_green_alternative: bool
+            rationale: str
+
+        def _fallback_sustainability() -> SustainabilityDecisionSchema:
+            rec = freight_mode == "air" and co2_kg >= _CO2_HIGH_THRESHOLD
+            return SustainabilityDecisionSchema(
+                score=score_calc,
+                recommend_green_alternative=rec,
+                rationale=f"CO2 emissions: {co2_kg} kg via {freight_mode} freight. Score: {score_calc}/100."
+                + (" Green alternative available." if rec else ""),
+            )
+
+        sus_context = {
+            "freight_mode": freight_mode,
+            "weight_kg": estimated_weight_kg,
+            "distance_km": distance_km,
+            "co2_kg": co2_kg,
+            "calculated_score": score_calc,
+            "high_co2_threshold": _CO2_HIGH_THRESHOLD,
+        }
+        sus_rules = [
+            f"Score must be exactly {score_calc} (scaled against {_MAX_CO2_REFERENCE_KG}kg reference).",
+            f"If freight_mode is 'air' and co2_kg >= {_CO2_HIGH_THRESHOLD}, recommend_green_alternative must be True (road modal shift).",
+            "Otherwise recommend_green_alternative must be False.",
+            "Rationale must detail the carbon footprint and mitigation benefits.",
+        ]
+
+        llm_sus_dec, sus_src = await self.decide_with_llm(
+            decision_topic="Evaluate freight carbon footprint and modal shift recommendation",
+            context=sus_context,
+            rules=sus_rules,
+            schema=SustainabilityDecisionSchema,
+            fallback_callable=_fallback_sustainability,
+        )
+
+        score = llm_sus_dec.score
 
         # ── 3. Determine if a green alternative should be recommended ─────────
         green_alternative = None
-        if freight_mode == "air" and co2_kg >= _CO2_HIGH_THRESHOLD:
+        if llm_sus_dec.recommend_green_alternative:
             # Calculate road alternative CO2
-            road_co2 = weight_tonnes * _MOCK_DISTANCES["road"] * _CO2_FACTORS["road"]
-            co2_savings_kg = co2_kg - road_co2
-            # Only recommend if road is meaningfully cheaper in CO2 (always is for air)
+            road_co2 = round(weight_tonnes * _MOCK_DISTANCES["road"] * _CO2_FACTORS["road"], 3)
+            co2_savings_kg = round(co2_kg - road_co2, 3)
+            co2_reduction_pct = round((co2_savings_kg / co2_kg) * 100, 1) if co2_kg > 0 else 0.0
             green_alternative = {
                 "alternative_mode": "road",
                 "current_co2_kg": co2_kg,
-                "alternative_co2_kg": round(road_co2, 3),
-                "co2_savings_kg": round(co2_savings_kg, 3),
-                "co2_reduction_pct": round((co2_savings_kg / co2_kg) * 100, 1),
+                "alternative_co2_kg": road_co2,
+                "co2_savings_kg": co2_savings_kg,
+                "co2_reduction_pct": co2_reduction_pct,
                 "note": "Road freight produces significantly less CO2 than air at moderate cost increase",
             }
 
         # ── 4. Write SustainabilityMetric DB record ───────────────────────────
         metric_id = uuid.uuid4()
-        workflow_id_str = state.get("workflow_id")
-        if session:
+        shipment_id_str = shipment_state.get("shipment_id")
+        if session and shipment_id_str:
             try:
                 metric = SustainabilityMetric(
                     metric_id=metric_id,
-                    workflow_id=uuid.UUID(workflow_id_str) if workflow_id_str else None,
+                    shipment_id=uuid.UUID(str(shipment_id_str)),
                     freight_mode=freight_mode,
-                    co2_kg=Decimal(str(co2_kg)),
+                    co2_emission_kg=Decimal(str(co2_kg)),
+                    distance_km=Decimal(str(distance_km)) if distance_km is not None else None,
                     sustainability_score=Decimal(str(score)),
-                    created_at=now,
+                    green_alternatives={"recommended": green_alternative} if green_alternative else None,
+                    calculated_at=now,
                 )
                 session.add(metric)
                 await session.flush()
@@ -139,10 +181,13 @@ class SustainabilityAgent(BaseAgent):
         decisions = self._record_decision(
             decisions,
             "sustainability_calculated",
-            f"CO2 emissions: {co2_kg} kg via {freight_mode} freight. "
-            f"Sustainability score: {score}/100."
-            + (f" Green alternative available." if green_alternative else ""),
+            llm_sus_dec.rationale or (
+                f"CO2 emissions: {co2_kg} kg via {freight_mode} freight. "
+                f"Sustainability score: {score}/100."
+                + (f" Green alternative available." if green_alternative else "")
+            ),
             score_payload,
+            source=sus_src,
         )
 
         logger.info(

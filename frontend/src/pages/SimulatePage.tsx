@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { simulateApi } from '../services/api';
 import type { SimulationResult } from '../types';
+import { formatSimulationId } from '../utils/formatters';
 
 const SAMPLE_CUSTOMER = '50000000-0000-0000-0000-000000000001';
 const SAMPLE_ITEMS = [{ product_id: '30000000-0000-0000-0000-000000000001', quantity: 10 }];
@@ -55,8 +56,56 @@ export const SimulatePage: React.FC = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
+  const loadSimulation = async (id: string) => {
+    try {
+      setSimulationId(id);
+      localStorage.setItem('active_sim_id', id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('id', id);
+      window.history.replaceState(null, '', url.toString());
+
+      const r = await simulateApi.getResult(id);
+      setResult(r);
+      setSelectedScenario(r.scenario_type);
+      setStatus(r.status === 'completed' ? 'done' : r.status === 'failed' ? 'failed' : 'running');
+
+      if (r.status !== 'completed' && r.status !== 'failed') {
+        stopPoll();
+        let pollCount = 0;
+        pollRef.current = setInterval(async () => {
+          pollCount += 1;
+          try {
+            const updated = await simulateApi.getResult(id);
+            if (updated.status === 'completed' || updated.status === 'failed') {
+              stopPoll();
+              setResult(updated);
+              setStatus(updated.status === 'completed' ? 'done' : 'failed');
+            } else if (pollCount > 60) {
+              stopPoll();
+            }
+          } catch {
+            if (pollCount > 30) stopPoll();
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to load simulation:', err);
+    }
+  };
+
   useEffect(() => {
-    simulateApi.list(10).then((res) => setRecentSims(res.items));
+    simulateApi.list(15).then((res) => {
+      const items = res.items || [];
+      setRecentSims(items);
+      const params = new URLSearchParams(window.location.search);
+      const urlId = params.get('id');
+      const savedId = localStorage.getItem('active_sim_id');
+      const targetId = urlId || savedId || (items.length > 0 ? items[0].simulation_id : null);
+      if (targetId) {
+        loadSimulation(targetId);
+      }
+    }).catch(err => console.error('Recent simulations fetch error:', err));
+
     return () => stopPoll();
   }, []);
 
@@ -73,16 +122,38 @@ export const SimulatePage: React.FC = () => {
         items: SAMPLE_ITEMS,
       });
       setSimulationId(accepted.simulation_id);
+      localStorage.setItem('active_sim_id', accepted.simulation_id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('id', accepted.simulation_id);
+      window.history.replaceState(null, '', url.toString());
 
+      // Refresh list
+      simulateApi.list(15).then((res) => setRecentSims(res.items || []));
+
+      let pollCount = 0;
       pollRef.current = setInterval(async () => {
-        const r = await simulateApi.getResult(accepted.simulation_id);
-        if (r.status === 'completed' || r.status === 'failed') {
-          stopPoll();
-          setResult(r);
-          setStatus(r.status === 'completed' ? 'done' : 'failed');
+        pollCount += 1;
+        try {
+          const r = await simulateApi.getResult(accepted.simulation_id);
+          if (r.status === 'completed' || r.status === 'failed') {
+            stopPoll();
+            setResult(r);
+            setStatus(r.status === 'completed' ? 'done' : 'failed');
+            simulateApi.list(15).then((res) => setRecentSims(res.items || []));
+          } else if (pollCount > 60) {
+            // Stop after 2 minutes of polling
+            stopPoll();
+            setStatus('failed');
+          }
+        } catch (err) {
+          console.error('Polling simulation failed:', err);
+          if (pollCount > 30) {
+            stopPoll();
+            setStatus('failed');
+          }
         }
       }, 2000);
-    } catch (err) {
+    } catch {
       setStatus('failed');
     }
   };
@@ -107,12 +178,11 @@ export const SimulatePage: React.FC = () => {
                   key={s.type}
                   className="scenario-card"
                   style={{
-                    borderColor: selectedScenario === s.type ? s.color : 'rgba(56,90,155,0.22)',
-                    background: selectedScenario === s.type ? `${s.color}10` : 'rgba(12,18,32,0.5)',
+                    border: `1px solid ${selectedScenario === s.type ? s.color : 'var(--c-border)'}`,
+                    background: selectedScenario === s.type ? `${s.color}14` : 'var(--c-bg-card)',
                     cursor: 'pointer',
                     padding: '1rem',
                     borderRadius: '10px',
-                    border: '1px solid',
                     transition: 'all 0.2s ease',
                   }}
                   onClick={() => setSelectedScenario(s.type)}
@@ -120,10 +190,10 @@ export const SimulatePage: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <span style={{ fontSize: '1.5rem' }}>{s.icon}</span>
                     <div>
-                      <p style={{ fontWeight: 600, color: selectedScenario === s.type ? s.color : '#f0f4ff' }}>
+                      <p style={{ fontWeight: 600, color: selectedScenario === s.type ? s.color : 'var(--c-text-primary)' }}>
                         {s.title}
                       </p>
-                      <p style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.desc}</p>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>{s.desc}</p>
                     </div>
                     {selectedScenario === s.type && (
                       <span style={{ marginLeft: 'auto', color: s.color }}>✓</span>
@@ -151,32 +221,46 @@ export const SimulatePage: React.FC = () => {
             {recentSims.length === 0 ? (
               <p style={{ color: '#475569', fontSize: '0.875rem' }}>No simulations run yet</p>
             ) : (
-              recentSims.map((s) => (
-                <div
-                  key={s.simulation_id}
-                  className="flex justify-between items-center"
-                  style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(56,90,155,0.1)' }}
-                >
-                  <div>
-                    <span style={{ fontSize: '0.875rem', color: '#f0f4ff' }}>
-                      {s.scenario_type.replace('_', ' ')}
-                    </span>
-                    <p style={{ fontSize: '0.75rem', color: '#475569' }}>
-                      {s.agents_executed} agents executed
-                    </p>
-                  </div>
-                  <span
-                    className="badge"
+              recentSims.map((s) => {
+                const isSelected = simulationId === s.simulation_id;
+                return (
+                  <div
+                    key={s.simulation_id}
+                    className="flex justify-between items-center"
                     style={{
-                      background: s.status === 'completed' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                      color: s.status === 'completed' ? '#10b981' : '#ef4444',
-                      border: `1px solid ${s.status === 'completed' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                      padding: '0.6rem 0.75rem',
+                      marginBottom: '0.25rem',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      border: `1px solid ${isSelected ? 'var(--c-brand-1)' : 'var(--c-border)'}`,
+                      background: isSelected ? 'rgba(79, 70, 229, 0.08)' : 'var(--c-bg-subtle)',
+                      transition: 'all 0.15s ease',
                     }}
+                    onClick={() => loadSimulation(s.simulation_id)}
+                    title={`Click to view results of ${s.simulation_id}`}
                   >
-                    {s.status}
-                  </span>
-                </div>
-              ))
+                    <div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: isSelected ? 600 : 500, color: 'var(--c-text-primary)' }}>
+                        {s.scenario_type.replace('_', ' ')}
+                      </span>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
+                        {formatSimulationId(s.simulation_id)} • {s.agents_executed} agents
+                      </p>
+                    </div>
+                    <span
+                      className="badge"
+                      style={{
+                        background: s.status === 'completed' ? 'rgba(5,150,105,0.12)' : 'rgba(220,38,38,0.12)',
+                        color: s.status === 'completed' ? 'var(--c-success)' : 'var(--c-danger)',
+                        border: `1px solid ${s.status === 'completed' ? 'rgba(5,150,105,0.25)' : 'rgba(220,38,38,0.25)'}`,
+                        fontSize: '0.7rem',
+                      }}
+                    >
+                      {s.status}
+                    </span>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -189,7 +273,7 @@ export const SimulatePage: React.FC = () => {
             <div className="empty-state">
               <span className="empty-icon">🔬</span>
               <p>Select a scenario and run simulation</p>
-              <p style={{ fontSize: '0.8rem', color: '#475569' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
                 Results will appear here in real time
               </p>
             </div>
@@ -198,9 +282,9 @@ export const SimulatePage: React.FC = () => {
           {status === 'running' && (
             <div className="loading-overlay">
               <span className="loading-spinner" style={{ width: 40, height: 40 }} />
-              <p>Running 18-agent pipeline…</p>
-              <p style={{ fontSize: '0.8rem', color: '#475569' }}>
-                Simulation ID: {simulationId?.slice(0, 12)}…
+              <p>Running 18-agent consensus pipeline…</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
+                Target: {formatSimulationId(simulationId)}
               </p>
             </div>
           )}
@@ -208,33 +292,36 @@ export const SimulatePage: React.FC = () => {
           {result && result.summary && (
             <div className="animate-fade-in">
               <div className="mb-4">
-                <div className="flex gap-2 flex-wrap mb-3">
+                <div className="flex gap-2 flex-wrap mb-3 items-center">
+                  <span className="badge badge-info" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {formatSimulationId(result.simulation_id)}
+                  </span>
                   <span className="badge badge-success">{result.agents_executed} agents executed</span>
-                  <span className="tag">{result.scenario_type.replace('_', ' ')}</span>
+                  <span className="tag" style={{ textTransform: 'uppercase' }}>{result.scenario_type.replace('_', ' ')}</span>
                 </div>
               </div>
 
               <div className="grid-2" style={{ gap: '0.75rem', marginBottom: '1.25rem' }}>
                 {[
-                  { label: 'Workflow Status', value: result.summary.workflow_status, color: '#10b981' },
-                  { label: 'Order Status',    value: result.summary.order_status ?? '—',    color: '#3b82f6' },
-                  { label: 'Risk Level',      value: result.summary.risk_level ?? '—',      color: '#f59e0b' },
-                  { label: 'Risk Score',      value: result.summary.risk_score != null ? String(result.summary.risk_score) : '—', color: '#ef4444' },
-                  { label: 'CEO Approved',    value: result.summary.ceo_approved != null ? (result.summary.ceo_approved ? 'Yes ✅' : 'No ❌') : '—', color: result.summary.ceo_approved ? '#10b981' : '#ef4444' },
-                  { label: 'Carrier',         value: result.summary.carrier ?? '—',         color: '#8b5cf6' },
-                  { label: 'Decisions Made',  value: String(result.summary.decision_count ?? 0),  color: '#06b6d4' },
-                  { label: 'Events Fired',    value: String(result.summary.event_count ?? 0),    color: '#06b6d4' },
+                  { label: 'Workflow Status', value: result.summary.workflow_status, color: 'var(--c-success)' },
+                  { label: 'Order Status',    value: result.summary.order_status ?? '—',    color: 'var(--c-brand-1)' },
+                  { label: 'Risk Level',      value: result.summary.risk_level ?? '—',      color: 'var(--c-warning)' },
+                  { label: 'Risk Score',      value: result.summary.risk_score != null ? String(result.summary.risk_score) : '—', color: 'var(--c-danger)' },
+                  { label: 'CEO Approved',    value: result.summary.ceo_approved != null ? (result.summary.ceo_approved ? 'Yes ✅' : 'No ❌') : '—', color: result.summary.ceo_approved ? 'var(--c-success)' : 'var(--c-danger)' },
+                  { label: 'Carrier',         value: result.summary.carrier ?? '—',         color: 'var(--c-coordination)' },
+                  { label: 'Decisions Made',  value: String(result.summary.decision_count ?? 0),  color: 'var(--c-brand-3)' },
+                  { label: 'Events Fired',    value: String(result.summary.event_count ?? 0),    color: 'var(--c-brand-3)' },
                 ].map(({ label, value, color }) => (
                   <div
                     key={label}
                     style={{
-                      background: 'rgba(12,18,32,0.6)',
-                      border: '1px solid rgba(56,90,155,0.2)',
+                      background: 'var(--c-bg-subtle)',
+                      border: '1px solid var(--c-border)',
                       borderRadius: '8px',
                       padding: '0.75rem',
                     }}
                   >
-                    <p style={{ fontSize: '0.7rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--c-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {label}
                     </p>
                     <p style={{ color, fontWeight: 600, marginTop: '0.25rem' }}>{value}</p>
@@ -254,21 +341,21 @@ export const SimulatePage: React.FC = () => {
                     className="flex items-center gap-3"
                     style={{
                       padding: '0.5rem 0.75rem',
-                      background: 'rgba(12,18,32,0.5)',
+                      background: 'var(--c-bg-subtle)',
                       borderRadius: '6px',
-                      border: '1px solid rgba(56,90,155,0.15)',
+                      border: '1px solid var(--c-border)',
                     }}
                   >
                     <span
                       style={{
                         width: 8, height: 8, borderRadius: '50%',
-                        background: t.status === 'completed' ? '#10b981' : '#ef4444',
+                        background: t.status === 'completed' ? 'var(--c-success)' : 'var(--c-danger)',
                         flexShrink: 0,
                       }}
                     />
                     <span className="tag" style={{ fontSize: '0.7rem' }}>{t.agent_code}</span>
-                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', flex: 1 }}>{t.agent_name}</span>
-                    <span style={{ fontSize: '0.75rem', color: '#475569' }}>{t.duration_ms}ms</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--c-text-primary)', flex: 1 }}>{t.agent_name}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>{t.duration_ms}ms</span>
                   </div>
                 ))}
               </div>

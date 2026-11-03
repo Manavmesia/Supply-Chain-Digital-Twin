@@ -58,19 +58,49 @@ class CustomerServiceAgent(BaseAgent):
         # ── 1. Milestone Notification Processing ──────────────────────────────
         notifications_sent: list[dict[str, Any]] = []
 
-        # Determine milestone channel message
+        # Determine milestone channel message (LLM-synthesized if key present)
         milestone_type = "order_update"
         if shipment_state.get("status") == "delivered":
             milestone_type = "shipment_delivered"
-            msg = f"Your order {order.get('order_id', '')} has been delivered successfully."
-        elif shipment_state.get("status") == "dispatched" or shipment_state.get("status") == "in_transit":
+            default_msg = f"Your order {order.get('order_id', '')} has been delivered successfully."
+        elif shipment_state.get("status") in ("dispatched", "in_transit"):
             milestone_type = "shipment_dispatched"
-            msg = f"Your order {order.get('order_id', '')} is in transit via carrier."
+            default_msg = f"Your order {order.get('order_id', '')} is in transit via carrier."
         elif order.get("order_id"):
             milestone_type = "order_created"
-            msg = f"Your order {order.get('order_id', '')} has been confirmed and is being processed."
+            default_msg = f"Your order {order.get('order_id', '')} has been confirmed and is being processed."
         else:
-            msg = "Notification: Your supply chain request is being processed."
+            default_msg = "Notification: Your supply chain request is being processed."
+
+        from pydantic import BaseModel
+
+        class CSNotificationSchema(BaseModel):
+            message: str
+            rationale: str
+
+        def _fallback_cs() -> CSNotificationSchema:
+            return CSNotificationSchema(
+                message=default_msg,
+                rationale=f"Sent {milestone_type} notification to customer {customer_id}",
+            )
+
+        llm_cs_dec, cs_src = await self.decide_with_llm(
+            decision_topic="Formulate professional customer communication and SLA notification",
+            context={
+                "customer_id": str(customer_id),
+                "order_id": order.get("order_id"),
+                "milestone": milestone_type,
+                "shipment_status": shipment_state.get("status"),
+            },
+            rules=[
+                "Message must be polite, clear, enterprise-grade, and accurately reflect current milestone status.",
+                "Include the order identifier if present.",
+            ],
+            schema=CSNotificationSchema,
+            fallback_callable=_fallback_cs,
+        )
+
+        msg = llm_cs_dec.message
 
         notif_payload = {
             "notification_id": str(uuid.uuid4()),
@@ -88,8 +118,9 @@ class CustomerServiceAgent(BaseAgent):
         decisions = self._record_decision(
             decisions,
             "customer_notified",
-            f"Sent {milestone_type} notification to customer {customer_id}",
+            llm_cs_dec.rationale or f"Sent {milestone_type} notification to customer {customer_id}",
             notif_payload,
+            source=cs_src,
         )
 
         # ── 2. Return Request / Support Ticket Processing ──────────────────────

@@ -79,45 +79,77 @@ class PricingAgent(BaseAgent):
             baseline_qty = float(fc_data.get("baseline_quantity", forecast_qty))
             confidence = float(fc_data.get("confidence", 0.70))
 
-            # ── Apply pricing rules ───────────────────────────────────────────
-            recommendation = "stable"
-            adjustment_pct = 0.0
-            reason = "Price is optimal — no adjustment needed"
-
+            # ── Apply pricing rules (LLM-driven if API key present) ───────────
             is_spike = (
                 baseline_qty > 0
                 and forecast_qty >= _DEMAND_SPIKE_MULTIPLIER * baseline_qty
                 and confidence >= 0.70
             )
 
-            if is_spike:
-                # Scale the increase by how extreme the spike is (capped at 15%)
-                spike_ratio = min(forecast_qty / max(baseline_qty, 1), 3.0)
-                adjustment_pct = min(
-                    _SPIKE_INCREASE_MIN + (spike_ratio - 2.0) * 0.05,
-                    _SPIKE_INCREASE_MAX,
-                )
-                recommendation = "increase"
-                reason = (
-                    f"Demand spike detected ({forecast_qty:.0f} vs baseline {baseline_qty:.0f}). "
-                    f"Suggest {adjustment_pct*100:.1f}% price increase."
-                )
+            from pydantic import BaseModel
 
-            elif gross_margin_pct < _LOW_MARGIN_THRESHOLD:
-                adjustment_pct = _LOW_MARGIN_INCREASE
-                recommendation = "increase"
-                reason = (
-                    f"Low gross margin ({gross_margin_pct:.1f}% < {_LOW_MARGIN_THRESHOLD}%). "
-                    f"Suggest {adjustment_pct*100:.0f}% price increase to improve profitability."
-                )
+            class PricingDecisionSchema(BaseModel):
+                recommendation: str  # "increase", "discount", "stable"
+                adjustment_pct: float
+                reason: str
 
-            elif gross_margin_pct > _HIGH_MARGIN_THRESHOLD:
-                adjustment_pct = -_PROMO_DISCOUNT
-                recommendation = "discount"
-                reason = (
-                    f"High gross margin ({gross_margin_pct:.1f}% > {_HIGH_MARGIN_THRESHOLD}%). "
-                    f"Suggest {abs(adjustment_pct)*100:.0f}% promotional discount to drive volume."
-                )
+            def _fallback_pricing() -> PricingDecisionSchema:
+                if is_spike:
+                    spike_ratio = min(forecast_qty / max(baseline_qty, 1), 3.0)
+                    adj = min(_SPIKE_INCREASE_MIN + (spike_ratio - 2.0) * 0.05, _SPIKE_INCREASE_MAX)
+                    return PricingDecisionSchema(
+                        recommendation="increase",
+                        adjustment_pct=adj,
+                        reason=f"Demand spike detected ({forecast_qty:.0f} vs baseline {baseline_qty:.0f}). Suggest {adj*100:.1f}% price increase.",
+                    )
+                elif gross_margin_pct < _LOW_MARGIN_THRESHOLD:
+                    return PricingDecisionSchema(
+                        recommendation="increase",
+                        adjustment_pct=_LOW_MARGIN_INCREASE,
+                        reason=f"Low gross margin ({gross_margin_pct:.1f}% < {_LOW_MARGIN_THRESHOLD}%). Suggest {_LOW_MARGIN_INCREASE*100:.0f}% price increase.",
+                    )
+                elif gross_margin_pct > _HIGH_MARGIN_THRESHOLD:
+                    return PricingDecisionSchema(
+                        recommendation="discount",
+                        adjustment_pct=-_PROMO_DISCOUNT,
+                        reason=f"High gross margin ({gross_margin_pct:.1f}% > {_HIGH_MARGIN_THRESHOLD}%). Suggest {_PROMO_DISCOUNT*100:.0f}% promotional discount.",
+                    )
+                else:
+                    return PricingDecisionSchema(
+                        recommendation="stable",
+                        adjustment_pct=0.0,
+                        reason="Price is optimal — no adjustment needed",
+                    )
+
+            pricing_context = {
+                "product_id": product_id_str,
+                "unit_price": str(unit_price),
+                "baseline_qty": baseline_qty,
+                "forecast_qty": forecast_qty,
+                "confidence": confidence,
+                "gross_margin_pct": gross_margin_pct,
+                "is_spike": is_spike,
+            }
+            pricing_rules = [
+                "If is_spike is True: recommendation must be 'increase' with adjustment_pct between 0.05 and 0.15.",
+                "If gross_margin_pct < 15.0%: recommendation must be 'increase' with adjustment_pct = 0.08 (+8%).",
+                "If gross_margin_pct > 35.0%: recommendation must be 'discount' with adjustment_pct = -0.05 (-5%).",
+                "Otherwise: recommendation must be 'stable' with adjustment_pct = 0.0.",
+                "Reason must explicitly detail the driver (spike, low margin, high margin, or optimal).",
+            ]
+
+            llm_price_dec, price_src = await self.decide_with_llm(
+                decision_topic=f"Determine dynamic pricing for product {product_id_str}",
+                context=pricing_context,
+                rules=pricing_rules,
+                schema=PricingDecisionSchema,
+                fallback_callable=_fallback_pricing,
+                state=state,
+            )
+
+            recommendation = llm_price_dec.recommendation
+            adjustment_pct = llm_price_dec.adjustment_pct
+            reason = llm_price_dec.reason
 
             # ── Calculate suggested price ─────────────────────────────────────
             if unit_price > Decimal("0"):
@@ -131,12 +163,13 @@ class PricingAgent(BaseAgent):
             if session and unit_price > Decimal("0"):
                 try:
                     record = PricingHistory(
-                        pricing_id=pricing_record_id,
+                        price_id=pricing_record_id,
                         product_id=uuid.UUID(product_id_str),
-                        old_price=unit_price,
-                        new_price=suggested_price,
-                        trigger=f"demand_spike" if is_spike else ("low_margin" if adjustment_pct > 0 else "promotion"),
-                        approved=(recommendation != "stable"),
+                        previous_price=unit_price,
+                        recommended_price=suggested_price,
+                        approved_price=suggested_price if recommendation != "stable" else None,
+                        trigger_type="demand_spike" if is_spike else ("cost_change" if adjustment_pct > 0 else "promotion"),
+                        reasoning=reason,
                         created_at=now,
                     )
                     session.add(record)
@@ -177,6 +210,7 @@ class PricingAgent(BaseAgent):
             f"Evaluated pricing for {len(pricing_results)} product(s). "
             f"Recommendations: {set(r['recommendation'] for r in pricing_results)}",
             {"product_count": len(pricing_results)},
+            source=price_src if pricing_results else "rule_engine",
         )
 
         return {

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 class OrderItemRequest(BaseModel):
     """A single order line item."""
     product_id: UUID
-    quantity: int = Field(gt=0, description="Must be a positive integer")
+    quantity: int = Field(gt=0, le=1_000_000, description="Must be a positive integer <= 1,000,000")
 
 
 class OrderWorkflowRequest(BaseModel):
@@ -27,7 +27,7 @@ class OrderWorkflowRequest(BaseModel):
     by manipulating priority directly.
     """
     customer_id: UUID
-    items: list[OrderItemRequest] = Field(min_length=1)
+    items: list[OrderItemRequest] = Field(min_length=1, max_length=100, description="Order must contain 1-100 items")
 
     @field_validator("items")
     @classmethod

@@ -17,6 +17,17 @@ export interface WorkflowAccepted {
   message: string;
 }
 
+export interface BlackboardEntry {
+  agent_id: string;
+  timestamp: string;
+  confidence: number;
+  rationale: string;
+  status: 'proposed' | 'contested' | 'accepted' | 'superseded' | string;
+  data: Record<string, unknown>;
+  message_type?: string | null;
+  topic?: string | null;
+}
+
 export interface WorkflowStatus {
   workflow_id: string;
   correlation_id: string | null;
@@ -29,8 +40,8 @@ export interface WorkflowStatus {
   requires_human_approval: boolean;
   event_count: number;
   error_count: number;
-  blackboard?: Record<string, any[]> | null;
-  human_overrides?: Record<string, any> | null;
+  blackboard?: Record<string, BlackboardEntry[]> | null;
+  human_overrides?: Record<string, unknown> | null;
 }
 
 export interface AgentTrace {
@@ -53,6 +64,22 @@ export interface WorkflowTrace {
   traces: AgentTrace[];
 }
 
+export interface WorkflowSummary {
+  workflow_id: string;
+  correlation_id: string;
+  workflow_status: string;
+  created_at: string;
+  updated_at: string;
+  order_id?: string;
+  customer_id?: string;
+  total_amount?: string;
+  order_status?: string;
+  requires_human_approval: boolean;
+  active_agents: string[];
+  event_count: number;
+  error_count: number;
+}
+
 // Analytics / Dashboard
 export interface DashboardKPIs {
   total_orders: number;
@@ -63,6 +90,8 @@ export interface DashboardKPIs {
   avg_supplier_reliability: number;
   low_stock_alerts: number;
   out_of_stock_alerts: number;
+  total_inventory_locations?: number;
+  sku_availability_pct?: number;
   total_agents: number;
 }
 

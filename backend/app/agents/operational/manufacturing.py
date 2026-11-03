@@ -181,11 +181,38 @@ class ManufacturingAgent(BaseAgent):
             event_history = self._append_event(event_history, "ManufacturingCompleted", completed_payload)
             event_history = self._append_event(event_history, "InspectionRequested", inspection_payload)
 
+            from pydantic import BaseModel
+
+            class ManufacturingDecisionSchema(BaseModel):
+                rationale: str
+
+            def _fallback_mfg() -> ManufacturingDecisionSchema:
+                return ManufacturingDecisionSchema(
+                    rationale=f"Completed manufacturing run {mo_id} for product {product_id} ({planned_qty} units)"
+                )
+
+            llm_mfg_dec, mfg_src = await self.decide_with_llm(
+                decision_topic=f"Approve and schedule manufacturing lot for product {product_id}",
+                context={
+                    "product_id": str(product_id),
+                    "warehouse_id": str(target_warehouse_id),
+                    "planned_qty": planned_qty,
+                    "max_capacity": _DEFAULT_MAX_CAPACITY,
+                },
+                rules=[
+                    "Validate production capacity against maximum threshold (5,000 units).",
+                    "Schedule manufacturing start and completion times with quality inspection handover.",
+                ],
+                schema=ManufacturingDecisionSchema,
+                fallback_callable=_fallback_mfg,
+            )
+
             decisions = self._record_decision(
                 decisions,
                 "manufacturing_completed",
-                f"Completed manufacturing run {mo_id} for product {product_id} ({planned_qty} units)",
+                llm_mfg_dec.rationale or f"Completed manufacturing run {mo_id} for product {product_id} ({planned_qty} units)",
                 completed_payload,
+                source=mfg_src,
             )
 
             mo_payload = {

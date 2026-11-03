@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local persistent storage and sqlite databases
+.storage/
+*.db
+*.db-wal
+*.db-shm

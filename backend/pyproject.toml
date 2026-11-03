@@ -36,7 +36,12 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::pytest_asyncio.plugin.PytestDeprecationWarning",
+    "ignore::RuntimeWarning",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

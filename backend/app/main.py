@@ -16,7 +16,8 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import analytics as analytics_router
@@ -126,14 +127,40 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS — strictly validate origins when credentials are enabled
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled server error", path=request.url.path, error=str(exc))
+    origin = request.headers.get("origin")
+    # Only echo origin if it matches local/trusted domains
+    allowed_origin = "*"
+    if origin and ("localhost" in origin or "127.0.0.1" in origin):
+        allowed_origin = origin
+
+    error_msg = str(exc)
+    # Sanitize sensitive database credentials/connection strings if present
+    if "postgresql" in error_msg.lower() or "password" in error_msg.lower():
+        error_msg = "Database communication error"
+
+    headers = {"Access-Control-Allow-Origin": allowed_origin}
+    if allowed_origin != "*":
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": error_msg},
+        headers=headers,
+    )
 
 # ── Register routers ─────────────────────────────────────────────────────────
 

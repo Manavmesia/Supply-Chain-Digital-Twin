@@ -89,7 +89,7 @@ export const AgentsPage: React.FC = () => {
                     <div className="flex justify-between items-center mb-2">
                       <span
                         className="tag"
-                        style={{ color: style.color, borderColor: `${style.color}44` }}
+                        style={{ color: style.color, border: `1px solid ${style.color}44` }}
                       >
                         {agent.code}
                       </span>
