@@ -1,3 +1,9 @@
+# Environment and secrets
+.env
+.env.*
+*.env
+!.env.example
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -5,12 +11,24 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend
+node_modules/
+dist/
 
 # Virtual environments
 .venv
+venv/
 
 # Local persistent storage and sqlite databases
 .storage/
 *.db
 *.db-wal
 *.db-shm
+
+# OS generated files
+.DS_Store
+Thumbs.db

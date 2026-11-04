@@ -14,12 +14,15 @@ GET /api/v1/workflows/{workflow_id}/trace
 
 from __future__ import annotations
 
+import asyncio
 import uuid
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+
+from app.api.v1.auth import require_authenticated_role
 
 from app.core import persistence
 from app.core.database import AsyncSessionLocal
@@ -65,7 +68,16 @@ def _save_workflow_state(
 # Background workflow runner
 # ---------------------------------------------------------------------------
 
+_MAX_CONCURRENT_WORKFLOWS = 10
+_WORKFLOW_SEMAPHORE = asyncio.Semaphore(_MAX_CONCURRENT_WORKFLOWS)
+
+
 async def _run_workflow(workflow_id: str, correlation_id: str, request: OrderWorkflowRequest | None = None) -> None:
+    async with _WORKFLOW_SEMAPHORE:
+        await _run_workflow_inner(workflow_id, correlation_id, request)
+
+
+async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: OrderWorkflowRequest | None = None) -> None:
     """
     Executes or resumes the decentralized supply chain workflow.
     """
@@ -345,6 +357,7 @@ async def human_override(
     workflow_id: str,
     request: OverrideRequest,
     background_tasks: BackgroundTasks,
+    _user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
 ) -> dict[str, Any]:
     """
     Exposes the Human Monitoring Override. Allows an observer to override,
@@ -433,6 +446,7 @@ async def approve_workflow(
     workflow_id: str,
     body: ExecutiveApprovalRequest | None = None,
     background_tasks: BackgroundTasks = BackgroundTasks(),
+    _user: Annotated[dict, Depends(require_authenticated_role("admin"))] = None,
 ) -> dict[str, Any]:
     """Approves an escalated workflow requiring human review and resumes execution."""
     state = _WORKFLOW_STORE.get(workflow_id) or persistence.get_workflow(workflow_id)
@@ -500,6 +514,7 @@ async def approve_workflow(
 async def reject_workflow(
     workflow_id: str,
     body: ExecutiveApprovalRequest | None = None,
+    _user: Annotated[dict, Depends(require_authenticated_role("admin"))] = None,
 ) -> dict[str, Any]:
     """Rejects an escalated workflow and halts further processing."""
     state = _WORKFLOW_STORE.get(workflow_id) or persistence.get_workflow(workflow_id)

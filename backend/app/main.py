@@ -123,7 +123,9 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Autonomous multi-agent supply chain digital twin with 18 AI agents.",
     version=settings.APP_VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.is_docs_enabled else None,
+    docs_url=f"{settings.API_V1_STR}/docs" if settings.is_docs_enabled else None,
+    redoc_url=f"{settings.API_V1_STR}/redoc" if settings.is_docs_enabled else None,
     lifespan=lifespan,
 )
 
@@ -136,6 +138,18 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.ENVIRONMENT.lower() == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.exception_handler(Exception)

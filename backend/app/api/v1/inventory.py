@@ -9,12 +9,14 @@ GET /api/v1/inventory/warehouse/{wh_id}  — all inventory in a warehouse
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.auth import require_authenticated_role
 
 from app.core import persistence
 from app.core.database import get_db_session
@@ -216,6 +218,7 @@ async def list_replenishment_orders(
 )
 async def receive_replenishment_order(
     po_id: str,
+    _user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
 ) -> dict[str, Any]:
     """Commit inbound stock receipt to warehouse inventory, completing the replenishment loop."""
     result = persistence.receive_purchase_order(po_id)

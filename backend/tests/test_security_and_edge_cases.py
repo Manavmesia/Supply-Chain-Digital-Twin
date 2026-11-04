@@ -125,6 +125,12 @@ async def test_override_invalid_topic_rejected():
 @pytest.mark.asyncio
 async def test_auth_timing_safe_authentication():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Check security headers on response
+        res_health = await ac.get("/health")
+        assert res_health.headers.get("X-Content-Type-Options") == "nosniff"
+        assert res_health.headers.get("X-Frame-Options") == "DENY"
+        assert res_health.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+
         # Invalid credentials
         res = await ac.post(
             "/api/v1/auth/token",
@@ -141,6 +147,31 @@ async def test_auth_timing_safe_authentication():
         )
         assert res_ok.status_code == 200
         assert "access_token" in res_ok.json()
+
+
+@pytest.mark.asyncio
+async def test_auth_rate_limiting_brute_force():
+    from app.api.v1.auth import _FAILED_LOGIN_ATTEMPTS
+    _FAILED_LOGIN_ATTEMPTS.clear()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Make 5 failed requests
+        for _ in range(5):
+            res = await ac.post(
+                "/api/v1/auth/token",
+                data={"username": "admin_bf_test", "password": "wrong_password"},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            assert res.status_code == 401
+
+        # 6th request should hit 429
+        res_blocked = await ac.post(
+            "/api/v1/auth/token",
+            data={"username": "admin_bf_test", "password": "wrong_password"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert res_blocked.status_code == 429
+        assert "Too many failed login attempts" in res_blocked.json()["detail"]
 
 
 def test_bounded_memory_stores_prevent_dos():
@@ -219,3 +250,65 @@ async def test_approve_nonexistent_workflow_404():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         res = await ac.post(f"/api/v1/workflows/{fake_id}/approve")
         assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_role_based_access_control_viewer_forbidden():
+    wf_id = str(uuid.uuid4())
+    _save_workflow_state(wf_id, {
+        "workflow_id": wf_id,
+        "workflow_status": "escalated",
+        "requires_human_approval": True,
+        "correlation_id": str(uuid.uuid4()),
+    })
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Obtain a token for a 'viewer' role
+        login_res = await ac.post(
+            "/api/v1/auth/token",
+            data={"username": "viewer", "password": "viewer123"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert login_res.status_code == 200
+        viewer_token = login_res.json()["access_token"]
+        headers = {"Authorization": f"Bearer {viewer_token}"}
+
+        # Viewer cannot approve escalated workflow
+        res_approve = await ac.post(
+            f"/api/v1/workflows/{wf_id}/approve",
+            json={"notes": "Unauthorized approval"},
+            headers=headers,
+        )
+        assert res_approve.status_code == 403
+        assert "Operation requires one of the following roles" in res_approve.json()["detail"]
+
+        # Viewer cannot reject workflow
+        res_reject = await ac.post(
+            f"/api/v1/workflows/{wf_id}/reject",
+            json={"notes": "Unauthorized rejection"},
+            headers=headers,
+        )
+        assert res_reject.status_code == 403
+
+        # Viewer cannot override blackboard decision
+        res_override = await ac.post(
+            f"/api/v1/workflows/{wf_id}/override",
+            json={"topic": "pricing", "action": "pin", "value": {}},
+            headers=headers,
+        )
+        assert res_override.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_production_mode_unauthenticated_request_rejected():
+    from unittest.mock import patch
+    wf_id = str(uuid.uuid4())
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        with patch("app.core.config.settings.ENVIRONMENT", "production"):
+            res = await ac.post(
+                f"/api/v1/workflows/{wf_id}/approve",
+                json={"notes": "No token in production"},
+            )
+            assert res.status_code == 401
+            assert "Authentication credentials were not provided" in res.json()["detail"]

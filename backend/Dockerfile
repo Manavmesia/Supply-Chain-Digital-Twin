@@ -10,9 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY pyproject.toml .
+COPY pyproject.toml requirements.lock* ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+    pip install --no-cache-dir -r requirements.lock && \
+    pip install --no-cache-dir --no-deps .
 
 # Stage 2: Runtime image
 FROM python:3.12-slim AS runner

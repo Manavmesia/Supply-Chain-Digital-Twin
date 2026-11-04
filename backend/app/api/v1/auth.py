@@ -13,11 +13,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -53,36 +54,81 @@ def verify_password(password: str, stored_hash: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Secure in-memory user store
+# In-memory user store (Development only)
 # ---------------------------------------------------------------------------
 
-_DEV_USERS: dict[str, dict[str, Any]] = {
-    "admin": {
-        "username": "admin",
-        "password_hash": hash_password("admin123"),
-        "role": "admin",
-        "full_name": "System Administrator",
-    },
-    "viewer": {
-        "username": "viewer",
-        "password_hash": hash_password("viewer123"),
-        "role": "viewer",
-        "full_name": "Dashboard Viewer",
-    },
-    "analyst": {
-        "username": "analyst",
-        "password_hash": hash_password("analyst123"),
-        "role": "analyst",
-        "full_name": "Supply Chain Analyst",
-    },
-}
+_DEV_USERS: dict[str, dict[str, Any]] = (
+    {
+        "admin": {
+            "username": "admin",
+            "password_hash": hash_password("admin123"),
+            "role": "admin",
+            "full_name": "System Administrator",
+        },
+        "viewer": {
+            "username": "viewer",
+            "password_hash": hash_password("viewer123"),
+            "role": "viewer",
+            "full_name": "Dashboard Viewer",
+        },
+        "analyst": {
+            "username": "analyst",
+            "password_hash": hash_password("analyst123"),
+            "role": "analyst",
+            "full_name": "Supply Chain Analyst",
+        },
+    }
+    if settings.ENVIRONMENT.lower() == "development"
+    else {}
+)
+
+# ---------------------------------------------------------------------------
+# Rate limiting for brute-force protection
+# ---------------------------------------------------------------------------
+
+_FAILED_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+_RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+def _check_login_rate_limit(client_identifier: str) -> None:
+    now = time.time()
+    attempts = _FAILED_LOGIN_ATTEMPTS.get(client_identifier, [])
+    # Keep only attempts in the active time window
+    valid_attempts = [t for t in attempts if now - t < _RATE_LIMIT_WINDOW_SECONDS]
+    _FAILED_LOGIN_ATTEMPTS[client_identifier] = valid_attempts
+
+    if len(valid_attempts) >= settings.LOGIN_RATE_LIMIT_PER_MINUTE:
+        logger.warning("Login rate limit triggered", client=client_identifier)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait 1 minute before retrying.",
+            headers={"Retry-After": str(_RATE_LIMIT_WINDOW_SECONDS)},
+        )
+
+
+def _record_failed_attempt(client_identifier: str) -> None:
+    now = time.time()
+    attempts = _FAILED_LOGIN_ATTEMPTS.setdefault(client_identifier, [])
+    attempts.append(now)
+
+
+def _clear_failed_attempts(client_identifier: str) -> None:
+    _FAILED_LOGIN_ATTEMPTS.pop(client_identifier, None)
+
 
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
 
 ALGORITHM = "HS256"
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/token",
+    auto_error=True,
+)
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/token",
+    auto_error=False,
+)
 
 
 def _create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -118,6 +164,72 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dic
     return _DEV_USERS[username]
 
 
+async def get_optional_current_user(
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)] = None,
+) -> dict[str, Any] | None:
+    """Extract authenticated user if token is present, else None."""
+    if not token:
+        return None
+    try:
+        payload = _decode_token(token)
+        username: str | None = payload.get("sub")
+        if username and username in _DEV_USERS:
+            return _DEV_USERS[username]
+    except Exception:
+        return None
+    return None
+
+
+def require_roles(*roles: str) -> Callable:
+    """Dependency factory checking that the authenticated user possesses an allowed role."""
+    async def role_checker(
+        current_user: Annotated[dict[str, Any], Depends(get_current_user)],
+    ) -> dict[str, Any]:
+        user_role = current_user.get("role")
+        if user_role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Operation requires one of the following roles: {list(roles)}. Current role: '{user_role}'",
+            )
+        return current_user
+
+    return role_checker
+
+
+def require_authenticated_role(*roles: str) -> Callable:
+    """
+    Dependency factory enforcing authentication and role membership.
+    In production: strictly requires a valid Bearer token.
+    In development without a token: falls back to dev admin user.
+    If a token is provided (even in dev): strictly checks that its role is in `roles`.
+    """
+    async def role_checker(
+        user: Annotated[dict[str, Any] | None, Depends(get_optional_current_user)],
+    ) -> dict[str, Any]:
+        if user is None:
+            if settings.ENVIRONMENT.lower() == "development":
+                user = _DEV_USERS.get(
+                    "admin",
+                    {"username": "admin", "role": "admin", "full_name": "Development Admin"},
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication credentials were not provided or are invalid",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+        user_role = user.get("role")
+        if roles and user_role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Operation requires one of the following roles: {list(roles)}. Current role: '{user_role}'",
+            )
+        return user
+
+    return role_checker
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -145,25 +257,31 @@ class UserProfile(BaseModel):
     response_model=TokenResponse,
     summary="Issue JWT access token",
 )
-async def login(form: Annotated[OAuth2PasswordRequestForm, Depends()]) -> TokenResponse:
+async def login(
+    form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
+) -> TokenResponse:
     """
-    Authenticate with username + password and receive a JWT bearer token.
+    Authenticate with username and password to receive a JWT bearer token.
+    Applies rate limiting to prevent brute-force attacks.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    client_key = f"{client_ip}:{form.username}"
 
-    **Development credentials:**
-    - `admin` / `admin123`
-    - `analyst` / `analyst123`
-    - `viewer` / `viewer123`
-    """
+    _check_login_rate_limit(client_key)
+
     user = _DEV_USERS.get(form.username)
     stored_hash = user.get("password_hash") or user.get("password", "") if user else ""
     if user is None or not verify_password(form.password, stored_hash):
-        logger.warning("Failed login attempt", username=form.username)
+        _record_failed_attempt(client_key)
+        logger.warning("Failed login attempt", username=form.username, ip=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    _clear_failed_attempts(client_key)
     expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
     token = _create_access_token(
         {"sub": user["username"], "role": user["role"]},

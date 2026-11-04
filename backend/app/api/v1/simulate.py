@@ -8,6 +8,7 @@ GET  /api/v1/simulate            — list recent simulations
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any, Literal
 
@@ -136,7 +137,19 @@ def _build_initial_state(
 # Background simulation runner
 # ---------------------------------------------------------------------------
 
+_MAX_CONCURRENT_SIMULATIONS = 10
+_SIMULATION_SEMAPHORE = asyncio.Semaphore(_MAX_CONCURRENT_SIMULATIONS)
+
+
 async def _run_simulation(
+    simulation_id: str,
+    scenario: SimulationScenario,
+) -> None:
+    async with _SIMULATION_SEMAPHORE:
+        await _run_simulation_inner(simulation_id, scenario)
+
+
+async def _run_simulation_inner(
     simulation_id: str,
     scenario: SimulationScenario,
 ) -> None:

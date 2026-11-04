@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "dev-secret-key-change-in-production-32chars"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    LOGIN_RATE_LIMIT_PER_MINUTE: int = 5
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -41,8 +43,28 @@ class Settings(BaseSettings):
     # RabbitMQ
     RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
 
-    # Environment
+    # Environment & Documentation
     ENVIRONMENT: str = "development"
+    ENABLE_API_DOCS: bool | None = None  # None = auto: True in dev, False in prod
+
+    @property
+    def is_docs_enabled(self) -> bool:
+        if self.ENABLE_API_DOCS is not None:
+            return self.ENABLE_API_DOCS
+        return self.ENVIRONMENT.lower() != "production"
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.ENVIRONMENT.lower() == "production":
+            if (
+                not self.SECRET_KEY
+                or self.SECRET_KEY == "dev-secret-key-change-in-production-32chars"
+                or len(self.SECRET_KEY) < 32
+            ):
+                raise ValueError(
+                    "In production, SECRET_KEY must be configured with at least 32 characters."
+                )
+        return self
 
     # Finance — budget threshold for automatic approval (Phase 4)
     FINANCE_APPROVAL_THRESHOLD: Decimal = Decimal("50000.00")

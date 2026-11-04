@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from app.api.v1.auth import require_authenticated_role
 from app.core import persistence
 
 logger = structlog.get_logger(__name__)
@@ -59,7 +60,10 @@ class EventResponse(BaseModel):
     status_code=status.HTTP_202_ACCEPTED,
     summary="Inject a manual event into the system",
 )
-async def inject_event(request: ManualEventRequest) -> dict[str, Any]:
+async def inject_event(
+    request: ManualEventRequest,
+    _user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
+) -> dict[str, Any]:
     """
     Inject a synthetic event into the supply chain event bus.
 
@@ -139,7 +143,10 @@ async def list_events(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Replay a failed event from the DLQ",
 )
-async def replay_event(event_id: str) -> dict[str, Any]:
+async def replay_event(
+    event_id: str,
+    _user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
+) -> dict[str, Any]:
     """
     Requeue a specific event for replay.  In production this would
     move the message from the Dead Letter Queue back to the main exchange.
