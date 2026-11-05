@@ -13,10 +13,10 @@ import {
 import { formatCurrency } from '../utils/formatters';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  in_transit: { label: 'In Transit', bg: 'rgba(59, 130, 246, 0.12)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
-  received:   { label: 'Received (Stock Added)', bg: 'rgba(16, 185, 129, 0.12)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)' },
-  draft:      { label: 'Drafted', bg: 'rgba(245, 158, 11, 0.12)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.3)' },
-  cancelled:  { label: 'Cancelled', bg: 'rgba(239, 68, 68, 0.12)', text: '#f87171', border: 'rgba(239, 68, 68, 0.3)' },
+  in_transit: { label: 'In Transit', bg: 'rgba(59, 130, 246, 0.08)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.2)' },
+  received:   { label: 'Received (Stock Added)', bg: 'rgba(16, 185, 129, 0.08)', text: '#34d399', border: 'rgba(16, 185, 129, 0.2)' },
+  draft:      { label: 'Drafted', bg: 'rgba(255, 255, 255, 0.04)', text: '#94a3b8', border: 'rgba(255, 255, 255, 0.08)' },
+  cancelled:  { label: 'Cancelled', bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
 };
 
 export const ProcurementPage: React.FC = () => {

@@ -1,4 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  TrendingUp,
+  Factory,
+  Ship,
+  Package,
+  AlertTriangle,
+  Play,
+  Check,
+  Sliders,
+  BarChart3,
+  Clock,
+  FlaskConical,
+} from 'lucide-react';
 import { simulateApi } from '../services/api';
 import type { SimulationResult } from '../types';
 import { formatSimulationId } from '../utils/formatters';
@@ -9,35 +22,35 @@ const SAMPLE_ITEMS = [{ product_id: '30000000-0000-0000-0000-000000000001', quan
 const SCENARIOS = [
   {
     type: 'demand_spike',
-    icon: '📈',
+    icon: TrendingUp,
     title: 'Demand Spike',
     desc: '2× demand — tests inventory strain and supplier fallback',
     color: '#3b82f6',
   },
   {
     type: 'supplier_outage',
-    icon: '🏭',
+    icon: Factory,
     title: 'Supplier Outage',
     desc: 'Primary supplier unavailable — tests alternate sourcing logic',
     color: '#ef4444',
   },
   {
     type: 'logistics_delay',
-    icon: '🚢',
+    icon: Ship,
     title: 'Logistics Delay',
     desc: 'Doubled transit days — triggers risk escalation and CEO review',
     color: '#f59e0b',
   },
   {
     type: 'bulk_order',
-    icon: '📦',
+    icon: Package,
     title: 'Bulk Order',
     desc: 'High-value enterprise order — tests finance thresholds and CEO approval',
     color: '#8b5cf6',
   },
   {
     type: 'quality_crisis',
-    icon: '⚠️',
+    icon: AlertTriangle,
     title: 'Quality Crisis',
     desc: 'All QA batches fail — triggers manufacturing reorder path',
     color: '#10b981',
@@ -190,53 +203,83 @@ export const SimulatePage: React.FC = () => {
         {/* Scenario picker */}
         <div>
           <div className="card mb-4">
-            <h3 className="section-title mb-4">🎮 Choose a Scenario</h3>
+            <h3 className="section-title mb-4 flex items-center gap-2">
+              <Sliders size={16} className="text-slate-400" />
+              <span>Choose a Scenario</span>
+            </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {SCENARIOS.map((s) => (
-                <div
-                  key={s.type}
-                  className="scenario-card"
-                  style={{
-                    border: `1px solid ${selectedScenario === s.type ? s.color : 'var(--c-border)'}`,
-                    background: selectedScenario === s.type ? `${s.color}14` : 'var(--c-bg-card)',
-                    cursor: 'pointer',
-                    padding: '1rem',
-                    borderRadius: '10px',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onClick={() => setSelectedScenario(s.type)}
-                >
-                  <div className="flex items-center gap-3">
-                    <span style={{ fontSize: '1.5rem' }}>{s.icon}</span>
-                    <div>
-                      <p style={{ fontWeight: 600, color: selectedScenario === s.type ? s.color : 'var(--c-text-primary)' }}>
-                        {s.title}
-                      </p>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>{s.desc}</p>
+              {SCENARIOS.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <div
+                    key={s.type}
+                    className="scenario-card"
+                    style={{
+                      border: `1px solid ${selectedScenario === s.type ? s.color : 'var(--c-border)'}`,
+                      background: selectedScenario === s.type ? `${s.color}14` : 'var(--c-bg-card)',
+                      cursor: 'pointer',
+                      padding: '1rem',
+                      borderRadius: '10px',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onClick={() => setSelectedScenario(s.type)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '8px',
+                          background: `${s.color}18`,
+                          border: `1px solid ${s.color}33`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: s.color,
+                        }}
+                      >
+                        <Icon size={16} />
+                      </div>
+                      <div>
+                        <p style={{ fontWeight: 600, color: selectedScenario === s.type ? s.color : 'var(--c-text-primary)' }}>
+                          {s.title}
+                        </p>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>{s.desc}</p>
+                      </div>
+                      {selectedScenario === s.type && (
+                        <span style={{ marginLeft: 'auto', color: s.color, display: 'flex' }}>
+                          <Check size={16} />
+                        </span>
+                      )}
                     </div>
-                    {selectedScenario === s.type && (
-                      <span style={{ marginLeft: 'auto', color: s.color }}>✓</span>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <button
-              className="btn btn-primary mt-4"
+              className="btn btn-primary mt-4 flex items-center justify-center gap-2"
               style={{ width: '100%' }}
               onClick={runSimulation}
               disabled={!selectedScenario || status === 'running'}
             >
               {status === 'running' ? (
                 <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Simulating…</>
-              ) : `⚡ Run "${scenarioInfo?.title ?? 'Scenario'}" Simulation`}
+              ) : (
+                <>
+                  <Play size={14} />
+                  <span>Run &ldquo;{scenarioInfo?.title ?? 'Scenario'}&rdquo; Simulation</span>
+                </>
+              )}
             </button>
           </div>
 
           {/* Recent simulations */}
           <div className="card">
-            <h3 className="section-title mb-3">🕐 Recent Simulations</h3>
+            <h3 className="section-title mb-3 flex items-center gap-2">
+              <Clock size={16} className="text-slate-400" />
+              <span>Recent Simulations</span>
+            </h3>
             {recentSims.length === 0 ? (
               <p style={{ color: '#475569', fontSize: '0.875rem' }}>No simulations run yet</p>
             ) : (
@@ -286,11 +329,14 @@ export const SimulatePage: React.FC = () => {
 
         {/* Results panel */}
         <div className="card">
-          <h3 className="section-title mb-4">📊 Simulation Results</h3>
+          <h3 className="section-title mb-4 flex items-center gap-2">
+            <BarChart3 size={16} className="text-slate-400" />
+            <span>Simulation Results</span>
+          </h3>
 
           {status === 'idle' && !simulationId && (
             <div className="empty-state">
-              <span className="empty-icon">🔬</span>
+              <FlaskConical size={32} className="text-slate-600 mb-2" />
               <p>Select a scenario and run simulation</p>
               <p style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
                 Results will appear here in real time
@@ -326,7 +372,7 @@ export const SimulatePage: React.FC = () => {
                   { label: 'Order Status',    value: result.summary.order_status ?? '—',    color: 'var(--c-brand-1)' },
                   { label: 'Risk Level',      value: result.summary.risk_level ?? '—',      color: 'var(--c-warning)' },
                   { label: 'Risk Score',      value: result.summary.risk_score != null ? String(result.summary.risk_score) : '—', color: 'var(--c-danger)' },
-                  { label: 'CEO Approved',    value: result.summary.ceo_approved != null ? (result.summary.ceo_approved ? 'Yes ✅' : 'No ❌') : '—', color: result.summary.ceo_approved ? 'var(--c-success)' : 'var(--c-danger)' },
+                  { label: 'CEO Approved',    value: result.summary.ceo_approved != null ? (result.summary.ceo_approved ? 'Yes (Approved)' : 'No (Rejected)') : '—', color: result.summary.ceo_approved ? 'var(--c-success)' : 'var(--c-danger)' },
                   { label: 'Carrier',         value: result.summary.carrier ?? '—',         color: 'var(--c-coordination)' },
                   { label: 'Decisions Made',  value: String(result.summary.decision_count ?? 0),  color: 'var(--c-brand-3)' },
                   { label: 'Events Fired',    value: String(result.summary.event_count ?? 0),    color: 'var(--c-brand-3)' },

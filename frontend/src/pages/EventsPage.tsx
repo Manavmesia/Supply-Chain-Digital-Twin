@@ -1,4 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import {
+  Zap,
+  Bot,
+  RotateCcw,
+  CheckCircle2,
+  List,
+  BookOpen,
+  Send,
+  Inbox,
+} from 'lucide-react';
 import { eventsApi, inventoryApi } from '../services/api';
 import type { EventRecord } from '../types';
 import {
@@ -136,23 +146,24 @@ export const EventsPage: React.FC = () => {
   return (
     <div className="page-content animate-fade-in">
       <div className="page-header">
-        <h1><span className="gradient-text">Event Bus & Autonomous Remediation</span></h1>
+        <h1>Event Bus & Autonomous Remediation</h1>
         <p>Inject synthetic events, trigger closed-loop multi-agent remediation, and monitor real-time event telemetry</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm flex items-center gap-1.5"
             onClick={handleAutonomousScan}
             disabled={isScanning}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}
           >
-            {isScanning ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : '⚡'} Run Autonomous Digital Twin Scan
+            {isScanning ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : <Zap size={13} />}
+            <span>Run Autonomous Scan</span>
           </button>
           <button
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm flex items-center gap-1.5"
             onClick={() => load(false)}
             disabled={loading}
           >
-            ↻ Refresh Stream
+            <RotateCcw size={13} />
+            <span>Refresh</span>
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
@@ -175,7 +186,7 @@ export const EventsPage: React.FC = () => {
           fontSize: '0.85rem',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '1.1rem' }}>🤖</span>
+            <Bot size={16} className="text-blue-400" />
             <span>{scanMessage}</span>
           </div>
           <button
@@ -190,7 +201,10 @@ export const EventsPage: React.FC = () => {
       <div className="grid-2">
         {/* Inject form */}
         <div className="card">
-          <h3 className="section-title mb-4">⚡ Inject Manual Event</h3>
+          <h3 className="section-title mb-4 flex items-center gap-2">
+            <Send size={16} className="text-slate-400" />
+            <span>Inject Manual Event</span>
+          </h3>
 
           <div className="form-group mb-3">
             <label className="form-label">Event Type</label>
@@ -244,32 +258,41 @@ export const EventsPage: React.FC = () => {
               borderRadius: '8px',
               fontSize: '0.8125rem',
             }}>
-              <div style={{ color: '#10b981', fontWeight: 600, marginBottom: '0.25rem' }}>
-                ✅ Event Injected: <code style={{ fontFamily: 'var(--font-mono)' }}>{formatEventId(lastInjected)}</code>
+              <div style={{ color: '#10b981', fontWeight: 600, marginBottom: '0.25rem' }} className="flex items-center gap-1.5">
+                <CheckCircle2 size={14} />
+                <span>Event Injected: <code style={{ fontFamily: 'var(--font-mono)' }}>{formatEventId(lastInjected)}</code></span>
               </div>
               {latestRemediation && (
                 <div style={{ color: 'var(--c-text-primary)', fontSize: '0.75rem', marginTop: '0.35rem', lineHeight: '1.4' }}>
-                  <span style={{ color: '#60a5fa', fontWeight: 600 }}>🤖 Autonomous Remediation:</span> {latestRemediation}
+                  <span style={{ color: '#60a5fa', fontWeight: 600 }}>Autonomous Remediation:</span> {latestRemediation}
                 </div>
               )}
             </div>
           )}
 
           <button
-            className="btn btn-primary"
+            className="btn btn-primary flex items-center justify-center gap-2"
             style={{ width: '100%' }}
             onClick={inject}
             disabled={injecting}
           >
             {injecting ? (
               <><span className="loading-spinner" style={{ width: 14, height: 14 }} /> Injecting…</>
-            ) : '⚡ Inject Event'}
+            ) : (
+              <>
+                <Zap size={14} />
+                <span>Inject Event</span>
+              </>
+            )}
           </button>
         </div>
 
         {/* Event type catalogue */}
         <div className="card">
-          <h3 className="section-title mb-4">📚 Event Type Catalogue</h3>
+          <h3 className="section-title mb-4 flex items-center gap-2">
+            <BookOpen size={16} className="text-slate-400" />
+            <span>Event Type Catalogue</span>
+          </h3>
           <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
             {eventTypes.map((et) => (
               <div
@@ -303,9 +326,13 @@ export const EventsPage: React.FC = () => {
       {/* Event log */}
       <div className="card mt-6 animate-fade-in">
         <div className="section-header">
-          <h3 className="section-title">📋 Injected Event Log</h3>
-          <button className="btn btn-ghost btn-sm" onClick={() => { setLoading(true); load(false); }} disabled={loading}>
-            ↻ Refresh
+          <h3 className="section-title flex items-center gap-2">
+            <List size={16} className="text-slate-400" />
+            <span>Injected Event Log</span>
+          </h3>
+          <button className="btn btn-ghost btn-sm flex items-center gap-1.5" onClick={() => { setLoading(true); load(false); }} disabled={loading}>
+            <RotateCcw size={13} />
+            <span>Refresh</span>
           </button>
         </div>
 
@@ -315,7 +342,7 @@ export const EventsPage: React.FC = () => {
           </div>
         ) : events.length === 0 ? (
           <div className="empty-state">
-            <span className="empty-icon">📭</span>
+            <Inbox size={32} className="text-slate-600 mb-2" />
             <p>No events injected yet</p>
           </div>
         ) : (
@@ -351,7 +378,7 @@ export const EventsPage: React.FC = () => {
                             </span>
                             {e.remediation_summary && (
                               <div style={{ fontSize: '0.75rem', color: 'var(--c-text-secondary)', marginTop: '0.25rem' }}>
-                                <span style={{ color: '#10b981', fontWeight: 600 }}>✦ Remediated:</span> {e.remediation_summary}
+                                <span style={{ color: '#10b981', fontWeight: 600 }}>Remediated:</span> {e.remediation_summary}
                               </div>
                             )}
                           </div>
@@ -406,8 +433,9 @@ export const EventsPage: React.FC = () => {
                       {isExpanded && hasActions && (
                         <tr>
                           <td colSpan={6} style={{ background: 'var(--c-bg-subtle)', padding: '1rem 1.5rem', borderBottom: '1px solid var(--c-border)' }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#60a5fa', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              🤖 Autonomous Multi-Agent Action Log
+                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#60a5fa', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }} className="flex items-center gap-1.5">
+                              <Bot size={14} />
+                              <span>Autonomous Multi-Agent Action Log</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                               {e.autonomous_actions?.map((act, idx) => (

@@ -1,4 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  Globe,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+} from 'lucide-react';
 import type { TwinNetworkData, TwinNode } from '../../types';
 
 interface DigitalTwinCanvasProps {
@@ -34,17 +43,17 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
     }
   };
 
-  const NODE_COLORS: Record<string, { bg: string; border: string; glow: string; icon: string }> = {
-    supplier:   { bg: '#8b5cf6', border: '#a78bfa', glow: 'rgba(139,92,246,0.5)', icon: '🏭' },
-    plant:      { bg: '#f97316', border: '#fb923c', glow: 'rgba(249,115,22,0.5)', icon: '⚙️' },
-    warehouse:  { bg: '#2563eb', border: '#60a5fa', glow: 'rgba(37,99,235,0.5)', icon: '🏪' },
-    market:     { bg: '#10b981', border: '#34d399', glow: 'rgba(16,185,129,0.5)', icon: '🎯' },
+  const NODE_COLORS: Record<string, { bg: string; border: string; glow: string; label: string }> = {
+    supplier:   { bg: '#0f172a', border: '#3b82f6', glow: 'rgba(59,130,246,0.3)', label: 'SUP' },
+    plant:      { bg: '#0f172a', border: '#64748b', glow: 'rgba(100,116,139,0.3)', label: 'MFG' },
+    warehouse:  { bg: '#0f172a', border: '#2563eb', glow: 'rgba(37,99,235,0.3)', label: 'WMS' },
+    market:     { bg: '#0f172a', border: '#10b981', glow: 'rgba(16,185,129,0.3)', label: 'MKT' },
   };
 
   const LANE_STYLES: Record<string, { stroke: string; strokeDash?: string; width: number }> = {
-    air:  { stroke: '#38bdf8', strokeDash: '6,4', width: 2.2 },
-    sea:  { stroke: '#3b82f6', strokeDash: '3,3', width: 2.5 },
-    road: { stroke: '#10b981', width: 1.8 },
+    air:  { stroke: '#60a5fa', strokeDash: '6,4', width: 1.8 },
+    sea:  { stroke: '#3b82f6', strokeDash: '3,3', width: 2.0 },
+    road: { stroke: '#475569', width: 1.5 },
   };
 
   const filteredLanes = (data?.lanes || []).filter((l) => {
@@ -64,10 +73,10 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
         position: 'relative',
         padding: 0,
         overflow: 'hidden',
-        background: 'radial-gradient(ellipse at 50% 20%, #172033 0%, #0d121f 100%)',
-        border: '1px solid rgba(56, 189, 248, 0.25)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-        borderRadius: '12px',
+        background: '#090d16',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: 'none',
+        borderRadius: '8px',
         minHeight: '540px',
       }}
     >
@@ -91,15 +100,14 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
               width: 32,
               height: 32,
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #2563eb, #38bdf8)',
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.1rem',
-              boxShadow: '0 0 12px rgba(56, 189, 248, 0.4)',
             }}
           >
-            🌐
+            <Globe size={18} className="text-cyan-400" />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -158,7 +166,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   textTransform: 'capitalize',
                 }}
               >
-                {mode === 'all' ? 'All Lanes' : mode === 'critical' ? '⚠️ High Risk' : mode}
+                {mode === 'all' ? 'All Lanes' : mode === 'critical' ? 'High Risk' : mode}
               </button>
             ))}
           </div>
@@ -170,7 +178,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
               title="Refresh twin telemetry"
               style={{ padding: '6px 10px', height: '30px' }}
             >
-              ↻
+              <RotateCcw size={13} />
             </button>
           )}
 
@@ -180,7 +188,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
             title="Toggle fullscreen view"
             style={{ padding: '6px 10px', height: '30px' }}
           >
-            {isFullscreen ? '✕' : '⛶'}
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           </button>
         </div>
       </div>
@@ -326,25 +334,26 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                 e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
               }}
             >
-              {/* Node Badge / Pulse */}
+              {/* Node Badge */}
               <div
                 style={{
-                  width: isSelected ? 42 : 34,
-                  height: isSelected ? 42 : 34,
-                  borderRadius: node.type === 'supplier' ? '8px' : '50%',
-                  background: `linear-gradient(135deg, ${cfg.bg}, #0f172a)`,
-                  border: `2px solid ${isSelected ? '#38bdf8' : cfg.border}`,
-                  boxShadow: isSelected
-                    ? `0 0 20px #38bdf8, inset 0 0 8px ${cfg.glow}`
-                    : `0 0 10px ${cfg.glow}`,
+                  width: isSelected ? 34 : 28,
+                  height: isSelected ? 34 : 28,
+                  borderRadius: '6px',
+                  background: '#0f172a',
+                  border: `1.5px solid ${isSelected ? '#60a5fa' : cfg.border}`,
+                  boxShadow: isSelected ? '0 0 10px rgba(59, 130, 246, 0.4)' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: isSelected ? '1.1rem' : '0.9rem',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  color: isSelected ? '#ffffff' : '#cbd5e1',
                   position: 'relative',
                 }}
               >
-                {cfg.icon}
+                {cfg.label}
 
                 {/* Status Dot */}
                 {isWarning && (
@@ -406,8 +415,8 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '1.2rem' }}>
-                  {NODE_COLORS[selectedNode.type]?.icon ?? '📍'}
+                <span style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '2px 5px', borderRadius: '3px', color: '#cbd5e1' }}>
+                  {NODE_COLORS[selectedNode.type]?.label ?? 'NODE'}
                 </span>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
@@ -425,10 +434,10 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   border: 'none',
                   color: '#94a3b8',
                   cursor: 'pointer',
-                  fontSize: '1rem',
+                  padding: 2,
                 }}
               >
-                ✕
+                <X size={15} />
               </button>
             </div>
 
@@ -469,12 +478,14 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                 </div>
 
                 {(selectedNode.low_stock_count ?? 0) > 0 ? (
-                  <div style={{ fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245,158,11,0.1)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.3)' }}>
-                    ⚠️ {selectedNode.low_stock_count} SKU locations below safety stock buffer
+                  <div style={{ fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245,158,11,0.1)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={13} />
+                    <span>{selectedNode.low_stock_count} SKU locations below safety stock buffer</span>
                   </div>
                 ) : (
-                  <div style={{ fontSize: '0.72rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(16,185,129,0.3)' }}>
-                    ✓ Safety stock buffers verified optimal
+                  <div style={{ fontSize: '0.72rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={13} />
+                    <span>Safety stock buffers verified optimal</span>
                   </div>
                 )}
 

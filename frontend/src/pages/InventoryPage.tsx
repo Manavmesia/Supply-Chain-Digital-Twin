@@ -2,17 +2,29 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { inventoryApi } from '../services/api';
 import type { InventoryRecord, InventorySummary, PurchaseOrder } from '../types';
 import { formatCurrency, formatPoId } from '../utils/formatters';
+import {
+  Sparkles,
+  CheckCircle2,
+  RefreshCw,
+  Warehouse,
+  Package,
+  AlertTriangle,
+  Target,
+  Bot,
+  Check,
+  Boxes,
+} from 'lucide-react';
 
-const STATUS_CONFIG = {
-  ok:       { color: '#10b981', label: 'OK' },
-  low:      { color: '#f59e0b', label: 'Low Stock' },
-  critical: { color: '#ef4444', label: 'Critical' },
+const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
+  ok:       { color: '#34d399', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.2)', label: 'Normal' },
+  low:      { color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.2)', label: 'Low Stock' },
+  critical: { color: '#f87171', bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.2)', label: 'Critical' },
 };
 
 const PO_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  in_transit: { color: '#3b82f6', label: 'In Transit' },
-  draft:      { color: '#f59e0b', label: 'Drafted' },
-  received:   { color: '#10b981', label: 'Received' },
+  in_transit: { color: '#60a5fa', label: 'In Transit' },
+  draft:      { color: '#94a3b8', label: 'Drafted' },
+  received:   { color: '#34d399', label: 'Received' },
 };
 
 export const InventoryPage: React.FC = () => {
@@ -148,37 +160,45 @@ export const InventoryPage: React.FC = () => {
   );
 
   return (
-    <div className="page-content animate-fade-in">
-      <div className="page-header">
-        <h1><span className="gradient-text">Inventory Intelligence</span></h1>
-        <p>Live stock levels across all warehouses with safety stock monitoring</p>
+    <div className="page-content animate-fade-in" style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto', color: '#f8fafc' }}>
+      <div className="page-header" style={{ marginBottom: '20px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#f8fafc' }}>
+          Warehouse Inventory (WMS)
+        </h1>
+        <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+          Stock levels across regional hubs with automated safety stock replenishment
+        </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary btn-sm"
             onClick={handleAutonomousScan}
             disabled={isScanning || isAutoHealing}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#2563eb', border: 'none', borderRadius: '5px', fontWeight: 600, fontSize: '12px' }}
           >
-            {isScanning ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : '⚡'} Run Autonomous Agent Scan
+            <Sparkles size={13} className={isScanning ? 'animate-spin' : ''} />
+            {isScanning ? 'Scanning Network...' : 'Run Autonomous Agent Scan'}
           </button>
           <button
             className="btn btn-secondary btn-sm"
             onClick={handleAutoHealAll}
             disabled={isScanning || isAutoHealing}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(16,185,129,0.4)', color: '#10b981' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '5px', fontSize: '12px' }}
           >
-            {isAutoHealing ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : '✦'} Commit All Inbound Stock
+            <CheckCircle2 size={13} />
+            Commit All Inbound Stock
           </button>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => { setLoading(true); fetchInventory(false); }}
             disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '5px', fontSize: '12px' }}
           >
-            ↻ Refresh Inventory
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Refresh
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
-            Live Auto-Sync (3.5s) • Updated {lastUpdated.toLocaleTimeString()}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+            Synced {lastUpdated.toLocaleTimeString()}
           </div>
         </div>
       </div>
@@ -197,7 +217,7 @@ export const InventoryPage: React.FC = () => {
           fontSize: '0.85rem',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '1.1rem' }}>🤖</span>
+            <Bot size={16} className="text-blue-400" />
             <span>{scanMessage}</span>
           </div>
           <button
@@ -215,35 +235,33 @@ export const InventoryPage: React.FC = () => {
           {
             label: 'Total Locations',
             value: summary?.total_sku_locations ?? '—',
-            color: '#3b82f6',
-            icon: '🏪',
+            icon: Warehouse,
           },
           {
             label: 'Net Available Units',
             value: summary ? summary.net_available_units.toLocaleString() : '—',
-            color: '#10b981',
-            icon: '📦',
+            icon: Package,
           },
           {
             label: 'Low Stock Alerts',
             value: summary?.low_stock_locations ?? '—',
-            color: '#f59e0b',
-            icon: '⚠️',
+            icon: AlertTriangle,
           },
           {
             label: 'Stock Availability',
             value: summary ? `${summary.fill_rate_pct}%` : '—',
             sub: 'Target: ≥ 95%',
-            color: summary && summary.fill_rate_pct >= 95 ? '#10b981' : '#ef4444',
-            icon: '🎯',
+            icon: Target,
           },
-        ].map(({ label, value, sub, color, icon }) => (
-          <div key={label} className="card" style={{ borderTop: `2px solid ${color}` }}>
-            <span style={{ fontSize: '1.5rem' }}>{icon}</span>
-            <div className="kpi-value" style={{ color, fontSize: '1.75rem', margin: '0.5rem 0' }}>
+        ].map(({ label, value, sub, icon: Icon }) => (
+          <div key={label} className="card">
+            <div className="flex justify-between items-start mb-2">
+              <span className="kpi-label">{label}</span>
+              <Icon size={16} className="text-slate-400" />
+            </div>
+            <div className="kpi-value" style={{ fontSize: '1.75rem', margin: '0.25rem 0' }}>
               {loading ? <div className="skeleton" style={{ height: '28px', width: '80px' }} /> : value}
             </div>
-            <div className="kpi-label">{label}</div>
             {sub && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>{sub}</div>}
           </div>
         ))}
@@ -284,7 +302,7 @@ export const InventoryPage: React.FC = () => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">
-            <span className="empty-icon">📦</span>
+            <Package size={32} className="text-slate-600 mb-2" />
             <p>No inventory records found</p>
             <p style={{ fontSize: '0.8rem', color: '#475569' }}>
               Run the rich seed script to populate data
@@ -355,10 +373,13 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* Autonomous Inbound Replenishment & Purchase Orders */}
-      <div className="card mt-6 animate-fade-in" style={{ borderTop: '3px solid #3b82f6' }}>
+      <div className="card mt-6 animate-fade-in">
         <div className="section-header mb-4">
           <div>
-            <h3 className="section-title">🔄 Autonomous Inbound Replenishment (Self-Healing Digital Twin)</h3>
+            <h3 className="section-title flex items-center gap-2">
+              <RefreshCw size={16} className="text-slate-400" />
+              <span>Autonomous Inbound Replenishment (Self-Healing Digital Twin)</span>
+            </h3>
             <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.25rem' }}>
               When order reservations breach safety stock thresholds, ADS-03 &amp; ADS-05 autonomously draft purchase orders to restore inventory buffers.
             </p>
@@ -368,7 +389,7 @@ export const InventoryPage: React.FC = () => {
 
         {replenishmentOrders.length === 0 ? (
           <div className="empty-state">
-            <span className="empty-icon">🤝</span>
+            <Boxes size={32} className="text-slate-600 mb-2" />
             <p>No active replenishment purchase orders</p>
             <p style={{ fontSize: '0.8rem', color: '#475569' }}>
               All inventory levels are currently above reorder points
@@ -428,7 +449,7 @@ export const InventoryPage: React.FC = () => {
                       </td>
                       <td>
                         <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                          ⏱ {po.lead_time_days} days
+                          {po.lead_time_days} days
                         </span>
                       </td>
                       <td>
@@ -446,12 +467,12 @@ export const InventoryPage: React.FC = () => {
                       </td>
                       <td>
                         {po.status === 'received' ? (
-                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 600 }}>
-                            ✓ Stock Restored
+                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Check size={13} /> Stock Restored
                           </span>
                         ) : (
                           <button
-                            className="btn btn-sm"
+                            className="btn btn-sm flex items-center gap-1.5"
                             style={{
                               background: '#10b981',
                               color: '#fff',
@@ -463,7 +484,8 @@ export const InventoryPage: React.FC = () => {
                             onClick={() => handleReceiveStock(po.po_id)}
                             disabled={receivingPoId === po.po_id}
                           >
-                            {receivingPoId === po.po_id ? 'Receiving…' : '✓ Receive Stock'}
+                            <Check size={13} />
+                            <span>{receivingPoId === po.po_id ? 'Receiving…' : 'Receive Stock'}</span>
                           </button>
                         )}
                       </td>

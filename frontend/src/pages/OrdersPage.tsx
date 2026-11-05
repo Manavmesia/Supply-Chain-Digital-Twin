@@ -14,18 +14,18 @@ import { formatCurrency } from '../utils/formatters';
 import { Link } from 'react-router-dom';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  pending:    { label: 'Pending / Evaluating', bg: 'rgba(245, 158, 11, 0.12)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.3)' },
-  processing: { label: 'Processing & Staging', bg: 'rgba(59, 130, 246, 0.12)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
-  in_transit: { label: 'In Transit', bg: 'rgba(168, 85, 247, 0.12)', text: '#c084fc', border: 'rgba(168, 85, 247, 0.3)' },
-  delivered:  { label: 'Delivered', bg: 'rgba(16, 185, 129, 0.12)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)' },
-  cancelled:  { label: 'Cancelled', bg: 'rgba(239, 68, 68, 0.12)', text: '#f87171', border: 'rgba(239, 68, 68, 0.3)' },
+  pending:    { label: 'Evaluating', bg: 'rgba(245, 158, 11, 0.08)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.2)' },
+  processing: { label: 'Processing', bg: 'rgba(59, 130, 246, 0.08)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.2)' },
+  in_transit: { label: 'In Transit', bg: 'rgba(59, 130, 246, 0.08)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.2)' },
+  delivered:  { label: 'Delivered', bg: 'rgba(16, 185, 129, 0.08)', text: '#34d399', border: 'rgba(16, 185, 129, 0.2)' },
+  cancelled:  { label: 'Cancelled', bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
 };
 
 const PRIORITY_BADGES: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'rgba(239, 68, 68, 0.2)', text: '#fca5a5' },
-  high:     { bg: 'rgba(245, 158, 11, 0.2)', text: '#fcd34d' },
-  standard: { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd' },
-  low:      { bg: 'rgba(148, 163, 184, 0.2)', text: '#cbd5e1' },
+  critical: { bg: 'rgba(239, 68, 68, 0.1)', text: '#fca5a5' },
+  high:     { bg: 'rgba(245, 158, 11, 0.1)', text: '#fcd34d' },
+  standard: { bg: 'rgba(255, 255, 255, 0.04)', text: '#cbd5e1' },
+  low:      { bg: 'rgba(255, 255, 255, 0.03)', text: '#94a3b8' },
 };
 
 const BASELINE_CUSTOMERS = [

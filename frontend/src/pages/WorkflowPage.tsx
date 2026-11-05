@@ -1,4 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Activity,
+  AlertTriangle,
+  Check,
+  History,
+  Play,
+  RotateCcw,
+  Sliders,
+  ShoppingCart,
+  X,
+} from 'lucide-react';
 import { workflowApi } from '../services/api';
 import type { WorkflowStatus, AgentTrace, WorkflowSummary } from '../types';
 import {
@@ -94,7 +105,7 @@ function OutputDiff({ input, output }: { input: Record<string, unknown>; output:
       {changedKeys.length > 0 && (
         <div style={{ marginBottom: '1rem' }}>
           <p style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            ✦ Changed / Added Keys ({changedKeys.length})
+            Changed / Added Keys ({changedKeys.length})
           </p>
           {changedKeys.map(k => (
             <div key={k} style={{ marginBottom: '0.75rem' }}>
@@ -174,11 +185,11 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
   const completedCount = trace.filter(t => t.status === 'completed').length;
   const failedCount = trace.filter(t => t.status === 'failed').length;
 
-  const TABS: { id: TraceTab; label: string; icon: string }[] = [
-    { id: 'output', label: 'Output Diff', icon: '⬆' },
-    { id: 'input', label: 'Input State', icon: '⬇' },
-    { id: 'decision', label: 'Decision', icon: '⚖' },
-    { id: 'events', label: 'Events', icon: '📡' },
+  const TABS: { id: TraceTab; label: string }[] = [
+    { id: 'output', label: 'Output Diff' },
+    { id: 'input', label: 'Input State' },
+    { id: 'decision', label: 'Decision' },
+    { id: 'events', label: 'Events' },
   ];
 
   return (
@@ -195,16 +206,17 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
         gap: '0.75rem',
       }}>
         <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--c-text-primary)' }}>
-            🔬 Exact Agent Trace
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--c-text-primary)' }} className="flex items-center gap-2">
+            <Activity size={16} className="text-slate-400" />
+            <span>Exact Agent Trace</span>
           </h3>
           <span className="badge badge-info">{trace.length} agents</span>
           <span style={{ fontSize: '0.72rem', color: '#10b981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 8px', borderRadius: '4px' }}>
-            ✓ {completedCount} completed
+            {completedCount} completed
           </span>
           {failedCount > 0 && (
             <span style={{ fontSize: '0.72rem', color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', padding: '2px 8px', borderRadius: '4px' }}>
-              ✗ {failedCount} failed
+              {failedCount} failed
             </span>
           )}
           <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
@@ -352,12 +364,12 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
                   {t.decision && (
                     <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '3px', background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
-                      ⚖ decision
+                      Decision
                     </span>
                   )}
                   {eventsWithPayload.length > 0 && (
                     <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '3px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.25)' }}>
-                      📡 {eventsWithPayload.length} event{eventsWithPayload.length > 1 ? 's' : ''}
+                      {eventsWithPayload.length} event{eventsWithPayload.length > 1 ? 's' : ''}
                     </span>
                   )}
                   <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '3px', background: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.2)' }}>
@@ -408,7 +420,7 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                           transition: 'all 0.15s',
                         }}
                       >
-                        {tb.icon} {tb.label}
+                        {tb.label}
                       </button>
                     ))}
                   </div>
@@ -767,8 +779,9 @@ export const WorkflowPage: React.FC = () => {
           }}
         >
           <div className="flex items-center gap-3" style={{ flexWrap: 'wrap', flex: 1 }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--c-text-primary)' }}>
-              📋 Workflow History ({recentWorkflows.length}):
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--c-text-primary)' }} className="flex items-center gap-1.5">
+              <History size={15} className="text-slate-400" />
+              <span>Workflow History ({recentWorkflows.length}):</span>
             </span>
             {loadingHistory && <span className="loading-spinner" style={{ width: 14, height: 14 }} />}
             <select
@@ -783,7 +796,7 @@ export const WorkflowPage: React.FC = () => {
                 }
               }}
             >
-              <option value="">＋ Start Fresh Order...</option>
+              <option value="">+ Start Fresh Order...</option>
               {recentWorkflows.map((w) => (
                 <option key={w.workflow_id} value={w.workflow_id}>
                   {formatOrderId(w.order_id)} • {getCustomerName(w.customer_id)} • {w.workflow_status.toUpperCase()} • {formatCurrency(w.total_amount)}
@@ -803,7 +816,7 @@ export const WorkflowPage: React.FC = () => {
               onClick={resetForNewWorkflow}
               style={{ fontSize: '0.8rem' }}
             >
-              ＋ New Order Flow
+              + New Order Flow
             </button>
           </div>
         </div>
@@ -812,7 +825,10 @@ export const WorkflowPage: React.FC = () => {
       <div className="grid-2">
         {/* Submit form */}
         <div className="card">
-          <h3 className="section-title mb-4">🛒 New Order Workflow</h3>
+          <h3 className="section-title mb-4 flex items-center gap-2">
+            <ShoppingCart size={16} className="text-slate-400" />
+            <span>New Order Workflow</span>
+          </h3>
 
           <div className="form-group mb-4">
             <label className="form-label">Client / Enterprise Account</label>
@@ -821,10 +837,10 @@ export const WorkflowPage: React.FC = () => {
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
             >
-              <option value="50000000-0000-0000-0000-000000000001">🏢 Siemens Global Automations (Enterprise Tier)</option>
-              <option value="50000000-0000-0000-0000-000000000002">⚡ Tesla Energy & Storage (Strategic Partner)</option>
-              <option value="50000000-0000-0000-0000-000000000003">🏭 Schneider Electric Grid (Critical Infrastructure)</option>
-              <option value="50000000-0000-0000-0000-000000000004">✈️ Honeywell Aerospace (Commercial Tier)</option>
+              <option value="50000000-0000-0000-0000-000000000001">Siemens Global Automations (Enterprise Tier)</option>
+              <option value="50000000-0000-0000-0000-000000000002">Tesla Energy & Storage (Strategic Partner)</option>
+              <option value="50000000-0000-0000-0000-000000000003">Schneider Electric Grid (Critical Infrastructure)</option>
+              <option value="50000000-0000-0000-0000-000000000004">Honeywell Aerospace (Commercial Tier)</option>
             </select>
             <div className="flex gap-2 items-center mt-2" style={{ fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>
               <span>Account: <strong style={{ color: 'var(--c-brand-1)' }}>{CUSTOMER_DIRECTORY[customerId]?.code || 'CUST-SIEMENS'}</strong></span>
@@ -857,10 +873,13 @@ export const WorkflowPage: React.FC = () => {
                   onChange={(e) => updateItem(i, 'quantity', e.target.value)}
                 />
                 <button
-                  className="btn btn-danger btn-sm"
+                  className="btn btn-danger btn-sm flex items-center justify-center"
+                  style={{ width: '32px', height: '32px', padding: 0 }}
                   onClick={() => removeItem(i)}
                   disabled={items.length === 1}
-                >✕</button>
+                >
+                  <X size={13} />
+                </button>
               </div>
             ))}
             <div className="flex justify-between items-center mt-2">
@@ -877,30 +896,39 @@ export const WorkflowPage: React.FC = () => {
           </div>
 
           {error && (
-            <div className="alert-error mb-4">
-              ⚠️ {error}
+            <div className="alert-error mb-4 flex items-center gap-2">
+              <AlertTriangle size={15} />
+              <span>{error}</span>
             </div>
           )}
 
           <button
-            className="btn btn-primary"
+            className="btn btn-primary flex items-center justify-center gap-2"
             style={{ width: '100%' }}
             onClick={submit}
             disabled={phase === 'running'}
           >
             {phase === 'running' ? (
               <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Running 18-Agent Pipeline…</>
-            ) : '🚀 Start Workflow'}
+            ) : (
+              <>
+                <Play size={15} />
+                <span>Start Workflow</span>
+              </>
+            )}
           </button>
         </div>
 
         {/* Status panel */}
         <div className="card flex flex-col justify-between">
           <div>
-            <h3 className="section-title mb-4">📡 Workflow Status</h3>
+            <h3 className="section-title mb-4 flex items-center gap-2">
+              <Activity size={16} className="text-slate-400" />
+              <span>Workflow Status</span>
+            </h3>
             {phase === 'idle' && !workflowId && (
               <div className="empty-state">
-                <span className="empty-icon">⚡</span>
+                <Activity size={32} className="text-slate-600 mb-2" />
                 <p>Submit an order to start the workflow</p>
               </div>
             )}
@@ -966,26 +994,31 @@ export const WorkflowPage: React.FC = () => {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <div>
-                  <strong>⚠️ Executive Approval Required</strong>
-                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: 'var(--c-text-secondary)' }}>
-                    High-risk or budget threshold reached. Awaiting executive governance verdict.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={18} />
+                  <div>
+                    <strong>Executive Approval Required</strong>
+                    <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: 'var(--c-text-secondary)' }}>
+                      High-risk or budget threshold reached. Awaiting executive governance verdict.
+                    </p>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
-                    className="btn btn-sm"
+                    className="btn btn-sm flex items-center gap-1.5"
                     style={{ background: '#10b981', color: '#fff', border: 'none', fontWeight: 600, padding: '6px 14px' }}
                     onClick={handleApprove}
                   >
-                    ✓ Approve Order
+                    <Check size={14} />
+                    <span>Approve Order</span>
                   </button>
                   <button
-                    className="btn btn-sm btn-danger"
+                    className="btn btn-sm btn-danger flex items-center gap-1.5"
                     style={{ fontWeight: 600, padding: '6px 14px' }}
                     onClick={handleReject}
                   >
-                    ✕ Reject Order
+                    <X size={14} />
+                    <span>Reject Order</span>
                   </button>
                 </div>
               </div>
@@ -1007,8 +1040,9 @@ export const WorkflowPage: React.FC = () => {
               </h3>
             </div>
             <div className="flex gap-2 items-center">
-              <span className="badge badge-success" style={{ textTransform: 'uppercase' }}>
-                ✓ {String(orderData.status || 'delivered')}
+              <span className="badge badge-success flex items-center gap-1" style={{ textTransform: 'uppercase' }}>
+                <Check size={12} />
+                <span>{String(orderData.status || 'delivered')}</span>
               </span>
               <span className="badge badge-info">Priority: {String(orderData.priority || 'Standard')}</span>
             </div>
@@ -1034,7 +1068,7 @@ export const WorkflowPage: React.FC = () => {
             <div style={{ background: 'var(--c-bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--c-border)' }}>
               <span style={{ fontSize: '0.7rem', color: 'var(--c-text-muted)', textTransform: 'uppercase' }}>Executive Consensus</span>
               <p style={{ margin: '0.2rem 0 0', fontSize: '0.95rem', fontWeight: 600, color: '#3b82f6' }}>
-                {execDecision?.approved ? 'Executive Approved ✓' : 'Consensus Standard'}
+                {execDecision?.approved ? 'Executive Approved' : 'Consensus Standard'}
               </p>
               <span style={{ fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
                 Approval Tier: {String(execDecision?.approval_tier || 'Auto Tier')}
@@ -1058,7 +1092,7 @@ export const WorkflowPage: React.FC = () => {
             >
               <div>
                 <strong style={{ color: '#3b82f6', fontSize: '0.85rem' }}>
-                  🔄 Autonomous Inbound Replenishment Triggered (Self-Healing Digital Twin)
+                  Autonomous Inbound Replenishment Triggered (Self-Healing Digital Twin)
                 </strong>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>
                   Inventory Agent (ADS-03) detected safety stock breaches and dispatched Supplier Agent (ADS-05) to issue {replenishmentRequests.length} inbound replenishment Purchase Order(s).
@@ -1128,7 +1162,10 @@ export const WorkflowPage: React.FC = () => {
       {/* Versioned Blackboard Monitor */}
       {status?.blackboard && Object.keys(status.blackboard).length > 0 && (
         <div className="card mt-6 animate-fade-in">
-          <h3 className="section-title mb-4">🎛️ Shared Blackboard Store & Override Control</h3>
+          <h3 className="section-title mb-4 flex items-center gap-2">
+            <Sliders size={16} className="text-slate-400" />
+            <span>Shared Blackboard Store & Override Control</span>
+          </h3>
           <p className="form-label mb-4" style={{ color: '#94a3b8' }}>
             All peer agents read/write to this decentralized board. Objections flag topics as <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>contested</span>.
           </p>
@@ -1183,18 +1220,20 @@ export const WorkflowPage: React.FC = () => {
                   <div className="flex flex-col gap-2 justify-end items-end ml-4">
                     {isContested && (
                       <button 
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm flex items-center gap-1.5"
                         onClick={() => handleOverride(topic, 'pin', latest.data)}
                       >
-                        📌 Approve (Override)
+                        <Check size={13} />
+                        <span>Approve (Override)</span>
                       </button>
                     )}
                     {isPinned && (
                       <button 
-                        className="btn btn-danger btn-sm"
+                        className="btn btn-danger btn-sm flex items-center gap-1.5"
                         onClick={() => handleOverride(topic, 'revert', {})}
                       >
-                        ↩ Revert Override
+                        <RotateCcw size={13} />
+                        <span>Revert Override</span>
                       </button>
                     )}
                   </div>

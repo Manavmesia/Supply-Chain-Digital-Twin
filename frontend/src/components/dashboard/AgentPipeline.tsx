@@ -1,30 +1,31 @@
 import React from 'react';
 import type { AgentDefinition } from '../../types';
+import { Cpu } from 'lucide-react';
 
-const LAYER_STYLE: Record<string, { color: string; bg: string; label: string }> = {
-  operational:  { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  label: 'Operational' },
-  business:     { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  label: 'Business Intelligence' },
-  coordination: { color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', label: 'Coordination' },
+const LAYER_CONFIG: Record<string, { label: string; tagColor: string }> = {
+  operational:  { label: 'Operational Layer', tagColor: '#60a5fa' },
+  business:     { label: 'Business Intelligence', tagColor: '#a78bfa' },
+  coordination: { label: 'Coordination & Consensus', tagColor: '#34d399' },
 };
 
 interface AgentPipelineProps {
   agents: AgentDefinition[];
-  activeAgents?: string[];    // agent codes that ran in the last workflow
+  activeAgents?: string[];
   loading?: boolean;
 }
 
 export const AgentPipeline: React.FC<AgentPipelineProps> = ({
-  agents, activeAgents = [], loading,
+  agents,
+  activeAgents = [],
+  loading,
 }) => {
   if (loading) {
     return (
-      <div className="card">
-        <div className="section-header">
-          <h3 className="section-title">🤖 18-Agent Pipeline</h3>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', padding: '0.5rem' }}>
+      <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '18px' }}>
+        <div style={{ height: '24px', width: '200px', background: 'rgba(255,255,255,0.04)', borderRadius: '4px', marginBottom: '16px' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px' }}>
           {Array.from({ length: 18 }).map((_, i) => (
-            <div key={i} className="skeleton" style={{ width: '110px', height: '56px', borderRadius: '8px' }} />
+            <div key={i} style={{ height: '48px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }} />
           ))}
         </div>
       </div>
@@ -35,67 +36,150 @@ export const AgentPipeline: React.FC<AgentPipelineProps> = ({
   const byLayer = (l: string) => agents.filter((a) => a.layer === l);
 
   return (
-    <div className="card animate-fade-in">
-      <div className="section-header">
-        <h3 className="section-title">
-          <span className="icon-accent">🤖</span> 18-Agent Pipeline
-        </h3>
-        <div className="flex gap-2">
-          {Object.entries(LAYER_STYLE).map(([k, s]) => (
-            <span key={k} className="badge" style={{
-              background: s.bg,
-              color: s.color,
-              border: `1px solid ${s.color}44`,
-              fontSize: '0.7rem',
-            }}>
-              {s.label}
+    <div
+      style={{
+        background: '#0f172a',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '24px',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#94a3b8',
+            }}
+          >
+            <Cpu size={15} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#f8fafc', margin: 0 }}>
+              Autonomous 18-Agent Consensus Engine
+            </h3>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>
+              LangGraph state-machine orchestrating decentralized supply chain nodes
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {Object.entries(LAYER_CONFIG).map(([k, cfg]) => (
+            <span
+              key={k}
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: cfg.tagColor,
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                padding: '3px 8px',
+                borderRadius: '4px',
+              }}
+            >
+              {cfg.label}
             </span>
           ))}
         </div>
       </div>
 
-      <div className="agent-pipeline">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {layers.map((layer) => {
-          const style = LAYER_STYLE[layer];
+          const cfg = LAYER_CONFIG[layer];
+          const layerAgents = byLayer(layer);
+
           return (
-            <div key={layer} className="agent-layer">
-              <div className="agent-layer-header" style={{ color: style.color }}>
-                <span
-                  className="agent-layer-dot"
-                  style={{ background: style.color }}
-                />
-                {style.label}
-                <span className="agent-layer-count">
-                  ({byLayer(layer).length})
-                </span>
+            <div key={layer}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#64748b',
+                  marginBottom: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>{cfg.label}</span>
+                <span style={{ color: '#475569' }}>&bull;</span>
+                <span style={{ color: '#94a3b8' }}>{layerAgents.length} agents</span>
               </div>
-              <div className="agent-layer-grid">
-                {byLayer(layer).map((agent, i) => {
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                  gap: '8px',
+                }}
+              >
+                {layerAgents.map((agent) => {
                   const isActive = activeAgents.includes(agent.code);
+
                   return (
                     <div
                       key={agent.code}
-                      className={`agent-chip ${isActive ? 'active' : ''}`}
-                      style={{
-                        border: `1px solid ${isActive ? style.color : 'var(--c-border)'}`,
-                        background: isActive ? style.bg : 'var(--c-bg-card)',
-                        animationDelay: `${i * 40}ms`,
-                      }}
                       title={agent.description}
+                      style={{
+                        background: isActive ? 'rgba(59, 130, 246, 0.08)' : '#131e33',
+                        border: isActive ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
+                        borderRadius: '6px',
+                        padding: '8px 10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '6px',
+                      }}
                     >
-                      <span
-                        className="agent-chip-code"
-                        style={{ color: isActive ? style.color : 'var(--c-text-muted)' }}
-                      >
-                        {agent.code}
-                      </span>
-                      <span className="agent-chip-name">{agent.name}</span>
-                      {isActive && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                         <span
-                          className="agent-chip-active-dot"
-                          style={{ background: style.color }}
-                        />
-                      )}
+                          style={{
+                            fontFamily: 'monospace',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            color: isActive ? '#60a5fa' : '#94a3b8',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {agent.code}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            color: '#f8fafc',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {agent.name}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          background: isActive ? '#34d399' : '#334155',
+                          flexShrink: 0,
+                        }}
+                      />
                     </div>
                   );
                 })}

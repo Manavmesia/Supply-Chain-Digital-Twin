@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { RotateCcw, Bot } from 'lucide-react';
 import { analyticsApi } from '../services/api';
 import { AgentPipeline } from '../components/dashboard/AgentPipeline';
 import type { AgentDefinition } from '../types';
@@ -80,15 +81,16 @@ export const AgentsPage: React.FC = () => {
   return (
     <div className="page-content animate-fade-in">
       <div className="page-header">
-        <h1><span className="gradient-text">Agent Control Centre</span></h1>
+        <h1>Agent Control Centre</h1>
         <p>All 18 autonomous AI agents — their roles, layers, and responsibilities</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm flex items-center gap-1.5"
             onClick={() => { setLoading(true); fetchAgents(false); }}
             disabled={loading}
           >
-            ↻ Refresh Agents
+            <RotateCcw size={13} />
+            <span>Refresh</span>
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
@@ -127,7 +129,10 @@ export const AgentsPage: React.FC = () => {
 
       {/* Agent cards grid */}
       <div className="mt-6">
-        <h3 className="section-title mb-4">📋 Agent Directory</h3>
+        <h3 className="section-title mb-4 flex items-center gap-2">
+          <Bot size={16} className="text-slate-400" />
+          <span>Agent Directory</span>
+        </h3>
         <div className="grid-3">
           {loading
             ? Array.from({ length: 18 }).map((_, i) => (

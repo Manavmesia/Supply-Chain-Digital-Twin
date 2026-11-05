@@ -17,17 +17,17 @@ import {
 } from 'lucide-react';
 
 const MODE_ICONS: Record<string, React.ReactNode> = {
-  road: <Truck className="w-4 h-4 text-emerald-400" />,
-  air: <Plane className="w-4 h-4 text-sky-400" />,
-  ocean: <Ship className="w-4 h-4 text-blue-400" />,
-  rail: <Train className="w-4 h-4 text-purple-400" />,
+  road: <Truck className="w-4 h-4 text-slate-300" />,
+  air: <Plane className="w-4 h-4 text-slate-300" />,
+  ocean: <Ship className="w-4 h-4 text-slate-300" />,
+  rail: <Train className="w-4 h-4 text-slate-300" />,
 };
 
 const STATUS_BADGES: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  in_transit: { label: 'In Transit', bg: 'rgba(59, 130, 246, 0.1)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
-  delivered: { label: 'Delivered', bg: 'rgba(16, 185, 129, 0.1)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)' },
-  delayed: { label: 'Delayed / Exception', bg: 'rgba(239, 68, 68, 0.15)', text: '#f87171', border: 'rgba(239, 68, 68, 0.4)' },
-  pending: { label: 'Pending Dispatch', bg: 'rgba(245, 158, 11, 0.1)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.3)' },
+  in_transit: { label: 'In Transit', bg: 'rgba(59, 130, 246, 0.08)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.2)' },
+  delivered: { label: 'Delivered', bg: 'rgba(16, 185, 129, 0.08)', text: '#34d399', border: 'rgba(16, 185, 129, 0.2)' },
+  delayed: { label: 'Delayed / Exception', bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
+  pending: { label: 'Pending Dispatch', bg: 'rgba(255, 255, 255, 0.04)', text: '#94a3b8', border: 'rgba(255, 255, 255, 0.08)' },
 };
 
 export const ShipmentsPage: React.FC = () => {
@@ -368,7 +368,7 @@ export const ShipmentsPage: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        background: '#2563eb',
                         border: 'none',
                         borderRadius: '5px',
                         padding: '6px 12px',
@@ -376,10 +376,9 @@ export const ShipmentsPage: React.FC = () => {
                         fontSize: '12px',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        boxShadow: '0 0 10px rgba(2, 132, 199, 0.4)',
                       }}
                     >
-                      <Zap className="w-3.5 h-3.5 text-yellow-300" />
+                      <Zap className="w-3.5 h-3.5 text-white" />
                       {reroutingId === shipment.shipment_id ? 'Rerouting...' : 'Autonomous Air Reroute'}
                     </button>
                   )}

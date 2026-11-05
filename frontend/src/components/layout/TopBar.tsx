@@ -4,13 +4,15 @@ import { RefreshCw, Database, Server, MessageSquare, Sun, Moon } from 'lucide-re
 import { healthApi } from '../../services/api';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/':          'Executive Dashboard',
-  '/workflows': 'Workflow Management',
-  '/agents':    'Agent Control Centre',
-  '/inventory': 'Inventory Intelligence',
-  '/reports':   'Reports & Analytics',
-  '/simulate':  'What-If Simulator',
-  '/events':    'Event Bus Monitor',
+  '/':              'Executive Digital Twin',
+  '/orders':        'Commercial Orders (OMS)',
+  '/shipments':     'Transportation & Logistics (TMS)',
+  '/procurement':   'Procurement & Suppliers (SRM)',
+  '/inventory':     'Warehouse Inventory (WMS)',
+  '/control-tower': 'Supply Chain Control Tower',
+  '/workflows':     'AI Agent Workflow Engine',
+  '/agents':        '18-Agent Consensus Swarm',
+  '/reports':       'Executive Synthesis Reports',
 };
 
 interface TopBarProps {
@@ -29,10 +31,10 @@ interface HealthStatus {
 
 export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
   const location = useLocation();
-  const title = PAGE_TITLES[location.pathname] ?? 'AI Supply Chain Digital Twin';
+  const title = PAGE_TITLES[location.pathname] ?? 'Supply Chain Digital Twin';
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
   });
 
   useEffect(() => {
@@ -62,6 +64,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
     <header className="topbar">
       <div className="topbar-left">
         <h2 className="topbar-title">{title}</h2>
+        <span style={{ color: '#475569', fontSize: '0.75rem' }}>/</span>
         <span className="topbar-timestamp">
           {new Date().toLocaleDateString('en-US', {
             weekday: 'short', month: 'short', day: 'numeric',
@@ -70,48 +73,49 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
       </div>
 
       <div className="topbar-right">
-        {/* Live sync pulse badge */}
+        {/* Subtle live sync status */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.4rem',
-            fontSize: '0.72rem',
-            color: '#10b981',
-            background: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.25)',
-            padding: '2px 8px',
-            borderRadius: '12px',
+            fontSize: '0.7rem',
+            color: '#94a3b8',
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            padding: '3px 8px',
+            borderRadius: '4px',
+            fontWeight: 500,
           }}
-          title="All screens automatically sync data in real time"
+          title="Telemetry and agent consensus sync automatically"
         >
           <span
             style={{
-              width: 6,
-              height: 6,
+              width: 5,
+              height: 5,
               borderRadius: '50%',
-              background: '#10b981',
-              boxShadow: '0 0 6px #10b981',
+              background: '#34d399',
             }}
           />
-          Live Real-Time Sync
+          Live Telemetry
         </div>
+
         {/* Dependency health indicators */}
         {health && (
           <div className="topbar-health">
             <DepIndicator
-              icon={<Database size={12} />}
+              icon={<Database size={11} />}
               label="DB"
               status={depStatus(health.dependencies.db)}
             />
             <DepIndicator
-              icon={<Server size={12} />}
-              label="Redis"
+              icon={<Server size={11} />}
+              label="Cache"
               status={depStatus(health.dependencies.redis)}
             />
             <DepIndicator
-              icon={<MessageSquare size={12} />}
-              label="MQ"
+              icon={<MessageSquare size={11} />}
+              label="EventBus"
               status={depStatus(health.dependencies.rabbitmq)}
             />
           </div>
@@ -121,15 +125,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
         <div
           className="topbar-system-badge"
           style={{
-            border: `1px solid ${health?.status === 'ok' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
-            color: health?.status === 'ok' ? '#10b981' : '#ef4444',
+            border: `1px solid ${health?.status === 'ok' ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
+            color: health?.status === 'ok' ? '#34d399' : '#fbbf24',
           }}
         >
           <span
             className="topbar-system-dot"
-            style={{ background: health?.status === 'ok' ? '#10b981' : '#ef4444' }}
+            style={{ background: health?.status === 'ok' ? '#10b981' : '#f59e0b' }}
           />
-          {health?.status === 'ok' ? 'Healthy' : health ? 'Degraded' : 'Checking…'}
+          {health?.status === 'ok' ? 'Operational' : 'Degraded Mode'}
         </div>
 
         <button
@@ -137,11 +141,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
           onClick={toggleTheme}
           title={theme === 'light' ? 'Switch to Dark theme' : 'Switch to Light theme'}
           aria-label="Toggle theme"
+          style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', padding: '4px 8px' }}
         >
-          {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-          <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>
-            {theme === 'light' ? 'Light' : 'Dark'}
-          </span>
+          {theme === 'light' ? <Moon size={13} /> : <Sun size={13} />}
         </button>
 
         {onRefresh && (
@@ -150,9 +152,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
             onClick={onRefresh}
             disabled={isLoading}
             title="Refresh data"
+            style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', padding: '4px 8px' }}
           >
             <RefreshCw
-              size={14}
+              size={13}
               style={{
                 animation: isLoading ? 'spin 0.7s linear infinite' : 'none',
               }}

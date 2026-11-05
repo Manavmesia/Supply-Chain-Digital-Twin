@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { FileText, Tag, Zap, Clock, RotateCcw, FileSearch } from 'lucide-react';
 import { reportsApi } from '../services/api';
 import type { Report } from '../types';
 import { formatReportId, formatWorkflowId } from '../utils/formatters';
@@ -78,15 +79,16 @@ export const ReportsPage: React.FC = () => {
   return (
     <div className="page-content animate-fade-in">
       <div className="page-header">
-        <h1><span className="gradient-text">Reports & Analytics</span></h1>
+        <h1>Reports & Analytics</h1>
         <p>ADS-18 Reporting Agent generates executive reports after every workflow</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm flex items-center gap-1.5"
             onClick={() => { setLoading(true); fetchReports(false); }}
             disabled={loading}
           >
-            ↻ Refresh Reports
+            <RotateCcw size={13} />
+            <span>Refresh</span>
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
@@ -99,7 +101,10 @@ export const ReportsPage: React.FC = () => {
         {/* Report list */}
         <div className="card">
           <div className="section-header">
-            <h3 className="section-title">📄 Report History</h3>
+            <h3 className="section-title flex items-center gap-2">
+              <FileText size={16} className="text-slate-400" />
+              <span>Report History</span>
+            </h3>
             <span className="badge badge-info">{total} total</span>
           </div>
 
@@ -110,7 +115,7 @@ export const ReportsPage: React.FC = () => {
             </div>
           ) : reports.length === 0 ? (
             <div className="empty-state">
-              <span className="empty-icon">📄</span>
+              <FileText size={32} className="text-slate-600 mb-2" />
               <p>No reports generated yet</p>
               <p style={{ fontSize: '0.8rem', color: '#475569' }}>
                 Complete a workflow to generate your first report
@@ -136,10 +141,10 @@ export const ReportsPage: React.FC = () => {
                       <span className={`badge ${sc.badge}`}>{r.status}</span>
                     </div>
                     <div className="flex gap-3 mt-2" style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      <span>🔖 {r.report_type}</span>
-                      {r.workflow_id && <span>⚡ {formatWorkflowId(r.workflow_id)}</span>}
+                      <span className="flex items-center gap-1"><Tag size={12} /> {r.report_type}</span>
+                      {r.workflow_id && <span className="flex items-center gap-1"><Zap size={12} /> {formatWorkflowId(r.workflow_id)}</span>}
                       {r.created_at && (
-                        <span>🕐 {new Date(r.created_at).toLocaleString()}</span>
+                        <span className="flex items-center gap-1"><Clock size={12} /> {new Date(r.created_at).toLocaleString()}</span>
                       )}
                     </div>
                   </div>
@@ -151,10 +156,13 @@ export const ReportsPage: React.FC = () => {
 
         {/* Report detail */}
         <div className="card">
-          <h3 className="section-title mb-4">📊 Report Detail</h3>
+          <h3 className="section-title mb-4 flex items-center gap-2">
+            <FileSearch size={16} className="text-slate-400" />
+            <span>Report Detail</span>
+          </h3>
           {!selected ? (
             <div className="empty-state">
-              <span className="empty-icon">👈</span>
+              <FileSearch size={32} className="text-slate-600 mb-2" />
               <p>Select a report to view details</p>
             </div>
           ) : (
