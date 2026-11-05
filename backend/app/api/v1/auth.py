@@ -196,13 +196,20 @@ def require_roles(*roles: str) -> Callable:
     return role_checker
 
 
-def require_authenticated_role(*roles: str) -> Callable:
+def require_authenticated_role(*roles: str | list[str]) -> Callable:
     """
     Dependency factory enforcing authentication and role membership.
     In production: strictly requires a valid Bearer token.
     In development without a token: falls back to dev admin user.
     If a token is provided (even in dev): strictly checks that its role is in `roles`.
     """
+    allowed_roles: set[str] = set()
+    for r in roles:
+        if isinstance(r, (list, tuple, set)):
+            allowed_roles.update(r)
+        else:
+            allowed_roles.add(str(r))
+
     async def role_checker(
         user: Annotated[dict[str, Any] | None, Depends(get_optional_current_user)],
     ) -> dict[str, Any]:
@@ -220,10 +227,10 @@ def require_authenticated_role(*roles: str) -> Callable:
                 )
 
         user_role = user.get("role")
-        if roles and user_role not in roles:
+        if allowed_roles and user_role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation requires one of the following roles: {list(roles)}. Current role: '{user_role}'",
+                detail=f"Operation requires one of the following roles: {sorted(allowed_roles)}. Current role: '{user_role}'",
             )
         return user
 

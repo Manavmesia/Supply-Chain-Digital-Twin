@@ -10,20 +10,24 @@ POST /api/v1/workflows/{id}/reject  — human rejection for escalated orders
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.auth import require_authenticated_role
+from app.api.v1.workflows import _run_workflow
 from app.core import persistence
+from app.core.catalog import BASELINE_CUSTOMERS, BASELINE_ORDERS, BASELINE_PRODUCTS
 from app.core.database import get_db_session
+from app.events.dispatcher import dispatch_event
+from app.models.customer import Customer
 from app.models.order import Order
 from app.models.order_item import OrderItem
-from app.models.customer import Customer
-
-from app.core.catalog import BASELINE_ORDERS
+from app.schemas.order_request import OrderItemRequest, OrderWorkflowRequest
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -244,3 +248,145 @@ async def get_order(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"Order '{order_id}' not found",
     )
+
+
+def _safe_uuid(val: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(val))
+    except (ValueError, AttributeError):
+        return uuid.uuid5(uuid.NAMESPACE_DNS, str(val))
+
+
+class CommercialOrderItemInput(BaseModel):
+    product_id: str
+    quantity: int = Field(gt=0, le=100_000)
+
+
+class CreateCommercialOrderPayload(BaseModel):
+    customer_id: str
+    items: list[CommercialOrderItemInput] = Field(min_length=1, max_length=50)
+    priority: Literal["low", "standard", "high", "critical"] = "standard"
+    notes: str | None = None
+
+
+class UpdateOrderStatusPayload(BaseModel):
+    status: Literal["pending", "processing", "in_transit", "delivered", "cancelled"]
+
+
+@router.post("", status_code=status.HTTP_201_CREATED, summary="Create a commercial order and execute autonomous fulfillment")
+async def create_commercial_order(
+    payload: CreateCommercialOrderPayload,
+    background_tasks: BackgroundTasks,
+    current_user: dict[str, Any] = Depends(require_authenticated_role(["admin", "operator", "viewer"])),
+) -> dict[str, Any]:
+    """Create a real commercial customer order, run LangGraph 18-agent autonomous fulfillment, and dispatch shipment."""
+    cust_id_str = str(payload.customer_id)
+    cust_name = "Enterprise Client"
+    for c in BASELINE_CUSTOMERS:
+        if c[0] == cust_id_str:
+            cust_name = c[1]
+            break
+
+    # Calculate item totals and lookup product names
+    order_items_records = []
+    total_val = 0.0
+    for it in payload.items:
+        pid_str = str(it.product_id)
+        pname = "Enterprise Component"
+        sku = "SKU-001"
+        uprice = 150.0
+        for p in BASELINE_PRODUCTS:
+            if p[0] == pid_str:
+                sku = p[1]
+                pname = p[2]
+                uprice = float(p[5])
+                break
+        ltotal = round(uprice * it.quantity, 2)
+        total_val += ltotal
+        order_items_records.append({
+            "order_item_id": f"item-{uuid.uuid4().hex[:8]}",
+            "product_id": pid_str,
+            "sku": sku,
+            "product_name": pname,
+            "quantity": it.quantity,
+            "unit_price": uprice,
+            "line_total": ltotal,
+        })
+
+    order_id = f"ord-{uuid.uuid4().hex[:12]}"
+    workflow_id = str(uuid.uuid4())
+    correlation_id = str(uuid.uuid4())
+
+    # Save to SQLite persistence
+    order_record = {
+        "order_id": order_id,
+        "customer_id": cust_id_str,
+        "customer_name": cust_name,
+        "status": "pending",
+        "priority": payload.priority,
+        "total_amount": f"{total_val:.2f}",
+        "currency": "USD",
+        "workflow_id": workflow_id,
+    }
+    persistence.save_order_with_items(order_record, order_items_records)
+
+    # Automatically provision a linked TMS shipment
+    shipment_id = f"shp-{uuid.uuid4().hex[:12]}"
+    tracking_num = f"TRK-OMS-{uuid.uuid4().hex[:6].upper()}"
+    persistence.save_shipment({
+        "shipment_id": shipment_id,
+        "order_id": order_id,
+        "carrier": "Global Intermodal Logistics",
+        "carrier_tracking_id": tracking_num,
+        "freight_mode": "road",
+        "origin": "Newark Distribution Center",
+        "destination": f"{cust_name} Inbound Facility",
+        "status": "pending",
+        "current_location": "Order Processing & Staging",
+        "workflow_id": workflow_id,
+    })
+
+    # Trigger 18-agent LangGraph workflow
+    wf_request = OrderWorkflowRequest(
+        customer_id=_safe_uuid(payload.customer_id),
+        items=[OrderItemRequest(product_id=_safe_uuid(it.product_id), quantity=it.quantity) for it in payload.items],
+    )
+    background_tasks.add_task(_run_workflow, workflow_id, correlation_id, wf_request)
+
+    # Dispatch OrderPlaced canonical event
+    await dispatch_event(
+        event_type="OrderPlaced",
+        source_agent="OMS-CommercialPortal",
+        payload={
+            "order_id": order_id,
+            "customer_name": cust_name,
+            "total_amount": total_val,
+            "workflow_id": workflow_id,
+        },
+    )
+
+    return {
+        "order_id": order_id,
+        "status": "pending",
+        "priority": payload.priority,
+        "customer_name": cust_name,
+        "total_amount": f"{total_val:.2f}",
+        "workflow_id": workflow_id,
+        "shipment_id": shipment_id,
+        "tracking_number": tracking_num,
+        "items_count": len(order_items_records),
+    }
+
+
+@router.patch("/{order_id}/status", summary="Update commercial order status")
+async def update_order_status_endpoint(
+    order_id: str,
+    payload: UpdateOrderStatusPayload,
+    current_user: dict[str, Any] = Depends(require_authenticated_role(["admin", "operator", "viewer"])),
+) -> dict[str, Any]:
+    """Manually or programmatically transition commercial order status."""
+    success = persistence.update_order_status(order_id, payload.status)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Order '{order_id}' not found")
+    return {"order_id": order_id, "status": payload.status, "updated": True}
+

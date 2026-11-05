@@ -43,6 +43,7 @@ from app.core.catalog import (
     BASELINE_PURCHASE_ORDERS as _BASELINE_PURCHASE_ORDERS,
     BASELINE_REPORTS as _BASELINE_REPORTS,
     BASELINE_ROUTES as _BASELINE_ROUTES,
+    BASELINE_SHIPMENTS as _BASELINE_SHIPMENTS,
     BASELINE_SUPPLIERS as _BASELINE_SUPPLIERS,
     BASELINE_WAREHOUSES as _BASELINE_WAREHOUSES,
 )
@@ -208,6 +209,27 @@ def init_db() -> None:
                 workflow_id TEXT,
                 created_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS shipments (
+                shipment_id TEXT PRIMARY KEY,
+                order_id TEXT,
+                warehouse_id TEXT,
+                carrier TEXT,
+                carrier_tracking_id TEXT,
+                route TEXT,
+                freight_mode TEXT,
+                origin TEXT,
+                destination TEXT,
+                eta TEXT,
+                actual_delivery TEXT,
+                status TEXT DEFAULT 'pending',
+                delay_reason TEXT,
+                current_location TEXT,
+                carrier_id TEXT,
+                workflow_id TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
             """
         )
 
@@ -336,6 +358,27 @@ def init_db() -> None:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _BASELINE_PURCHASE_ORDERS,
+            )
+
+        # Seed baseline shipments if empty
+        cur = conn.execute("SELECT COUNT(*) as count FROM shipments")
+        if cur.fetchone()["count"] == 0:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO shipments (
+                    shipment_id, order_id, warehouse_id, carrier, carrier_tracking_id,
+                    route, freight_mode, origin, destination, eta, actual_delivery,
+                    status, delay_reason, current_location, carrier_id, workflow_id,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8], s[9],
+                        s[10], s[11], s[12], s[13], s[14], s[15], s[16], s[16],
+                    )
+                    for s in _BASELINE_SHIPMENTS
+                ],
             )
 
 
@@ -1432,3 +1475,226 @@ def receive_purchase_order(po_id: str) -> dict[str, Any] | None:
         "quantity_replenished": row["quantity"],
         "warehouse_id": row["warehouse_id"],
     }
+
+
+# ── Transportation & Logistics (TMS Shipments) ──────────────────────────────
+
+def save_shipment(shipment: dict[str, Any]) -> str:
+    """Save or update a shipment record."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    shp_id = str(shipment.get("shipment_id") or f"shp-{uuid.uuid4().hex[:12]}")
+    with _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO shipments (
+                shipment_id, order_id, warehouse_id, carrier, carrier_tracking_id,
+                route, freight_mode, origin, destination, eta, actual_delivery,
+                status, delay_reason, current_location, carrier_id, workflow_id,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(shipment_id) DO UPDATE SET
+                carrier = excluded.carrier,
+                freight_mode = excluded.freight_mode,
+                status = excluded.status,
+                delay_reason = excluded.delay_reason,
+                current_location = excluded.current_location,
+                eta = excluded.eta,
+                actual_delivery = excluded.actual_delivery,
+                updated_at = excluded.updated_at
+            """,
+            (
+                shp_id,
+                str(shipment.get("order_id")) if shipment.get("order_id") else None,
+                str(shipment.get("warehouse_id")) if shipment.get("warehouse_id") else None,
+                str(shipment.get("carrier", "Global Intermodal Logistics")),
+                str(shipment.get("carrier_tracking_id") or f"TRK-{uuid.uuid4().hex[:8].upper()}"),
+                str(shipment.get("route", "Direct Route")),
+                str(shipment.get("freight_mode", "road")),
+                str(shipment.get("origin", "Distribution Center")),
+                str(shipment.get("destination", "Customer Destination")),
+                str(shipment.get("eta") or now_iso),
+                str(shipment.get("actual_delivery")) if shipment.get("actual_delivery") else None,
+                str(shipment.get("status", "pending")),
+                str(shipment.get("delay_reason")) if shipment.get("delay_reason") else None,
+                str(shipment.get("current_location", "Origin Hub")),
+                str(shipment.get("carrier_id")) if shipment.get("carrier_id") else None,
+                str(shipment.get("workflow_id")) if shipment.get("workflow_id") else None,
+                str(shipment.get("created_at") or now_iso),
+                now_iso,
+            ),
+        )
+    return shp_id
+
+
+def list_shipments(
+    skip: int = 0,
+    limit: int = 50,
+    status_filter: str | None = None,
+    freight_mode: str | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Retrieve paginated list of shipments with optional filtering."""
+    with _get_connection() as conn:
+        base_query = "FROM shipments"
+        clauses = []
+        params: list[Any] = []
+        if status_filter:
+            clauses.append("status = ?")
+            params.append(status_filter)
+        if freight_mode:
+            clauses.append("freight_mode = ?")
+            params.append(freight_mode)
+
+        if clauses:
+            base_query += " WHERE " + " AND ".join(clauses)
+
+        count_sql = f"SELECT COUNT(*) as count {base_query}"
+        total = conn.execute(count_sql, params).fetchone()["count"]
+
+        data_sql = f"SELECT * {base_query} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        rows = conn.execute(data_sql, params + [limit, skip]).fetchall()
+        return [dict(r) for r in rows], total
+
+
+def get_shipment(shipment_id: str) -> dict[str, Any] | None:
+    """Retrieve shipment details by shipment_id or carrier_tracking_id."""
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM shipments WHERE shipment_id = ? OR carrier_tracking_id = ?",
+            (shipment_id, shipment_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_shipment_status(
+    shipment_id: str,
+    status: str,
+    current_location: str | None = None,
+    delay_reason: str | None = None,
+) -> dict[str, Any] | None:
+    """Update shipment status, telemetry waypoint, and delay note."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM shipments WHERE shipment_id = ?",
+            (shipment_id,),
+        ).fetchone()
+        if not row:
+            return None
+
+        actual_del = now_iso if status == "delivered" else row["actual_delivery"]
+        loc = current_location or row["current_location"]
+        del_reason = delay_reason if delay_reason is not None else row["delay_reason"]
+
+        conn.execute(
+            """
+            UPDATE shipments
+            SET status = ?, current_location = ?, delay_reason = ?, actual_delivery = ?, updated_at = ?
+            WHERE shipment_id = ?
+            """,
+            (status, loc, del_reason, actual_del, now_iso, shipment_id),
+        )
+
+        updated_row = conn.execute(
+            "SELECT * FROM shipments WHERE shipment_id = ?",
+            (shipment_id,),
+        ).fetchone()
+        return dict(updated_row) if updated_row else None
+
+
+def reroute_shipment(
+    shipment_id: str,
+    new_mode: str,
+    new_carrier: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any] | None:
+    """Autonomous or manual reroute: shifts shipment freight mode (e.g. road/ocean -> air)."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM shipments WHERE shipment_id = ?",
+            (shipment_id,),
+        ).fetchone()
+        if not row:
+            return None
+
+        carrier_name = new_carrier or ("Express Air Logistics" if new_mode == "air" else row["carrier"])
+        note = f"Rerouted to {new_mode.upper()} via {carrier_name}: {reason or 'Disruption bypass'}"
+        conn.execute(
+            """
+            UPDATE shipments
+            SET freight_mode = ?, carrier = ?, delay_reason = ?, status = 'in_transit', updated_at = ?
+            WHERE shipment_id = ?
+            """,
+            (new_mode, carrier_name, note, now_iso, shipment_id),
+        )
+        updated = conn.execute(
+            "SELECT * FROM shipments WHERE shipment_id = ?",
+            (shipment_id,),
+        ).fetchone()
+        return dict(updated) if updated else None
+
+
+# ── Commercial Orders (OMS) ──────────────────────────────────────────────────
+
+def save_order_with_items(
+    order_data: dict[str, Any],
+    items_data: list[dict[str, Any]],
+) -> str:
+    """Save commercial order with line items atomically into SQLite."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    ord_id = str(order_data.get("order_id") or f"ord-{uuid.uuid4().hex[:12]}")
+    cust_id = str(order_data.get("customer_id") or uuid.uuid4())
+    cust_name = str(order_data.get("customer_name") or "Enterprise Client")
+    st = str(order_data.get("status") or "pending")
+    priority = str(order_data.get("priority") or "standard")
+    total_val = str(order_data.get("total_amount") or "0.00")
+    curr = str(order_data.get("currency") or "USD")
+    wf_id = str(order_data.get("workflow_id")) if order_data.get("workflow_id") else None
+
+    with _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO orders (
+                order_id, customer_id, customer_name, status, priority,
+                total_amount, currency, workflow_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(order_id) DO UPDATE SET
+                status = excluded.status,
+                priority = excluded.priority,
+                total_amount = excluded.total_amount,
+                workflow_id = excluded.workflow_id
+            """,
+            (ord_id, cust_id, cust_name, st, priority, total_val, curr, wf_id, now_iso),
+        )
+
+        for item in items_data:
+            item_id = str(item.get("order_item_id") or f"item-{uuid.uuid4().hex[:8]}")
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO order_items (
+                    order_item_id, order_id, product_id, sku, product_name, quantity, unit_price, line_total
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item_id,
+                    ord_id,
+                    str(item.get("product_id", "")),
+                    str(item.get("sku", "SKU")),
+                    str(item.get("product_name", "Component")),
+                    int(item.get("quantity", 1)),
+                    float(item.get("unit_price", 0.0)),
+                    float(item.get("line_total", 0.0)),
+                ),
+            )
+    return ord_id
+
+
+def update_order_status(order_id: str, new_status: str) -> bool:
+    """Transition commercial order status (e.g. pending -> processing -> in_transit -> delivered)."""
+    with _get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE orders SET status = ? WHERE order_id = ?",
+            (new_status, order_id),
+        )
+        return cur.rowcount > 0
+

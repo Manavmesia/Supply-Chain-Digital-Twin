@@ -19,6 +19,12 @@ import type {
   SimulationAccepted,
   SimulationResult,
   EventRecord,
+  Shipment,
+  ShipmentStats,
+  ProcurementPO,
+  ProcurementStats,
+  SupplierScorecard,
+  CreateOrderPayload,
 } from '../types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -149,7 +155,7 @@ export const analyticsApi = {
   },
 };
 
-// ── Orders ────────────────────────────────────────────────────────────────────
+// ── Orders (OMS) ──────────────────────────────────────────────────────────────
 
 export const ordersApi = {
   list: async (params?: { skip?: number; limit?: number; status?: string; priority?: string }) => {
@@ -169,6 +175,128 @@ export const ordersApi = {
   getById: async (id: string): Promise<Order> => {
     try {
       const { data } = await apiClient.get<Order>(`/orders/${id}`);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  create: async (payload: CreateOrderPayload) => {
+    try {
+      const { data } = await apiClient.post('/orders', payload);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  updateStatus: async (orderId: string, status: string) => {
+    try {
+      const { data } = await apiClient.patch(`/orders/${orderId}/status`, { status });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+};
+
+// ── Transportation & Logistics (TMS) ─────────────────────────────────────────
+
+export const shipmentsApi = {
+  list: async (params?: { skip?: number; limit?: number; status?: string; freight_mode?: string }) => {
+    try {
+      const { data } = await apiClient.get<PaginatedResponse<Shipment>>('/shipments', { params });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  getStats: async (): Promise<ShipmentStats> => {
+    try {
+      const { data } = await apiClient.get<ShipmentStats>('/shipments/stats');
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  getById: async (id: string): Promise<Shipment> => {
+    try {
+      const { data } = await apiClient.get<Shipment>(`/shipments/${id}`);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  create: async (payload: {
+    order_id?: string;
+    warehouse_id?: string;
+    carrier: string;
+    freight_mode: 'road' | 'air' | 'ocean' | 'rail';
+    origin: string;
+    destination: string;
+    eta?: string;
+  }) => {
+    try {
+      const { data } = await apiClient.post('/shipments', payload);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  updateStatus: async (id: string, payload: {
+    status: 'pending' | 'assigned' | 'dispatched' | 'in_transit' | 'delivered' | 'delayed' | 'failed';
+    current_location?: string;
+    delay_reason?: string;
+  }) => {
+    try {
+      const { data } = await apiClient.post(`/shipments/${id}/status`, payload);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  reroute: async (id: string, payload: {
+    new_freight_mode: 'road' | 'air' | 'ocean' | 'rail';
+    new_carrier?: string;
+    reason?: string;
+  }) => {
+    try {
+      const { data } = await apiClient.post(`/shipments/${id}/reroute`, payload);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+};
+
+// ── Supplier Relationship Management & Procurement (SRM) ──────────────────────
+
+export const procurementApi = {
+  listOrders: async (params?: { status?: string; limit?: number }) => {
+    try {
+      const { data } = await apiClient.get<{ items: ProcurementPO[]; total: number; limit: number }>('/procurement/orders', { params });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  getStats: async (): Promise<ProcurementStats> => {
+    try {
+      const { data } = await apiClient.get<ProcurementStats>('/procurement/stats');
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  createOrder: async (payload: {
+    supplier_id: string;
+    product_id: string;
+    warehouse_id: string;
+    quantity: number;
+    unit_cost: number;
+    lead_time_days?: number;
+  }) => {
+    try {
+      const { data } = await apiClient.post('/procurement/orders', payload);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  receiveOrder: async (poId: string) => {
+    try {
+      const { data } = await apiClient.post(`/procurement/orders/${poId}/receive`);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  getSuppliers: async () => {
+    try {
+      const { data } = await apiClient.get<{ items: SupplierScorecard[]; total: number }>('/procurement/suppliers');
       return data;
     } catch (err) { return handleError(err); }
   },

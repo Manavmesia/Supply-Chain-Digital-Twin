@@ -25,7 +25,9 @@ from app.api.v1 import auth as auth_router
 from app.api.v1 import events as events_router
 from app.api.v1 import inventory as inventory_router
 from app.api.v1 import orders as orders_router
+from app.api.v1 import procurement as procurement_router
 from app.api.v1 import reports as reports_router
+from app.api.v1 import shipments as shipments_router
 from app.api.v1 import simulate as simulate_router
 from app.api.v1 import suppliers as suppliers_router
 from app.api.v1 import workflows as workflows_router
@@ -181,6 +183,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(auth_router.router,       prefix=settings.API_V1_STR)
 app.include_router(workflows_router.router,  prefix=settings.API_V1_STR)
 app.include_router(orders_router.router,     prefix=settings.API_V1_STR)
+app.include_router(shipments_router.router,  prefix=settings.API_V1_STR)
+app.include_router(procurement_router.router,prefix=settings.API_V1_STR)
 app.include_router(reports_router.router,    prefix=settings.API_V1_STR)
 app.include_router(analytics_router.router,  prefix=settings.API_V1_STR)
 app.include_router(inventory_router.router,  prefix=settings.API_V1_STR)

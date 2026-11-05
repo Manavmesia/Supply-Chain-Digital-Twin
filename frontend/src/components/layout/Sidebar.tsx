@@ -2,18 +2,20 @@ import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Workflow, Bot, FileText,
-  FlaskConical, Package, Zap, ChevronRight,
-  Activity, Settings, LogOut,
+  Package, ChevronRight, Activity, Settings, LogOut,
+  ShoppingCart, Truck, Building2, ShieldAlert,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { path: '/',          label: 'Dashboard',   icon: LayoutDashboard, badge: null },
-  { path: '/workflows', label: 'Workflows',   icon: Workflow,         badge: null },
-  { path: '/agents',    label: 'Agents',      icon: Bot,              badge: '18' },
-  { path: '/inventory', label: 'Inventory',   icon: Package,          badge: null },
-  { path: '/reports',   label: 'Reports',     icon: FileText,         badge: null },
-  { path: '/simulate',  label: 'Simulate',    icon: FlaskConical,     badge: null },
-  { path: '/events',    label: 'Events',      icon: Zap,              badge: null },
+  { path: '/',              label: 'Dashboard',         icon: LayoutDashboard, badge: null },
+  { path: '/orders',         label: 'Orders (OMS)',      icon: ShoppingCart,    badge: null },
+  { path: '/shipments',      label: 'Logistics (TMS)',   icon: Truck,           badge: null },
+  { path: '/procurement',    label: 'Procurement (SRM)', icon: Building2,       badge: null },
+  { path: '/inventory',      label: 'Inventory (WMS)',   icon: Package,         badge: null },
+  { path: '/control-tower',  label: 'Control Tower',     icon: ShieldAlert,     badge: 'Live' },
+  { path: '/workflows',      label: 'AI Agent Engine',   icon: Workflow,        badge: null },
+  { path: '/agents',         label: 'Agent Roster',      icon: Bot,             badge: '18' },
+  { path: '/reports',        label: 'Executive Reports', icon: FileText,        badge: null },
 ];
 
 const LAYER_COLORS: Record<string, string> = {

@@ -330,3 +330,32 @@ async def dispatch_event_remediation(event_record: dict[str, Any]) -> dict[str, 
         "downstream_events_count": len(downstream_events),
         "timestamp": now_iso,
     }
+
+
+async def dispatch_event(
+    event_type: str,
+    source_agent: str,
+    payload: dict[str, Any],
+    workflow_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist and execute closed-loop autonomous multi-agent event remediation."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    event_id = str(uuid.uuid4())
+    event_record = {
+        "event_id": event_id,
+        "event_type": event_type,
+        "source_agent": source_agent,
+        "workflow_id": workflow_id,
+        "payload": payload,
+        "timestamp": now_iso,
+        "status": "pending",
+    }
+    persistence.save_event(event_record)
+    result = await dispatch_event_remediation(event_record)
+    return {
+        "event_id": event_id,
+        "event_type": event_type,
+        "timestamp": now_iso,
+        "remediation": result,
+    }
+

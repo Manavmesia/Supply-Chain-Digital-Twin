@@ -373,3 +373,86 @@ export interface TwinNetworkData {
   lanes: TwinLane[];
   active_shipments: TwinActiveShipment[];
 }
+
+// ── Real Enterprise Operational Modules ──────────────────────────────────────
+
+// Transportation Management System (TMS)
+export interface Shipment {
+  shipment_id: string;
+  order_id?: string | null;
+  warehouse_id?: string | null;
+  carrier: string;
+  carrier_tracking_id: string;
+  route?: string | null;
+  freight_mode: 'road' | 'air' | 'ocean' | 'rail';
+  origin: string;
+  destination: string;
+  eta?: string | null;
+  actual_delivery?: string | null;
+  status: 'pending' | 'assigned' | 'dispatched' | 'in_transit' | 'delivered' | 'delayed' | 'failed';
+  delay_reason?: string | null;
+  current_location?: string | null;
+  workflow_id?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ShipmentStats {
+  total_shipments: number;
+  in_transit: number;
+  delayed: number;
+  delivered: number;
+  on_time_rate_pct: number;
+  by_freight_mode: Record<string, number>;
+}
+
+// Supplier Relationship Management (SRM)
+export interface ProcurementPO {
+  po_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  product_id: string;
+  product_name: string;
+  sku: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  lead_time_days: number;
+  status: 'draft' | 'in_transit' | 'received' | 'cancelled';
+  workflow_id?: string | null;
+  created_at: string;
+}
+
+export interface ProcurementStats {
+  total_po_count: number;
+  in_transit_count: number;
+  received_count: number;
+  total_spend: number;
+  in_transit_spend: number;
+}
+
+export interface SupplierScorecard {
+  supplier_id: string;
+  name: string;
+  country: string;
+  lead_time_days: number;
+  reliability_score: number;
+  rating: number;
+  status: string;
+  risk_tier: 'low' | 'medium' | 'high';
+  open_purchase_orders: number;
+}
+
+// Order Management System (OMS)
+export interface CreateOrderPayload {
+  customer_id: string;
+  items: Array<{
+    product_id: string;
+    quantity: number;
+  }>;
+  priority?: 'low' | 'standard' | 'high' | 'critical';
+  notes?: string;
+}
+
