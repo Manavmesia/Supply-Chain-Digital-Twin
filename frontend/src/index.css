@@ -7,36 +7,36 @@
 
 /* ── Design Tokens ─────────────────────────────────────────── */
 :root {
-  /* Color Palette — Executive Dark Obsidian Palette */
-  --c-bg-base:     #090d16;
-  --c-bg-card:     #0f172a;
-  --c-bg-elevated: #131e33;
-  --c-bg-subtle:   #1e293b;
-  --c-bg-overlay:  rgba(9, 13, 22, 0.85);
+  /* Color Palette — Executive Crisp Light Palette (Stripe / Linear / Mercury style) */
+  --c-bg-base:     #f8fafc;
+  --c-bg-card:     #ffffff;
+  --c-bg-elevated: #ffffff;
+  --c-bg-subtle:   #f1f5f9;
+  --c-bg-overlay:  rgba(15, 23, 42, 0.4);
 
-  --c-border:      rgba(255, 255, 255, 0.08);
-  --c-border-subtle: rgba(255, 255, 255, 0.04);
-  --c-border-glow: rgba(59, 130, 246, 0.20);
+  --c-border:      #e2e8f0;
+  --c-border-subtle: #f1f5f9;
+  --c-border-glow: rgba(37, 99, 235, 0.12);
 
   /* Unified Brand Accent — Enterprise Precise Blue */
-  --c-brand-1: #3b82f6;
-  --c-brand-2: #2563eb;
-  --c-brand-3: #1d4ed8;
+  --c-brand-1: #2563eb;
+  --c-brand-2: #1d4ed8;
+  --c-brand-3: #1e40af;
 
   /* Restrained Semantic Colors */
-  --c-success:  #10b981;
-  --c-warning:  #f59e0b;
-  --c-danger:   #ef4444;
-  --c-info:     #3b82f6;
+  --c-success:  #059669;
+  --c-warning:  #d97706;
+  --c-danger:   #dc2626;
+  --c-info:     #2563eb;
 
-  /* Clean Typography Hierarchy */
-  --c-text-primary:   #f8fafc;
-  --c-text-secondary: #94a3b8;
+  /* Clean High-Contrast Slate Typography Hierarchy */
+  --c-text-primary:   #0f172a;
+  --c-text-secondary: #475569;
   --c-text-muted:     #64748b;
 
   /* Layer colors */
-  --c-operational:  #3b82f6;
-  --c-business:     #94a3b8;
+  --c-operational:  #2563eb;
+  --c-business:     #475569;
   --c-coordination: #64748b;
 
   /* Typography */
@@ -50,11 +50,11 @@
   --radius-xl:  16px;
 
   /* Shadows / Elevation */
-  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
-  --shadow-glow-blue:   0 0 12px rgba(59, 130, 246, 0.15);
-  --shadow-glow-violet: 0 0 12px rgba(59, 130, 246, 0.15);
-  --shadow-glow-cyan:   0 0 12px rgba(59, 130, 246, 0.15);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 4px 14px -2px rgba(0, 0, 0, 0.08);
+  --shadow-glow-blue:   0 0 12px rgba(37, 99, 235, 0.10);
+  --shadow-glow-violet: 0 0 12px rgba(37, 99, 235, 0.10);
+  --shadow-glow-cyan:   0 0 12px rgba(37, 99, 235, 0.10);
 
   /* Transitions */
   --t-fast:   150ms ease;
@@ -214,13 +214,13 @@ code, .mono {
 
 /* ── Title Text ─────────────────────────────────────────────── */
 .gradient-text {
-  color: #f8fafc;
+  color: var(--c-text-primary);
   font-weight: 700;
   letter-spacing: -0.025em;
 }
 
 .gradient-text-cyan {
-  color: #f8fafc;
+  color: var(--c-text-primary);
   font-weight: 700;
   letter-spacing: -0.025em;
 }

@@ -13,10 +13,10 @@ import {
 import { formatCurrency } from '../utils/formatters';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  in_transit: { label: 'In Transit', bg: 'rgba(59, 130, 246, 0.08)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.2)' },
-  received:   { label: 'Received (Stock Added)', bg: 'rgba(16, 185, 129, 0.08)', text: '#34d399', border: 'rgba(16, 185, 129, 0.2)' },
-  draft:      { label: 'Drafted', bg: 'rgba(255, 255, 255, 0.04)', text: '#94a3b8', border: 'rgba(255, 255, 255, 0.08)' },
-  cancelled:  { label: 'Cancelled', bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
+  in_transit: { label: 'In Transit', bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
+  received:   { label: 'Received (Stock Added)', bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
+  draft:      { label: 'Drafted', bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
+  cancelled:  { label: 'Cancelled', bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
 };
 
 export const ProcurementPage: React.FC = () => {
@@ -118,19 +118,19 @@ export const ProcurementPage: React.FC = () => {
   });
 
   return (
-    <div style={{ padding: '28px', maxWidth: '1440px', margin: '0 auto', color: '#f1f5f9' }}>
+    <div style={{ padding: '28px', maxWidth: '1440px', margin: '0 auto', color: '#0f172a' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#0f172a' }}>
               Procurement & Supplier Inbound (SRM)
             </h1>
-            <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+            <span style={{ fontSize: '11px', background: '#ecfdf5', color: '#059669', padding: '3px 8px', borderRadius: '4px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
               Live Warehouse Dock Loop
             </span>
           </div>
-          <p style={{ color: '#94a3b8', fontSize: '13px', margin: '4px 0 0 0' }}>
+          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
             Inbound purchase orders, automated supplier scorecards (ADS-05/12), and 1-click warehouse dock stock replenishment.
           </p>
         </div>
@@ -142,12 +142,13 @@ export const ProcurementPage: React.FC = () => {
               alignItems: 'center',
               gap: '6px',
               padding: '8px 14px',
-              background: '#1e293b',
-              border: '1px solid #334155',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
               borderRadius: '6px',
-              color: '#cbd5e1',
+              color: '#475569',
               cursor: 'pointer',
               fontSize: '13px',
+              fontWeight: 500,
             }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -176,41 +177,41 @@ export const ProcurementPage: React.FC = () => {
       </div>
 
       {actionMessage && (
-        <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#6ee7b7', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           <span>{actionMessage}</span>
         </div>
       )}
 
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-          <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>TOTAL INBOUND SPEND</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>TOTAL INBOUND SPEND</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>
             {formatCurrency(stats?.total_spend ?? 0)}
           </div>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{stats?.total_po_count ?? orders.length} procurement orders issued</div>
         </div>
 
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-          <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>IN-TRANSIT REPLENISHMENT</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#60a5fa' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>IN-TRANSIT REPLENISHMENT</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#2563eb' }}>
             {formatCurrency(stats?.in_transit_spend ?? 0)}
           </div>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{stats?.in_transit_count ?? 0} consignments en route</div>
         </div>
 
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-          <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>RECEIVED AT DOCK</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#34d399' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>RECEIVED AT DOCK</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#059669' }}>
             {stats?.received_count ?? 0}
           </div>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Directly added to warehouse stock</div>
         </div>
 
-        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '16px' }}>
-          <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>ACTIVE TIER-1 SUPPLIERS</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#a78bfa' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>ACTIVE TIER-1 SUPPLIERS</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#7c3aed' }}>
             {suppliers.length}
           </div>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Global supply network scorecards</div>
@@ -218,11 +219,11 @@ export const ProcurementPage: React.FC = () => {
       </div>
 
       {/* Supplier Scorecards Section */}
-      <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '18px', marginBottom: '24px' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Building2 className="w-4 h-4 text-emerald-400" />
-            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#f8fafc' }}>
+            <Building2 className="w-4 h-4 text-emerald-600" />
+            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#0f172a' }}>
               Tier-1 Supplier Scorecard & Resilience Ranking
             </h2>
           </div>
@@ -231,21 +232,24 @@ export const ProcurementPage: React.FC = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
           {suppliers.map((s) => {
-            const riskColor = s.risk_tier === 'low' ? '#34d399' : s.risk_tier === 'medium' ? '#fbbf24' : '#f87171';
+            const riskColor = s.risk_tier === 'low' ? '#059669' : s.risk_tier === 'medium' ? '#d97706' : '#dc2626';
+            const riskBg = s.risk_tier === 'low' ? '#ecfdf5' : s.risk_tier === 'medium' ? '#fffbeb' : '#fef2f2';
+            const riskBorder = s.risk_tier === 'low' ? '#a7f3d0' : s.risk_tier === 'medium' ? '#fde68a' : '#fecaca';
+
             return (
               <div
                 key={s.supplier_id}
                 style={{
-                  background: '#131e33',
-                  border: '1px solid #1e293b',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
                   borderRadius: '6px',
                   padding: '14px',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#f8fafc' }}>{s.name}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Country: {s.country} &bull; Lead Time: {s.lead_time_days}d</div>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{s.name}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>Country: {s.country} &bull; Lead Time: {s.lead_time_days}d</div>
                   </div>
                   <span
                     style={{
@@ -253,9 +257,9 @@ export const ProcurementPage: React.FC = () => {
                       fontWeight: 700,
                       padding: '2px 6px',
                       borderRadius: '4px',
-                      background: 'rgba(255,255,255,0.05)',
+                      background: riskBg,
                       color: riskColor,
-                      border: `1px solid ${riskColor}40`,
+                      border: `1px solid ${riskBorder}`,
                       textTransform: 'uppercase',
                     }}
                   >
@@ -264,11 +268,11 @@ export const ProcurementPage: React.FC = () => {
                 </div>
 
                 <div style={{ marginTop: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
                     <span>Reliability Score</span>
-                    <strong style={{ color: '#f8fafc' }}>{s.reliability_score}%</strong>
+                    <strong style={{ color: '#0f172a' }}>{s.reliability_score}%</strong>
                   </div>
-                  <div style={{ height: '5px', background: '#1e293b', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${s.reliability_score}%`, background: riskColor, borderRadius: '3px' }} />
                   </div>
                 </div>
@@ -284,11 +288,11 @@ export const ProcurementPage: React.FC = () => {
       </div>
 
       {/* Inbound Purchase Orders Section */}
-      <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', padding: '18px' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Package className="w-4 h-4 text-sky-400" />
-            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#f8fafc' }}>
+            <Package className="w-4 h-4 text-emerald-600" />
+            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#0f172a' }}>
               Inbound Replenishment Consignments
             </h2>
           </div>
@@ -303,10 +307,11 @@ export const ProcurementPage: React.FC = () => {
                     padding: '4px 10px',
                     borderRadius: '4px',
                     fontSize: '11px',
+                    fontWeight: statusFilter === st ? 600 : 400,
                     border: '1px solid',
-                    borderColor: statusFilter === st ? '#10b981' : '#334155',
-                    background: statusFilter === st ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
-                    color: statusFilter === st ? '#6ee7b7' : '#cbd5e1',
+                    borderColor: statusFilter === st ? '#a7f3d0' : '#cbd5e1',
+                    background: statusFilter === st ? '#ecfdf5' : '#ffffff',
+                    color: statusFilter === st ? '#059669' : '#475569',
                     cursor: 'pointer',
                     textTransform: 'capitalize',
                   }}
@@ -316,14 +321,14 @@ export const ProcurementPage: React.FC = () => {
               ))}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#1e293b', borderRadius: '6px', padding: '4px 10px', border: '1px solid #334155' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', borderRadius: '6px', padding: '4px 10px', border: '1px solid #cbd5e1' }}>
               <Search className="w-3.5 h-3.5 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search PO, supplier, SKU..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={{ background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: '12px', width: '200px' }}
+                style={{ background: 'transparent', border: 'none', outline: 'none', color: '#0f172a', fontSize: '12px', width: '200px' }}
               />
             </div>
           </div>
@@ -333,7 +338,7 @@ export const ProcurementPage: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b', color: '#94a3b8', textAlign: 'left' }}>
+              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
                 <th style={{ padding: '10px 12px' }}>PO NUMBER</th>
                 <th style={{ padding: '10px 12px' }}>SUPPLIER</th>
                 <th style={{ padding: '10px 12px' }}>PRODUCT & SKU</th>
@@ -350,18 +355,18 @@ export const ProcurementPage: React.FC = () => {
                 const canReceive = po.status === 'in_transit' || po.status === 'draft';
 
                 return (
-                  <tr key={po.po_id} style={{ borderBottom: '1px solid #131e33', transition: 'background 0.15s ease' }}>
-                    <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: 600, color: '#f8fafc' }}>
+                  <tr key={po.po_id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}>
+                    <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
                       {po.po_id.slice(0, 16)}...
                     </td>
-                    <td style={{ padding: '12px', color: '#cbd5e1' }}>{po.supplier_name}</td>
+                    <td style={{ padding: '12px', color: '#475569' }}>{po.supplier_name}</td>
                     <td style={{ padding: '12px' }}>
-                      <div style={{ color: '#f8fafc', fontWeight: 500 }}>{po.product_name}</div>
+                      <div style={{ color: '#0f172a', fontWeight: 600 }}>{po.product_name}</div>
                       <div style={{ fontSize: '11px', color: '#64748b' }}>{po.sku}</div>
                     </td>
-                    <td style={{ padding: '12px', color: '#94a3b8' }}>{po.warehouse_name}</td>
-                    <td style={{ padding: '12px', color: '#cbd5e1', fontWeight: 600 }}>{po.quantity.toLocaleString()} units</td>
-                    <td style={{ padding: '12px', color: '#34d399', fontWeight: 600 }}>{formatCurrency(po.total_cost)}</td>
+                    <td style={{ padding: '12px', color: '#64748b' }}>{po.warehouse_name}</td>
+                    <td style={{ padding: '12px', color: '#0f172a', fontWeight: 600 }}>{po.quantity.toLocaleString()} units</td>
+                    <td style={{ padding: '12px', color: '#059669', fontWeight: 600 }}>{formatCurrency(po.total_cost)}</td>
                     <td style={{ padding: '12px' }}>
                       <span
                         style={{
@@ -387,10 +392,10 @@ export const ProcurementPage: React.FC = () => {
                             alignItems: 'center',
                             gap: '5px',
                             padding: '5px 12px',
-                            background: 'rgba(16, 185, 129, 0.2)',
-                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                            background: '#ecfdf5',
+                            border: '1px solid #a7f3d0',
                             borderRadius: '4px',
-                            color: '#34d399',
+                            color: '#059669',
                             fontWeight: 600,
                             cursor: 'pointer',
                             fontSize: '11px',
@@ -400,7 +405,7 @@ export const ProcurementPage: React.FC = () => {
                           {receivingId === po.po_id ? 'Receiving...' : '1-Click Dock Receipt'}
                         </button>
                       ) : (
-                        <span style={{ color: '#64748b', fontSize: '11px' }}>Processed</span>
+                        <span style={{ color: '#94a3b8', fontSize: '11px' }}>Processed</span>
                       )}
                     </td>
                   </tr>
@@ -421,18 +426,18 @@ export const ProcurementPage: React.FC = () => {
 
       {/* Create PO Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '24px', width: '500px', maxWidth: '90%' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#f8fafc' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '24px', width: '500px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>
               Issue Inbound Replenishment Purchase Order
             </h2>
             <form onSubmit={handleCreatePoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Supplier</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Supplier</label>
                 <select
                   value={selectedSupplierId}
                   onChange={(e) => setSelectedSupplierId(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '5px', color: '#f8fafc', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
                 >
                   <option value="sup00000-0000-0000-0000-000000000001">Apex Microelectronics Inc. (Japan - 96.5% Rel)</option>
                   <option value="sup00000-0000-0000-0000-000000000002">Global Precision Systems GmbH (Germany - 91.2% Rel)</option>
@@ -442,11 +447,11 @@ export const ProcurementPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Component / Product</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Component / Product</label>
                 <select
                   value={selectedProductId}
                   onChange={(e) => setSelectedProductId(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '5px', color: '#f8fafc', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
                 >
                   <option value="30000000-0000-0000-0000-000000000001">Industrial Sensor Module (ELEC-001)</option>
                   <option value="30000000-0000-0000-0000-000000000002">High-Torque Servo Motor (ELEC-002)</option>
@@ -456,11 +461,11 @@ export const ProcurementPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Destination Hub</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Destination Hub</label>
                 <select
                   value={selectedWarehouseId}
                   onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '5px', color: '#f8fafc', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
                 >
                   <option value="10000000-0000-0000-0000-000000000001">Newark Distribution Center (US)</option>
                   <option value="10000000-0000-0000-0000-000000000002">Birmingham Fulfilment Hub (GB)</option>
@@ -471,38 +476,38 @@ export const ProcurementPage: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Units to Procure</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Units to Procure</label>
                   <input
                     type="number"
                     value={poQty}
                     onChange={(e) => setPoQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    style={{ width: '100%', padding: '8px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '5px', color: '#f8fafc', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
                     required
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Unit Contract Cost ($)</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Unit Contract Cost ($)</label>
                   <input
                     type="number"
                     step="0.01"
                     value={poUnitCost}
                     onChange={(e) => setPoUnitCost(Math.max(0.1, parseFloat(e.target.value) || 1))}
-                    style={{ width: '100%', padding: '8px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '5px', color: '#f8fafc', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
                     required
                   />
                 </div>
               </div>
 
-              <div style={{ background: '#131e33', padding: '10px 14px', borderRadius: '6px', border: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Total PO Financial Commitment:</span>
-                <span style={{ fontSize: '16px', fontWeight: 700, color: '#34d399' }}>{formatCurrency(poQty * poUnitCost)}</span>
+              <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: '#475569' }}>Total PO Financial Commitment:</span>
+                <span style={{ fontSize: '16px', fontWeight: 700, color: '#059669' }}>{formatCurrency(poQty * poUnitCost)}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  style={{ padding: '8px 14px', background: 'transparent', border: '1px solid #334155', borderRadius: '5px', color: '#cbd5e1', cursor: 'pointer', fontSize: '13px' }}
+                  style={{ padding: '8px 14px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontSize: '13px' }}
                 >
                   Cancel
                 </button>

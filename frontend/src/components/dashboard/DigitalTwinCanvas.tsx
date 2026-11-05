@@ -44,16 +44,16 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
   };
 
   const NODE_COLORS: Record<string, { bg: string; border: string; glow: string; label: string }> = {
-    supplier:   { bg: '#0f172a', border: '#3b82f6', glow: 'rgba(59,130,246,0.3)', label: 'SUP' },
-    plant:      { bg: '#0f172a', border: '#64748b', glow: 'rgba(100,116,139,0.3)', label: 'MFG' },
-    warehouse:  { bg: '#0f172a', border: '#2563eb', glow: 'rgba(37,99,235,0.3)', label: 'WMS' },
-    market:     { bg: '#0f172a', border: '#10b981', glow: 'rgba(16,185,129,0.3)', label: 'MKT' },
+    supplier:   { bg: '#ffffff', border: '#2563eb', glow: 'rgba(37,99,235,0.2)', label: 'SUP' },
+    plant:      { bg: '#ffffff', border: '#475569', glow: 'rgba(71,85,105,0.2)', label: 'MFG' },
+    warehouse:  { bg: '#ffffff', border: '#1d4ed8', glow: 'rgba(29,78,216,0.2)', label: 'WMS' },
+    market:     { bg: '#ffffff', border: '#059669', glow: 'rgba(5,150,105,0.2)', label: 'MKT' },
   };
 
   const LANE_STYLES: Record<string, { stroke: string; strokeDash?: string; width: number }> = {
-    air:  { stroke: '#60a5fa', strokeDash: '6,4', width: 1.8 },
-    sea:  { stroke: '#3b82f6', strokeDash: '3,3', width: 2.0 },
-    road: { stroke: '#475569', width: 1.5 },
+    air:  { stroke: '#3b82f6', strokeDash: '6,4', width: 1.8 },
+    sea:  { stroke: '#1d4ed8', strokeDash: '3,3', width: 2.0 },
+    road: { stroke: '#64748b', width: 1.5 },
   };
 
   const filteredLanes = (data?.lanes || []).filter((l) => {
@@ -73,9 +73,9 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
         position: 'relative',
         padding: 0,
         overflow: 'hidden',
-        background: '#090d16',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: 'none',
+        background: '#ffffff',
+        border: '1px solid var(--c-border)',
+        boxShadow: 'var(--shadow-card)',
         borderRadius: '8px',
         minHeight: '540px',
       }}
@@ -87,9 +87,8 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '1rem 1.5rem',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          background: 'rgba(13, 18, 31, 0.75)',
-          backdropFilter: 'blur(10px)',
+          borderBottom: '1px solid var(--c-border)',
+          background: '#ffffff',
           zIndex: 20,
           position: 'relative',
         }}
@@ -100,18 +99,18 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
               width: 32,
               height: 32,
               borderRadius: '8px',
-              background: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Globe size={18} className="text-cyan-400" />
+            <Globe size={18} className="text-blue-600" />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
+              <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--c-text-primary)', letterSpacing: '-0.01em' }}>
                 Spatial Digital Twin Topology
               </h3>
               <span
@@ -119,20 +118,20 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   fontSize: '0.65rem',
                   padding: '2px 8px',
                   borderRadius: '999px',
-                  background: 'rgba(16,185,129,0.15)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16,185,129,0.3)',
+                  background: 'rgba(16,185,129,0.1)',
+                  color: '#059669',
+                  border: '1px solid rgba(16,185,129,0.25)',
                   fontWeight: 600,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
                 }}
               >
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: loading ? '#f59e0b' : '#10b981', display: 'inline-block', boxShadow: loading ? '0 0 6px #f59e0b' : '0 0 6px #10b981' }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: loading ? '#f59e0b' : '#059669', display: 'inline-block' }} />
                 {loading ? 'SYNCING...' : 'REAL-TIME TELEMETRY'}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
               Multi-echelon node network with live in-transit freight corridors & inventory buffers
             </p>
           </div>
@@ -143,10 +142,10 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
           <div
             style={{
               display: 'flex',
-              background: 'rgba(30, 41, 59, 0.6)',
+              background: '#f1f5f9',
               borderRadius: '8px',
               padding: '2px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid #e2e8f0',
             }}
           >
             {(['all', 'air', 'sea', 'road', 'critical'] as const).map((mode) => (
@@ -160,8 +159,9 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
-                  background: filterMode === mode ? '#2563eb' : 'transparent',
-                  color: filterMode === mode ? '#ffffff' : '#94a3b8',
+                  background: filterMode === mode ? '#ffffff' : 'transparent',
+                  color: filterMode === mode ? '#0f172a' : '#64748b',
+                  boxShadow: filterMode === mode ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                   transition: 'all 0.15s ease',
                   textTransform: 'capitalize',
                 }}
@@ -194,7 +194,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       </div>
 
       {/* Main Canvas Area */}
-      <div style={{ position: 'relative', width: '100%', height: '480px', userSelect: 'none' }}>
+      <div style={{ position: 'relative', width: '100%', height: '480px', userSelect: 'none', background: '#f8fafc' }}>
         {/* Abstract World Grid Background */}
         <svg
           style={{
@@ -204,12 +204,12 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            opacity: 0.18,
+            opacity: 0.5,
           }}
         >
           <defs>
             <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" strokeWidth="0.5" />
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" strokeWidth="0.8" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#gridPattern)" />
@@ -340,16 +340,16 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   width: isSelected ? 34 : 28,
                   height: isSelected ? 34 : 28,
                   borderRadius: '6px',
-                  background: '#0f172a',
-                  border: `1.5px solid ${isSelected ? '#60a5fa' : cfg.border}`,
-                  boxShadow: isSelected ? '0 0 10px rgba(59, 130, 246, 0.4)' : 'none',
+                  background: '#ffffff',
+                  border: `1.5px solid ${isSelected ? '#2563eb' : cfg.border}`,
+                  boxShadow: isSelected ? '0 0 10px rgba(37, 99, 235, 0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: '9px',
                   fontWeight: 700,
                   fontFamily: 'monospace',
-                  color: isSelected ? '#ffffff' : '#cbd5e1',
+                  color: isSelected ? '#2563eb' : '#334155',
                   position: 'relative',
                 }}
               >
@@ -365,9 +365,9 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                       width: 9,
                       height: 9,
                       borderRadius: '50%',
-                      background: '#f59e0b',
-                      border: '2px solid #0f172a',
-                      boxShadow: '0 0 6px #f59e0b',
+                      background: '#d97706',
+                      border: '2px solid #ffffff',
+                      boxShadow: '0 0 6px rgba(217,119,6,0.6)',
                     }}
                   />
                 )}
@@ -379,14 +379,13 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   marginTop: 6,
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: isSelected ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.85)',
-                  border: isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-                  backdropFilter: 'blur(4px)',
-                  color: isSelected ? '#38bdf8' : '#e2e8f0',
+                  background: isSelected ? '#eff6ff' : '#ffffff',
+                  border: isSelected ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                  color: isSelected ? '#1d4ed8' : '#0f172a',
                   fontSize: '0.68rem',
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                 }}
               >
                 {node.name.replace(/ (Distribution Center|Logistics Centre|Fulfilment Hub|MegaHub|Plant|Market|Advanced Circuits|Systems GmbH|Inc\.|Ltd\.)/g, '')}
@@ -403,26 +402,25 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
               right: 16,
               bottom: 16,
               width: '320px',
-              background: 'rgba(15, 23, 42, 0.92)',
-              border: '1px solid rgba(56, 189, 248, 0.35)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.6), inset 0 0 16px rgba(56, 189, 248, 0.08)',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
               borderRadius: '10px',
               padding: '1.25rem',
-              backdropFilter: 'blur(16px)',
               zIndex: 25,
               animation: 'fadeIn 0.2s ease-out',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '2px 5px', borderRadius: '3px', color: '#cbd5e1' }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '2px 5px', borderRadius: '3px', color: '#334155' }}>
                   {NODE_COLORS[selectedNode.type]?.label ?? 'NODE'}
                 </span>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
                     {selectedNode.name}
                   </h4>
-                  <span style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <span style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     {selectedNode.type} • {selectedNode.location}
                   </span>
                 </div>
@@ -432,7 +430,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: '#64748b',
                   cursor: 'pointer',
                   padding: 2,
                 }}
@@ -445,33 +443,33 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
             {selectedNode.type === 'warehouse' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Available Stock</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#10b981' }}>
+                  <div style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Available Stock</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#059669' }}>
                       {selectedNode.available_units?.toLocaleString() ?? '—'}
                     </div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Reserved Stock</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#38bdf8' }}>
+                  <div style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Reserved Stock</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#2563eb' }}>
                       {selectedNode.reserved_units?.toLocaleString() ?? '0'}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '4px' }}>
+                <div style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b', marginBottom: '4px' }}>
                     <span>Capacity Utilization</span>
-                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>
                       {Math.round(((selectedNode.available_units || 0) / (selectedNode.capacity || 50000)) * 100)}%
                     </span>
                   </div>
-                  <div style={{ height: 4, width: '100%', background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: 4, width: '100%', background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
                     <div
                       style={{
                         height: '100%',
                         width: `${Math.min(Math.round(((selectedNode.available_units || 0) / (selectedNode.capacity || 50000)) * 100), 100)}%`,
-                        background: '#38bdf8',
+                        background: '#2563eb',
                       }}
                     />
                   </div>

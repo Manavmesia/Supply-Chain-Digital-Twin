@@ -136,9 +136,9 @@ function OutputDiff({ input, output }: { input: Record<string, unknown>; output:
                 <span style={{
                   display: 'inline-block',
                   fontSize: '0.68rem',
-                  background: 'rgba(71,85,105,0.2)',
-                  color: '#64748b',
-                  border: '1px solid #1e293b',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #e2e8f0',
                   borderRadius: '4px',
                   padding: '1px 8px',
                   marginBottom: '0.25rem',
@@ -402,7 +402,7 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                   </div>
 
                   {/* Tabs */}
-                  <div style={{ display: 'flex', gap: '2px', marginBottom: '1rem', borderBottom: '1px solid #1e293b', paddingBottom: '0' }}>
+                  <div style={{ display: 'flex', gap: '2px', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
                     {TABS.map(tb => (
                       <button
                         key={tb.id}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RefreshCw, Database, Server, MessageSquare, Sun, Moon } from 'lucide-react';
+import { RefreshCw, Database, Server, MessageSquare } from 'lucide-react';
 import { healthApi } from '../../services/api';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -33,18 +33,11 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
   const location = useLocation();
   const title = PAGE_TITLES[location.pathname] ?? 'Supply Chain Digital Twin';
   const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
-  });
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
-  };
+    document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -131,20 +124,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
         >
           <span
             className="topbar-system-dot"
-            style={{ background: health?.status === 'ok' ? '#10b981' : '#f59e0b' }}
+            style={{ background: health?.status === 'ok' ? '#059669' : '#d97706' }}
           />
           {health?.status === 'ok' ? 'Operational' : 'Degraded Mode'}
         </div>
-
-        <button
-          className="btn btn-ghost btn-sm topbar-theme-btn"
-          onClick={toggleTheme}
-          title={theme === 'light' ? 'Switch to Dark theme' : 'Switch to Light theme'}
-          aria-label="Toggle theme"
-          style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', padding: '4px 8px' }}
-        >
-          {theme === 'light' ? <Moon size={13} /> : <Sun size={13} />}
-        </button>
 
         {onRefresh && (
           <button
@@ -152,7 +135,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
             onClick={onRefresh}
             disabled={isLoading}
             title="Refresh data"
-            style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', padding: '4px 8px' }}
+            style={{ border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '4px', padding: '4px 8px', color: '#475569', cursor: 'pointer' }}
           >
             <RefreshCw
               size={13}

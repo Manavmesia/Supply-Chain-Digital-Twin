@@ -34,15 +34,16 @@ const KPICard: React.FC<KPICardProps> = ({
 }) => (
   <div
     style={{
-      background: '#0f172a',
-      border: isAlert ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255, 255, 255, 0.07)',
+      background: 'var(--c-bg-card)',
+      border: isAlert ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--c-border)',
       borderRadius: '8px',
       padding: '16px 18px',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
       position: 'relative',
-      transition: 'border-color 0.2s ease, transform 0.2s ease',
+      boxShadow: 'var(--shadow-card)',
+      transition: 'border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
     }}
   >
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -51,12 +52,12 @@ const KPICard: React.FC<KPICardProps> = ({
           width: '32px',
           height: '32px',
           borderRadius: '6px',
-          background: 'rgba(255, 255, 255, 0.04)',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
+          background: isAlert ? 'rgba(239, 68, 68, 0.08)' : 'var(--c-bg-subtle)',
+          border: '1px solid var(--c-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: isAlert ? '#f87171' : '#94a3b8',
+          color: isAlert ? '#dc2626' : 'var(--c-text-secondary)',
         }}
       >
         {icon}
@@ -70,8 +71,8 @@ const KPICard: React.FC<KPICardProps> = ({
             gap: '3px',
             fontSize: '11px',
             fontWeight: 600,
-            color: trend.positive ? '#34d399' : '#f87171',
-            background: trend.positive ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+            color: trend.positive ? '#059669' : '#dc2626',
+            background: trend.positive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
             padding: '2px 6px',
             borderRadius: '4px',
           }}
@@ -86,8 +87,9 @@ const KPICard: React.FC<KPICardProps> = ({
           style={{
             fontSize: '11px',
             fontWeight: 500,
-            color: '#94a3b8',
-            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'var(--c-text-muted)',
+            background: 'var(--c-bg-subtle)',
+            border: '1px solid var(--c-border)',
             padding: '2px 6px',
             borderRadius: '4px',
           }}
@@ -102,7 +104,7 @@ const KPICard: React.FC<KPICardProps> = ({
         style={{
           fontSize: '22px',
           fontWeight: 700,
-          color: '#f8fafc',
+          color: 'var(--c-text-primary)',
           letterSpacing: '-0.02em',
           lineHeight: 1.1,
           fontFamily: 'monospace',
@@ -117,13 +119,13 @@ const KPICard: React.FC<KPICardProps> = ({
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          color: '#64748b',
+          color: 'var(--c-text-muted)',
           marginBottom: '2px',
         }}
       >
         {label}
       </div>
-      {sub && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{sub}</div>}
+      {sub && <div style={{ fontSize: '11px', color: 'var(--c-text-secondary)' }}>{sub}</div>}
     </div>
   </div>
 );
@@ -138,7 +140,7 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ kpis, loading }) => {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} style={{ height: '110px', background: '#0f172a', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }} />
+          <div key={i} style={{ height: '110px', background: 'var(--c-bg-card)', borderRadius: '8px', border: '1px solid var(--c-border)' }} />
         ))}
       </div>
     );

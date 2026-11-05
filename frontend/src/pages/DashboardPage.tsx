@@ -95,26 +95,26 @@ export const DashboardPage: React.FC = () => {
   }, [fetchDashboardData]);
 
   const statusBadges: Record<string, { bg: string; text: string; border: string }> = {
-    delivered:  { bg: 'rgba(16, 185, 129, 0.08)', text: '#34d399', border: 'rgba(16, 185, 129, 0.2)' },
-    in_transit: { bg: 'rgba(59, 130, 246, 0.08)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.2)' },
-    pending:    { bg: 'rgba(245, 158, 11, 0.08)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.2)' },
-    cancelled:  { bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
-    failed:     { bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
+    delivered:  { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
+    in_transit: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+    pending:    { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
+    cancelled:  { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
+    failed:     { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
   };
 
   const priorityBadges: Record<string, { bg: string; text: string }> = {
-    critical: { bg: 'rgba(239, 68, 68, 0.12)', text: '#fca5a5' },
-    high:     { bg: 'rgba(245, 158, 11, 0.12)', text: '#fcd34d' },
-    standard: { bg: 'rgba(255, 255, 255, 0.05)', text: '#cbd5e1' },
-    low:      { bg: 'rgba(255, 255, 255, 0.03)', text: '#94a3b8' },
+    critical: { bg: '#fef2f2', text: '#dc2626' },
+    high:     { bg: '#fffbeb', text: '#d97706' },
+    standard: { bg: '#f1f5f9', text: '#475569' },
+    low:      { bg: '#f8fafc', text: '#64748b' },
   };
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto', color: '#f8fafc' }}>
+    <div style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto', color: 'var(--c-text-primary)' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '22px' }}>
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#f8fafc' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: 'var(--c-text-primary)' }}>
             Enterprise Supply Chain Digital Twin
           </h1>
           <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
@@ -122,8 +122,8 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#94a3b8', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: '4px' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#059669', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '5px 10px', borderRadius: '4px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669' }} />
             <span>Telemetry Synced {lastUpdated.toLocaleTimeString()}</span>
           </div>
           <button
@@ -134,12 +134,13 @@ export const DashboardPage: React.FC = () => {
               alignItems: 'center',
               gap: '6px',
               padding: '6px 12px',
-              background: '#0f172a',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
               borderRadius: '5px',
-              color: '#cbd5e1',
+              color: '#334155',
               cursor: 'pointer',
               fontSize: '12px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
@@ -163,16 +164,16 @@ export const DashboardPage: React.FC = () => {
       {/* Charts / Distribution row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
         {/* Orders by status */}
-        <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '18px' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <BarChart3 size={15} style={{ color: '#94a3b8' }} />
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <BarChart3 size={15} style={{ color: '#64748b' }} />
+            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Fulfillment Pipeline by Status
             </h3>
           </div>
 
           {loading ? (
-            <div style={{ height: '140px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }} />
+            <div style={{ height: '140px', background: '#f8fafc', borderRadius: '6px' }} />
           ) : dashboard?.orders_by_status ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {Object.entries(dashboard.orders_by_status).map(([st, count]) => {
@@ -181,11 +182,11 @@ export const DashboardPage: React.FC = () => {
                 return (
                   <div key={st}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                      <span style={{ color: '#cbd5e1', textTransform: 'capitalize' }}>{st.replace('_', ' ')}</span>
-                      <span style={{ color: '#f8fafc', fontWeight: 600, fontFamily: 'monospace' }}>{count} ({Math.round(pct)}%)</span>
+                      <span style={{ color: '#475569', textTransform: 'capitalize' }}>{st.replace('_', ' ')}</span>
+                      <span style={{ color: '#0f172a', fontWeight: 600, fontFamily: 'monospace' }}>{count} ({Math.round(pct)}%)</span>
                     </div>
-                    <div style={{ height: '5px', background: '#131e33', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: st === 'delivered' ? '#34d399' : st === 'in_transit' ? '#60a5fa' : '#fbbf24', borderRadius: '3px' }} />
+                    <div style={{ height: '5px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: st === 'delivered' ? '#059669' : st === 'in_transit' ? '#2563eb' : '#d97706', borderRadius: '3px' }} />
                     </div>
                   </div>
                 );
@@ -200,40 +201,40 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Inventory health */}
-        <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '18px' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <Layers size={15} style={{ color: '#94a3b8' }} />
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <Layers size={15} style={{ color: '#64748b' }} />
+            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Warehouse Inventory Distribution
             </h3>
           </div>
 
           {loading ? (
-            <div style={{ height: '140px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }} />
+            <div style={{ height: '140px', background: '#f8fafc', borderRadius: '6px' }} />
           ) : dashboard?.inventory_health ? (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
-                <div style={{ background: '#131e33', padding: '10px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Healthy SKUs</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#34d399', fontFamily: 'monospace', marginTop: '2px' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#059669', fontFamily: 'monospace', marginTop: '2px' }}>
                     {dashboard.inventory_health.healthy}
                   </div>
                 </div>
-                <div style={{ background: '#131e33', padding: '10px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Low Stock</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#fbbf24', fontFamily: 'monospace', marginTop: '2px' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#d97706', fontFamily: 'monospace', marginTop: '2px' }}>
                     {dashboard.inventory_health.low_stock}
                   </div>
                 </div>
-                <div style={{ background: '#131e33', padding: '10px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Out of Stock</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#f87171', fontFamily: 'monospace', marginTop: '2px' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#dc2626', fontFamily: 'monospace', marginTop: '2px' }}>
                     {dashboard.inventory_health.out_of_stock}
                   </div>
                 </div>
               </div>
 
-              <div style={{ height: '6px', background: '#131e33', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
                 <div
                   style={{
                     height: '100%',
@@ -241,7 +242,7 @@ export const DashboardPage: React.FC = () => {
                       (dashboard.inventory_health.healthy /
                         Math.max(dashboard.inventory_health.total_locations, 1)) * 100
                     )}%`,
-                    background: '#34d399',
+                    background: '#059669',
                     borderRadius: '3px',
                   }}
                 />
@@ -264,11 +265,11 @@ export const DashboardPage: React.FC = () => {
       <AgentPipeline agents={agents} loading={loading} />
 
       {/* Recent Orders */}
-      <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '8px', padding: '20px' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Package size={15} style={{ color: '#94a3b8' }} />
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <Package size={15} style={{ color: '#64748b' }} />
+            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Recent Commercial Orders
             </h3>
           </div>
@@ -279,7 +280,7 @@ export const DashboardPage: React.FC = () => {
               alignItems: 'center',
               gap: '4px',
               fontSize: '12px',
-              color: '#60a5fa',
+              color: '#2563eb',
               textDecoration: 'none',
               fontWeight: 500,
             }}
@@ -290,12 +291,12 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {loading ? (
-          <div style={{ height: '160px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }} />
+          <div style={{ height: '160px', background: '#f8fafc', borderRadius: '6px' }} />
         ) : dashboard?.recent_orders?.length ? (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#64748b', textAlign: 'left' }}>
+                <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left', background: '#f8fafc' }}>
                   <th style={{ padding: '8px 12px', fontWeight: 600 }}>ORDER REFERENCE</th>
                   <th style={{ padding: '8px 12px', fontWeight: 600 }}>CLIENT ACCOUNT</th>
                   <th style={{ padding: '8px 12px', fontWeight: 600 }}>STATUS</th>
@@ -311,11 +312,11 @@ export const DashboardPage: React.FC = () => {
                   const pBadge = priorityBadges[order.priority] || priorityBadges.standard;
 
                   return (
-                    <tr key={order.order_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 600, color: '#f8fafc' }}>
+                    <tr key={order.order_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
                         {formatOrderId(order.order_id)}
                       </td>
-                      <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>
+                      <td style={{ padding: '10px 12px', color: '#334155' }}>
                         {getCustomerName(order.customer_id || order.order_id)}
                       </td>
                       <td style={{ padding: '10px 12px' }}>
@@ -349,7 +350,7 @@ export const DashboardPage: React.FC = () => {
                           {order.priority}
                         </span>
                       </td>
-                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f8fafc', fontFamily: 'monospace' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0f172a', fontFamily: 'monospace' }}>
                         {formatCurrency(order.total_amount)}
                       </td>
                       <td style={{ padding: '10px 12px', color: '#64748b' }}>
@@ -360,7 +361,7 @@ export const DashboardPage: React.FC = () => {
                           href={`/workflows${order.workflow_id ? `?workflow_id=${order.workflow_id}` : ''}`}
                           style={{
                             fontSize: '11px',
-                            color: '#60a5fa',
+                            color: '#2563eb',
                             textDecoration: 'none',
                             fontWeight: 500,
                           }}
