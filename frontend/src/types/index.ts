@@ -287,6 +287,15 @@ export interface EventRecord {
   workflow_id: string | null;
   timestamp: string;
   status: string;
+  subscribers?: string[];
+  remediation_summary?: string;
+  remediation_status?: string;
+  autonomous_actions?: Array<{
+    agent: string;
+    action: string;
+    details: string;
+    timestamp: string;
+  }>;
 }
 
 // Auth

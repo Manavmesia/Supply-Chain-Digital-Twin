@@ -24,6 +24,9 @@ export const InventoryPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [receivingPoId, setReceivingPoId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isScanning, setIsScanning] = useState(false);
+  const [isAutoHealing, setIsAutoHealing] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
   const fetchInventory = useCallback(async (isSilent = false) => {
@@ -47,6 +50,38 @@ export const InventoryPage: React.FC = () => {
       }
     }
   }, [lowOnly]);
+
+  const handleAutonomousScan = async () => {
+    setIsScanning(true);
+    setScanMessage(null);
+    try {
+      const res = await inventoryApi.runAutonomousScan();
+      if (isMountedRef.current) {
+        setScanMessage(res.message);
+        await fetchInventory(true);
+      }
+    } catch (err) {
+      console.error('Autonomous scan error:', err);
+    } finally {
+      if (isMountedRef.current) setIsScanning(false);
+    }
+  };
+
+  const handleAutoHealAll = async () => {
+    setIsAutoHealing(true);
+    setScanMessage(null);
+    try {
+      const res = await inventoryApi.autoHealAll();
+      if (isMountedRef.current) {
+        setScanMessage(res.message);
+        await fetchInventory(true);
+      }
+    } catch (err) {
+      console.error('Auto heal error:', err);
+    } finally {
+      if (isMountedRef.current) setIsAutoHealing(false);
+    }
+  };
 
   const handleReceiveStock = async (poId: string) => {
     setReceivingPoId(poId);
@@ -119,6 +154,22 @@ export const InventoryPage: React.FC = () => {
         <p>Live stock levels across all warehouses with safety stock monitoring</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           <button
+            className="btn btn-primary btn-sm"
+            onClick={handleAutonomousScan}
+            disabled={isScanning || isAutoHealing}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}
+          >
+            {isScanning ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : '⚡'} Run Autonomous Agent Scan
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleAutoHealAll}
+            disabled={isScanning || isAutoHealing}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(16,185,129,0.4)', color: '#10b981' }}
+          >
+            {isAutoHealing ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : '✦'} Commit All Inbound Stock
+          </button>
+          <button
             className="btn btn-ghost btn-sm"
             onClick={() => { setLoading(true); fetchInventory(false); }}
             disabled={loading}
@@ -131,6 +182,32 @@ export const InventoryPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {scanMessage && (
+        <div style={{
+          padding: '0.875rem 1.25rem',
+          background: 'rgba(37,99,235,0.08)',
+          border: '1px solid rgba(37,99,235,0.3)',
+          borderRadius: '10px',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: 'var(--c-text-primary)',
+          fontSize: '0.85rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <span style={{ fontSize: '1.1rem' }}>🤖</span>
+            <span>{scanMessage}</span>
+          </div>
+          <button
+            onClick={() => setScanMessage(null)}
+            style={{ background: 'none', border: 'none', color: 'var(--c-text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Summary KPIs */}
       <div className="grid-4 mb-6">

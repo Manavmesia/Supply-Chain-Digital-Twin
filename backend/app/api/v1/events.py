@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.api.v1.auth import require_authenticated_role
 from app.core import persistence
+from app.events.dispatcher import dispatch_event_remediation
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/events", tags=["events"])
@@ -92,21 +93,38 @@ async def inject_event(
     try:
         persistence.save_event(event_record)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to persist event", event_id=event_id, error=str(exc))
+        logger.warning("Failed to persist initial event", event_id=event_id, error=str(exc))
+
+    # Autonomous Multi-Agent Dispatch & Closed-Loop Remediation
+    remediation: dict[str, Any] = {}
+    try:
+        remediation = await dispatch_event_remediation(event_record)
+        event_record["status"] = "remediated"
+        event_record["subscribers"] = remediation.get("subscribers", [])
+        event_record["remediation_summary"] = remediation.get("remediation_summary", "")
+        event_record["autonomous_actions"] = remediation.get("autonomous_actions", [])
+        persistence.save_event(event_record)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Event dispatcher remediation error", event_id=event_id, error=str(exc))
 
     logger.info(
-        "Manual event injected",
+        "Manual event injected and remediated by autonomous agents",
         event_id=event_id,
         event_type=request.event_type,
         source=request.source_agent,
+        subscribers=remediation.get("subscribers", []),
     )
 
     return {
         "event_id": event_id,
         "event_type": request.event_type,
-        "status": "injected",
+        "status": "remediated",
         "timestamp": timestamp,
-        "message": "Event accepted. It will be processed by subscribed agents.",
+        "message": remediation.get("remediation_summary") or "Event processed by subscribed agents.",
+        "subscribers": remediation.get("subscribers", []),
+        "remediation_status": "remediated",
+        "remediation_summary": remediation.get("remediation_summary", ""),
+        "autonomous_actions": remediation.get("autonomous_actions", []),
     }
 
 

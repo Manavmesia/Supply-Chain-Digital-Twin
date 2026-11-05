@@ -20,6 +20,7 @@ from app.api.v1.auth import require_authenticated_role
 
 from app.core import persistence
 from app.core.database import get_db_session
+from app.events.dispatcher import dispatch_event_remediation
 from app.models.inventory import Inventory
 from app.models.product import Product
 from app.models.warehouse import Warehouse
@@ -231,6 +232,84 @@ async def receive_replenishment_order(
         "success": True,
         "message": f"Inbound replenishment {po_id} received successfully. Stock added to warehouse.",
         "data": result,
+    }
+
+
+@router.post(
+    "/autonomous-scan",
+    summary="Run an autonomous agentic audit across all warehouse inventory and self-heal deficits",
+)
+async def run_autonomous_inventory_scan(
+    _user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
+) -> dict[str, Any]:
+    """
+    Scans live stock across all warehouses for safety stock or critical deficits.
+    For every violation found, autonomously dispatches ADS-03 Inventory and ADS-05 Supplier
+    to negotiate and generate replenishment purchase orders.
+    """
+    inv_data = persistence.list_inventory(limit=200)
+    items = inv_data.get("items", [])
+    
+    breaches = [item for item in items if item["status"] in ("low", "critical")]
+    created_orders = []
+    remediation_actions = []
+
+    for breach in breaches:
+        event_record = {
+            "event_id": str(uuid.uuid4()),
+            "event_type": "InventoryLow",
+            "source_agent": "ADS-03",
+            "payload": {
+                "sku": breach["sku"],
+                "product_id": breach["product_id"],
+                "product_name": breach["product_name"],
+                "warehouse_id": breach["warehouse_id"],
+                "warehouse_name": breach["warehouse_name"],
+                "available_qty": breach["available_qty"],
+                "safety_stock": breach["safety_stock"],
+                "quantity": max(breach["safety_stock"] * 2, 100),
+            },
+            "status": "injected",
+        }
+        rem = await dispatch_event_remediation(event_record)
+        remediation_actions.extend(rem.get("autonomous_actions", []))
+
+    # Retrieve all recent active purchase orders
+    pos = persistence.list_purchase_orders(limit=10, status_filter="in_transit")
+
+    return {
+        "status": "completed",
+        "scanned_sku_locations": len(items),
+        "deficits_detected": len(breaches),
+        "autonomous_remediations_executed": len(breaches),
+        "active_replenishment_orders": pos,
+        "remediation_actions": remediation_actions,
+        "message": f"Autonomous scan complete. {len(breaches)} deficits remediated by ADS-03 & ADS-05.",
+    }
+
+
+@router.post(
+    "/replenish/auto-heal",
+    summary="Autonomously receive all pending inbound replenishment shipments into warehouse stock",
+)
+async def auto_heal_all_replenishment(
+    _user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
+) -> dict[str, Any]:
+    """Commit all pending in-transit purchase orders into inventory, restoring safety stock levels."""
+    pending_pos = persistence.list_purchase_orders(limit=100, status_filter="in_transit")
+    received = []
+    for po in pending_pos:
+        res = persistence.receive_purchase_order(po["po_id"])
+        if res:
+            received.append(res)
+
+    summary_after = persistence.get_inventory_summary()
+    return {
+        "status": "completed",
+        "orders_received_count": len(received),
+        "replenished_orders": received,
+        "inventory_summary": summary_after,
+        "message": f"Successfully received {len(received)} replenishment orders into warehouse inventory.",
     }
 
 

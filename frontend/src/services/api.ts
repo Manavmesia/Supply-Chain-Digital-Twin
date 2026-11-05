@@ -204,6 +204,31 @@ export const inventoryApi = {
       return data;
     } catch (err) { return handleError(err); }
   },
+
+  runAutonomousScan: async (): Promise<{
+    status: string;
+    scanned_sku_locations: number;
+    deficits_detected: number;
+    autonomous_remediations_executed: number;
+    message: string;
+    remediation_actions: Array<{ agent: string; action: string; details: string; timestamp: string }>;
+  }> => {
+    try {
+      const { data } = await apiClient.post('/inventory/autonomous-scan');
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  autoHealAll: async (): Promise<{
+    status: string;
+    orders_received_count: number;
+    message: string;
+  }> => {
+    try {
+      const { data } = await apiClient.post('/inventory/replenish/auto-heal');
+      return data;
+    } catch (err) { return handleError(err); }
+  },
 };
 
 // ── Suppliers ─────────────────────────────────────────────────────────────────

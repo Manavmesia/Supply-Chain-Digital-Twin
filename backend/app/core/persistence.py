@@ -908,7 +908,16 @@ def save_event(event: dict[str, Any]) -> None:
     ev_type = str(event.get("event_type") or "GenericEvent")
     src = str(event.get("source_agent") or "system")
     wf_id = event.get("workflow_id")
-    payload_str = json.dumps(event.get("payload") or {}, default=str)
+    
+    payload = dict(event.get("payload") or {})
+    if "subscribers" in event and "_subscribers" not in payload:
+        payload["_subscribers"] = event["subscribers"]
+    if "remediation_summary" in event and "_remediation_summary" not in payload:
+        payload["_remediation_summary"] = event["remediation_summary"]
+    if "autonomous_actions" in event and "_autonomous_actions" not in payload:
+        payload["_autonomous_actions"] = event["autonomous_actions"]
+
+    payload_str = json.dumps(payload, default=str)
     ts = str(event.get("timestamp") or datetime.now(timezone.utc).isoformat())
     ev_status = str(event.get("status") or "completed")
 
@@ -957,6 +966,9 @@ def list_events(limit: int = 100, event_type: str | None = None) -> list[dict[st
                     payload = json.loads(r["payload_json"])
                 except Exception:
                     pass
+            subscribers = payload.pop("_subscribers", None)
+            remediation_summary = payload.pop("_remediation_summary", None)
+            autonomous_actions = payload.pop("_autonomous_actions", None)
             items.append({
                 "event_id": r["event_id"],
                 "event_type": r["event_type"],
@@ -965,6 +977,9 @@ def list_events(limit: int = 100, event_type: str | None = None) -> list[dict[st
                 "payload": payload,
                 "timestamp": r["timestamp"],
                 "status": r["status"],
+                "subscribers": subscribers or [],
+                "remediation_summary": remediation_summary or "",
+                "autonomous_actions": autonomous_actions or [],
             })
         return items
 

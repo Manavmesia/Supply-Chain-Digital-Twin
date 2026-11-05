@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { eventsApi } from '../services/api';
+import { eventsApi, inventoryApi } from '../services/api';
 import type { EventRecord } from '../types';
 import {
   formatEventId,
-  formatWorkflowId,
   formatTimeAgo,
 } from '../utils/formatters';
 
@@ -17,10 +16,14 @@ export const EventsPage: React.FC = () => {
     event_type: 'InventoryLow',
     source_agent: 'manual',
     workflow_id: '',
-    payload: '{}',
+    payload: '{\n  "sku": "ELEC-001",\n  "quantity": 100\n}',
   });
   const [injecting, setInjecting] = useState(false);
   const [lastInjected, setLastInjected] = useState<string | null>(null);
+  const [latestRemediation, setLatestRemediation] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const load = useCallback(async (isSilent = false) => {
     try {
@@ -85,6 +88,7 @@ export const EventsPage: React.FC = () => {
 
   const inject = async () => {
     setInjecting(true);
+    setLatestRemediation(null);
     try {
       let payload: Record<string, unknown> = {};
       try { payload = JSON.parse(form.payload); } catch { /* ignore */ }
@@ -96,11 +100,30 @@ export const EventsPage: React.FC = () => {
         workflow_id: form.workflow_id || undefined,
       });
       setLastInjected(result.event_id);
+      if (result.message) {
+        setLatestRemediation(result.message);
+      }
       await load(false);
     } catch (err) {
       console.error(err);
     } finally {
       setInjecting(false);
+    }
+  };
+
+  const handleAutonomousScan = async () => {
+    setIsScanning(true);
+    setScanMessage(null);
+    try {
+      const res = await inventoryApi.runAutonomousScan();
+      if (isMountedRef.current) {
+        setScanMessage(res.message);
+        await load(true);
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+    } finally {
+      if (isMountedRef.current) setIsScanning(false);
     }
   };
 
@@ -113,9 +136,17 @@ export const EventsPage: React.FC = () => {
   return (
     <div className="page-content animate-fade-in">
       <div className="page-header">
-        <h1><span className="gradient-text">Event Bus Monitor</span></h1>
-        <p>Inject synthetic events and monitor the supply chain event stream</p>
+        <h1><span className="gradient-text">Event Bus & Autonomous Remediation</span></h1>
+        <p>Inject synthetic events, trigger closed-loop multi-agent remediation, and monitor real-time event telemetry</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleAutonomousScan}
+            disabled={isScanning}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}
+          >
+            {isScanning ? <span className="loading-spinner" style={{ width: 12, height: 12 }} /> : '⚡'} Run Autonomous Digital Twin Scan
+          </button>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => load(false)}
@@ -129,6 +160,32 @@ export const EventsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {scanMessage && (
+        <div style={{
+          padding: '0.875rem 1.25rem',
+          background: 'rgba(37,99,235,0.08)',
+          border: '1px solid rgba(37,99,235,0.3)',
+          borderRadius: '10px',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: 'var(--c-text-primary)',
+          fontSize: '0.85rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <span style={{ fontSize: '1.1rem' }}>🤖</span>
+            <span>{scanMessage}</span>
+          </div>
+          <button
+            onClick={() => setScanMessage(null)}
+            style={{ background: 'none', border: 'none', color: 'var(--c-text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="grid-2">
         {/* Inject form */}
@@ -181,14 +238,20 @@ export const EventsPage: React.FC = () => {
 
           {lastInjected && (
             <div className="mb-3" style={{
-              padding: '0.75rem',
-              background: 'rgba(16,185,129,0.1)',
+              padding: '0.875rem',
+              background: 'rgba(16,185,129,0.08)',
               border: '1px solid rgba(16,185,129,0.3)',
               borderRadius: '8px',
               fontSize: '0.8125rem',
-              color: '#10b981',
             }}>
-              ✅ Event injected: <code style={{ fontFamily: 'var(--font-mono)' }}>{formatEventId(lastInjected)}</code>
+              <div style={{ color: '#10b981', fontWeight: 600, marginBottom: '0.25rem' }}>
+                ✅ Event Injected: <code style={{ fontFamily: 'var(--font-mono)' }}>{formatEventId(lastInjected)}</code>
+              </div>
+              {latestRemediation && (
+                <div style={{ color: 'var(--c-text-primary)', fontSize: '0.75rem', marginTop: '0.35rem', lineHeight: '1.4' }}>
+                  <span style={{ color: '#60a5fa', fontWeight: 600 }}>🤖 Autonomous Remediation:</span> {latestRemediation}
+                </div>
+              )}
             </div>
           )}
 
@@ -260,61 +323,126 @@ export const EventsPage: React.FC = () => {
             <table>
               <thead>
                 <tr>
-                  <th>Event Type</th>
-                  <th>Event Ref</th>
-                  <th>Source Agent</th>
+                  <th>Event Type & Autonomous Remediation</th>
+                  <th>Subscribers</th>
+                  <th>Source</th>
                   <th>Status</th>
                   <th>Timeline</th>
-                  <th>Linked Workflow</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {events.map((e) => (
-                  <tr key={e.event_id}>
-                    <td>
-                      <span style={{ color: 'var(--c-brand-1)', fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', fontWeight: 600 }}>
-                        {e.event_type}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="tag" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
-                        {formatEventId(e.event_id)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge badge-info">{e.source_agent}</span>
-                    </td>
-                    <td>
-                      <span
-                        className="badge"
-                        style={{
-                          background: e.status === 'replayed' ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)',
-                          color: e.status === 'replayed' ? '#60a5fa' : '#10b981',
-                          border: e.status === 'replayed' ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(16,185,129,0.3)',
-                          textTransform: 'uppercase',
-                        }}
+                {events.map((e) => {
+                  const isExpanded = expandedEventId === e.event_id;
+                  const hasActions = e.autonomous_actions && e.autonomous_actions.length > 0;
+                  return (
+                    <React.Fragment key={e.event_id}>
+                      <tr
+                        style={{ cursor: hasActions ? 'pointer' : 'default', background: isExpanded ? 'var(--c-bg-subtle)' : undefined }}
+                        onClick={() => hasActions && setExpandedEventId(isExpanded ? null : e.event_id)}
                       >
-                        {e.status}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
-                      {formatTimeAgo(e.timestamp)}
-                    </td>
-                    <td>
-                      {e.workflow_id ? (
-                        <a
-                          href={`/workflow?id=${e.workflow_id}`}
-                          className="tag"
-                          style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', textDecoration: 'none' }}
-                        >
-                          {formatWorkflowId(e.workflow_id)} ↗
-                        </a>
-                      ) : (
-                        <span style={{ color: 'var(--c-text-muted)', fontSize: '0.75rem' }}>System-Wide</span>
+                        <td>
+                          <div>
+                            <span style={{ color: 'var(--c-brand-1)', fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', fontWeight: 600 }}>
+                              {e.event_type}
+                            </span>
+                            <span className="tag ml-2" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', marginLeft: '0.5rem' }}>
+                              {formatEventId(e.event_id)}
+                            </span>
+                            {e.remediation_summary && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--c-text-secondary)', marginTop: '0.25rem' }}>
+                                <span style={{ color: '#10b981', fontWeight: 600 }}>✦ Remediated:</span> {e.remediation_summary}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                            {e.subscribers && e.subscribers.length > 0 ? (
+                              e.subscribers.map((sub) => (
+                                <span key={sub} className="badge badge-info" style={{ fontSize: '0.65rem' }}>
+                                  {sub}
+                                </span>
+                              ))
+                            ) : (
+                              <span style={{ color: 'var(--c-text-muted)', fontSize: '0.72rem' }}>—</span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="tag">{e.source_agent}</span>
+                        </td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              background: e.status === 'replayed' ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)',
+                              color: e.status === 'replayed' ? '#60a5fa' : '#10b981',
+                              border: e.status === 'replayed' ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(16,185,129,0.3)',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {e.status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
+                          {formatTimeAgo(e.timestamp)}
+                        </td>
+                        <td>
+                          {hasActions && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                              onClick={(evt) => {
+                                evt.stopPropagation();
+                                setExpandedEventId(isExpanded ? null : e.event_id);
+                              }}
+                            >
+                              {isExpanded ? '▲ Hide Trace' : `▼ Actions (${e.autonomous_actions?.length})`}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {isExpanded && hasActions && (
+                        <tr>
+                          <td colSpan={6} style={{ background: 'var(--c-bg-subtle)', padding: '1rem 1.5rem', borderBottom: '1px solid var(--c-border)' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#60a5fa', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              🤖 Autonomous Multi-Agent Action Log
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              {e.autonomous_actions?.map((act, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    display: 'flex',
+                                    gap: '0.75rem',
+                                    alignItems: 'flex-start',
+                                    background: 'var(--c-bg-card)',
+                                    border: '1px solid var(--c-border)',
+                                    borderRadius: '6px',
+                                    padding: '0.5rem 0.75rem',
+                                    fontSize: '0.75rem',
+                                  }}
+                                >
+                                  <span className="badge badge-info" style={{ fontWeight: 700, minWidth: '60px', textAlign: 'center' }}>
+                                    {act.agent}
+                                  </span>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--c-text-primary)' }}>{act.action}</div>
+                                    <div style={{ color: 'var(--c-text-secondary)', marginTop: '0.15rem' }}>{act.details}</div>
+                                  </div>
+                                  <div style={{ color: 'var(--c-text-muted)', fontSize: '0.7rem' }}>
+                                    {act.timestamp ? new Date(act.timestamp).toLocaleTimeString() : ''}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
