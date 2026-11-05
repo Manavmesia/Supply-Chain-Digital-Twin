@@ -314,3 +314,62 @@ export interface PaginatedResponse<T> {
   skip: number;
   limit: number;
 }
+
+// Digital Twin Spatial & Network Topology
+export interface TwinNode {
+  id: string;
+  name: string;
+  type: 'supplier' | 'plant' | 'warehouse' | 'market';
+  tier?: string;
+  location: string;
+  coords: { x: number; y: number };
+  status: 'healthy' | 'warning' | 'critical';
+  reliability?: number;
+  primary_products?: string;
+  lead_time_days?: number;
+  active_orders?: number;
+  capacity?: number;
+  utilization_pct?: number;
+  available_units?: number;
+  reserved_units?: number;
+  low_stock_count?: number;
+  sla_performance?: number;
+  active_runs?: number;
+}
+
+export interface TwinLane {
+  id: string;
+  from_node: string;
+  to_node: string;
+  mode: 'air' | 'sea' | 'road';
+  carrier: string;
+  transit_days: number;
+  risk_score: number;
+  status: 'active' | 'congested' | 'delayed';
+}
+
+export interface TwinActiveShipment {
+  id: string;
+  type: 'replenishment' | 'customer_order';
+  from_node: string;
+  to_node: string;
+  carrier: string;
+  mode: 'air' | 'sea' | 'road';
+  progress_pct: number;
+  payload_desc: string;
+  status: string;
+}
+
+export interface TwinNetworkData {
+  summary: {
+    total_nodes: number;
+    total_lanes: number;
+    active_shipments_in_flight: number;
+    network_health_score: number;
+    otif_delivery_projection: number;
+    co2_efficiency_rating: string;
+  };
+  nodes: TwinNode[];
+  lanes: TwinLane[];
+  active_shipments: TwinActiveShipment[];
+}

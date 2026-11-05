@@ -140,6 +140,13 @@ export const analyticsApi = {
       return data;
     } catch (err) { return handleError(err); }
   },
+
+  getNetworkTopology: async (): Promise<import('../types').TwinNetworkData> => {
+    try {
+      const { data } = await apiClient.get<import('../types').TwinNetworkData>('/analytics/network');
+      return data;
+    } catch (err) { return handleError(err); }
+  },
 };
 
 // ── Orders ────────────────────────────────────────────────────────────────────

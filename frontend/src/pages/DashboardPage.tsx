@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { analyticsApi } from '../services/api';
 import { KPIGrid } from '../components/dashboard/KPIGrid';
 import { AgentPipeline } from '../components/dashboard/AgentPipeline';
-import type { DashboardData, AgentDefinition, RecentOrder } from '../types';
+import { DigitalTwinCanvas } from '../components/dashboard/DigitalTwinCanvas';
+import type { DashboardData, AgentDefinition, RecentOrder, TwinNetworkData } from '../types';
 import {
   formatOrderId,
   getCustomerName,
@@ -13,6 +14,7 @@ import {
 export const DashboardPage: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
+  const [networkData, setNetworkData] = useState<TwinNetworkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -21,13 +23,15 @@ export const DashboardPage: React.FC = () => {
   const fetchDashboardData = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsUpdating(true);
     try {
-      const [dash, agentsRes] = await Promise.all([
+      const [dash, agentsRes, netRes] = await Promise.all([
         analyticsApi.getDashboard(),
         analyticsApi.getAgents(),
+        analyticsApi.getNetworkTopology(),
       ]);
       if (isMountedRef.current) {
         setDashboard(dash);
         setAgents(agentsRes.agents);
+        setNetworkData(netRes);
         setLastUpdated(new Date());
       }
     } catch (err) {
@@ -47,10 +51,12 @@ export const DashboardPage: React.FC = () => {
     Promise.all([
       analyticsApi.getDashboard(),
       analyticsApi.getAgents(),
-    ]).then(([dash, agentsRes]) => {
+      analyticsApi.getNetworkTopology(),
+    ]).then(([dash, agentsRes, netRes]) => {
       if (!ignore && isMountedRef.current) {
         setDashboard(dash);
         setAgents(agentsRes.agents);
+        setNetworkData(netRes);
         setLastUpdated(new Date());
         setLoading(false);
       }
@@ -120,6 +126,15 @@ export const DashboardPage: React.FC = () => {
 
       {/* KPI Grid */}
       <KPIGrid kpis={dashboard?.kpis ?? null} loading={loading} />
+
+      {/* Spatial Digital Twin Network Topology Canvas */}
+      <div className="mt-6 animate-fade-in" style={{ animationDelay: '50ms' }}>
+        <DigitalTwinCanvas
+          data={networkData}
+          loading={loading}
+          onRefresh={() => fetchDashboardData(false)}
+        />
+      </div>
 
       {/* Charts row */}
       <div className="grid-2 mt-6">

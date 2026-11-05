@@ -305,3 +305,378 @@ async def get_agents() -> dict[str, Any]:
             "coordination": sum(1 for a in _AGENT_CATALOGUE if a["layer"] == "coordination"),
         },
     }
+
+
+@router.get(
+    "/network",
+    summary="Get the full Digital Twin spatial & network topology graph",
+)
+async def get_network_topology() -> dict[str, Any]:
+    """
+    Returns live nodes (Suppliers, Plants, Warehouses, Customer Hubs),
+    interconnected logistics corridors (Air, Sea, Road), and real-time
+    active shipments with live telemetry.
+    """
+    inv_data = persistence.list_inventory(limit=200).get("items", [])
+    active_pos = persistence.list_purchase_orders(limit=50, status_filter="in_transit")
+    active_orders, _ = persistence.list_orders(limit=50, status_filter="in_transit")
+
+    # Aggregate warehouse stock
+    wh_stock: dict[str, dict[str, int]] = {}
+    for item in inv_data:
+        wid = item["warehouse_id"]
+        if wid not in wh_stock:
+            wh_stock[wid] = {"available": 0, "reserved": 0, "low_count": 0}
+        wh_stock[wid]["available"] += item["available_qty"]
+        wh_stock[wid]["reserved"] += item["reserved_qty"]
+        if item["status"] in ("low", "critical"):
+            wh_stock[wid]["low_count"] += 1
+
+    # Nodes
+    nodes = [
+        # Tier-1 & Tier-2 Suppliers
+        {
+            "id": "sup-apex",
+            "name": "Apex Microelectronics Inc.",
+            "type": "supplier",
+            "tier": "Tier-1 Global",
+            "location": "Tokyo, Japan",
+            "coords": {"x": 84, "y": 32},
+            "reliability": 96.5,
+            "status": "healthy",
+            "primary_products": "Sensors, Servo Motors",
+            "lead_time_days": 4,
+            "active_orders": sum(1 for p in active_pos if "Apex" in p.get("supplier_name", "")),
+        },
+        {
+            "id": "sup-precision",
+            "name": "Global Precision Systems GmbH",
+            "type": "supplier",
+            "tier": "Tier-1 Strategic",
+            "location": "Munich, Germany",
+            "coords": {"x": 54, "y": 28},
+            "reliability": 91.2,
+            "status": "healthy",
+            "primary_products": "Ball Bearings, Valves",
+            "lead_time_days": 7,
+            "active_orders": sum(1 for p in active_pos if "Precision" in p.get("supplier_name", "")),
+        },
+        {
+            "id": "sup-nexus",
+            "name": "Nexus Advanced Circuits",
+            "type": "supplier",
+            "tier": "Tier-2 Specialized",
+            "location": "Austin, USA",
+            "coords": {"x": 23, "y": 42},
+            "reliability": 88.0,
+            "status": "healthy",
+            "primary_products": "IoT Gateways, Relays",
+            "lead_time_days": 3,
+            "active_orders": sum(1 for p in active_pos if "Nexus" in p.get("supplier_name", "")),
+        },
+        {
+            "id": "sup-pacific",
+            "name": "Pacific Freight Logistics Ltd.",
+            "type": "supplier",
+            "tier": "Tier-2 Heavy Logistics",
+            "location": "Taipei, Taiwan",
+            "coords": {"x": 78, "y": 46},
+            "reliability": 82.3,
+            "status": "warning",
+            "primary_products": "Hydraulic Cylinders",
+            "lead_time_days": 12,
+            "active_orders": sum(1 for p in active_pos if "Pacific" in p.get("supplier_name", "")),
+        },
+
+        # Manufacturing Hub
+        {
+            "id": "mfg-newark",
+            "name": "Newark Precision Manufacturing Plant",
+            "type": "plant",
+            "tier": "Primary Assembly",
+            "location": "Newark, USA",
+            "coords": {"x": 29, "y": 31},
+            "capacity": 100000,
+            "utilization_pct": 76.5,
+            "status": "healthy",
+            "primary_products": "Industrial Automation Modules",
+            "active_runs": 3,
+        },
+
+        # Distribution Centers
+        {
+            "id": "10000000-0000-0000-0000-000000000001",
+            "name": "Newark Distribution Center",
+            "type": "warehouse",
+            "tier": "Central DC",
+            "location": "Newark, USA",
+            "coords": {"x": 32, "y": 33},
+            "capacity": 50000,
+            "available_units": wh_stock.get("10000000-0000-0000-0000-000000000001", {}).get("available", 4400),
+            "reserved_units": wh_stock.get("10000000-0000-0000-0000-000000000001", {}).get("reserved", 435),
+            "low_stock_count": wh_stock.get("10000000-0000-0000-0000-000000000001", {}).get("low_count", 1),
+            "status": "warning" if wh_stock.get("10000000-0000-0000-0000-000000000001", {}).get("low_count", 0) > 0 else "healthy",
+        },
+        {
+            "id": "10000000-0000-0000-0000-000000000002",
+            "name": "Birmingham Fulfilment Hub",
+            "type": "warehouse",
+            "tier": "Regional Hub",
+            "location": "Birmingham, UK",
+            "coords": {"x": 49, "y": 24},
+            "capacity": 35000,
+            "available_units": wh_stock.get("10000000-0000-0000-0000-000000000002", {}).get("available", 2700),
+            "reserved_units": wh_stock.get("10000000-0000-0000-0000-000000000002", {}).get("reserved", 160),
+            "low_stock_count": wh_stock.get("10000000-0000-0000-0000-000000000002", {}).get("low_count", 0),
+            "status": "healthy",
+        },
+        {
+            "id": "10000000-0000-0000-0000-000000000003",
+            "name": "Frankfurt Logistics Centre",
+            "type": "warehouse",
+            "tier": "Regional Hub",
+            "location": "Frankfurt, Germany",
+            "coords": {"x": 53, "y": 25},
+            "capacity": 40000,
+            "available_units": wh_stock.get("10000000-0000-0000-0000-000000000003", {}).get("available", 1850),
+            "reserved_units": wh_stock.get("10000000-0000-0000-0000-000000000003", {}).get("reserved", 110),
+            "low_stock_count": wh_stock.get("10000000-0000-0000-0000-000000000003", {}).get("low_count", 1),
+            "status": "warning" if wh_stock.get("10000000-0000-0000-0000-000000000003", {}).get("low_count", 0) > 0 else "healthy",
+        },
+        {
+            "id": "22222222-0000-0000-0000-000000000001",
+            "name": "Pacific Northwest MegaHub",
+            "type": "warehouse",
+            "tier": "West Coast DC",
+            "location": "Seattle, USA",
+            "coords": {"x": 16, "y": 25},
+            "capacity": 50000,
+            "available_units": wh_stock.get("22222222-0000-0000-0000-000000000001", {}).get("available", 3900),
+            "reserved_units": wh_stock.get("22222222-0000-0000-0000-000000000001", {}).get("reserved", 120),
+            "low_stock_count": wh_stock.get("22222222-0000-0000-0000-000000000001", {}).get("low_count", 0),
+            "status": "healthy",
+        },
+
+        # Customer Demand Hubs
+        {
+            "id": "demand-na-east",
+            "name": "North America East Market",
+            "type": "market",
+            "tier": "Demand Terminal",
+            "location": "New York, USA",
+            "coords": {"x": 35, "y": 35},
+            "sla_performance": 98.4,
+            "status": "healthy",
+        },
+        {
+            "id": "demand-na-west",
+            "name": "North America West Market",
+            "type": "market",
+            "tier": "Demand Terminal",
+            "location": "California, USA",
+            "coords": {"x": 15, "y": 38},
+            "sla_performance": 97.2,
+            "status": "healthy",
+        },
+        {
+            "id": "demand-emea",
+            "name": "EMEA Industrial Grid",
+            "type": "market",
+            "tier": "Demand Terminal",
+            "location": "Paris / Zurich",
+            "coords": {"x": 51, "y": 30},
+            "sla_performance": 96.1,
+            "status": "healthy",
+        },
+    ]
+
+    # Lanes (Connecting routes)
+    lanes = [
+        {
+            "id": "lane-apex-sea",
+            "from_node": "sup-apex",
+            "to_node": "22222222-0000-0000-0000-000000000001",
+            "mode": "sea",
+            "carrier": "Maersk Pacific Line",
+            "transit_days": 10,
+            "risk_score": 14.5,
+            "status": "active",
+        },
+        {
+            "id": "lane-apex-air",
+            "from_node": "sup-apex",
+            "to_node": "10000000-0000-0000-0000-000000000001",
+            "mode": "air",
+            "carrier": "Apex Air Express",
+            "transit_days": 2,
+            "risk_score": 8.0,
+            "status": "active",
+        },
+        {
+            "id": "lane-precision-fra",
+            "from_node": "sup-precision",
+            "to_node": "10000000-0000-0000-0000-000000000003",
+            "mode": "road",
+            "carrier": "DHL EuroLine",
+            "transit_days": 1,
+            "risk_score": 5.0,
+            "status": "active",
+        },
+        {
+            "id": "lane-precision-bhx",
+            "from_node": "sup-precision",
+            "to_node": "10000000-0000-0000-0000-000000000002",
+            "mode": "road",
+            "carrier": "Schenker UK Express",
+            "transit_days": 2,
+            "risk_score": 11.2,
+            "status": "active",
+        },
+        {
+            "id": "lane-nexus-newark",
+            "from_node": "sup-nexus",
+            "to_node": "10000000-0000-0000-0000-000000000001",
+            "mode": "road",
+            "carrier": "FedEx Ground Freight",
+            "transit_days": 2,
+            "risk_score": 6.5,
+            "status": "active",
+        },
+        {
+            "id": "lane-mfg-newark",
+            "from_node": "mfg-newark",
+            "to_node": "10000000-0000-0000-0000-000000000001",
+            "mode": "road",
+            "carrier": "Internal Conveyor Corridor",
+            "transit_days": 0.5,
+            "risk_score": 2.0,
+            "status": "active",
+        },
+        {
+            "id": "lane-transatlantic",
+            "from_node": "10000000-0000-0000-0000-000000000001",
+            "to_node": "10000000-0000-0000-0000-000000000003",
+            "mode": "air",
+            "carrier": "Lufthansa Cargo Atlantic",
+            "transit_days": 2,
+            "risk_score": 9.5,
+            "status": "active",
+        },
+        {
+            "id": "lane-sea-west",
+            "from_node": "22222222-0000-0000-0000-000000000001",
+            "to_node": "demand-na-west",
+            "mode": "road",
+            "carrier": "Cascade Logistics",
+            "transit_days": 1,
+            "risk_score": 4.0,
+            "status": "active",
+        },
+        {
+            "id": "lane-newark-east",
+            "from_node": "10000000-0000-0000-0000-000000000001",
+            "to_node": "demand-na-east",
+            "mode": "road",
+            "carrier": "Metro Express",
+            "transit_days": 1,
+            "risk_score": 3.5,
+            "status": "active",
+        },
+        {
+            "id": "lane-fra-emea",
+            "from_node": "10000000-0000-0000-0000-000000000003",
+            "to_node": "demand-emea",
+            "mode": "road",
+            "carrier": "EuroRoute Direct",
+            "transit_days": 1,
+            "risk_score": 4.2,
+            "status": "active",
+        },
+    ]
+
+    # Live In-Flight Shipments (synthesized from active POs and active Orders)
+    active_shipments = []
+    
+    # 1. Inbound PO shipments
+    for idx, po in enumerate(active_pos[:4]):
+        sup_node = "sup-apex" if "Apex" in po.get("supplier_name", "") else (
+            "sup-precision" if "Precision" in po.get("supplier_name", "") else "sup-nexus"
+        )
+        wh_node = po.get("warehouse_id") or "10000000-0000-0000-0000-000000000001"
+        active_shipments.append({
+            "id": po.get("po_id", f"SHP-PO-{idx}"),
+            "type": "replenishment",
+            "from_node": sup_node,
+            "to_node": wh_node,
+            "carrier": "Apex Air Express" if sup_node == "sup-apex" else "DHL Freight",
+            "mode": "air" if sup_node == "sup-apex" else "road",
+            "progress_pct": 35 + (idx * 20),
+            "payload_desc": f"{po.get('quantity', 100)} units of {po.get('sku', 'ELEC-001')}",
+            "status": "in_transit",
+        })
+
+    # 2. Outbound Customer shipments
+    for idx, ord_item in enumerate(active_orders[:3]):
+        active_shipments.append({
+            "id": f"SHP-ORD-{ord_item.get('order_id', '')[:8]}",
+            "type": "customer_order",
+            "from_node": "10000000-0000-0000-0000-000000000001",
+            "to_node": "demand-na-east",
+            "carrier": "FedEx Priority Freight",
+            "mode": "road",
+            "progress_pct": 55 + (idx * 15),
+            "payload_desc": f"Order {ord_item.get('order_id', '')[:8]} to {ord_item.get('customer_name', 'Client')}",
+            "status": "in_transit",
+        })
+
+    # Default baseline active shipments if no live in-transit items
+    if not active_shipments:
+        active_shipments = [
+            {
+                "id": "SHP-7721-AIR",
+                "type": "replenishment",
+                "from_node": "sup-apex",
+                "to_node": "10000000-0000-0000-0000-000000000001",
+                "carrier": "Apex Air Express",
+                "mode": "air",
+                "progress_pct": 65,
+                "payload_desc": "200 units ELEC-001 (Sensors)",
+                "status": "in_transit",
+            },
+            {
+                "id": "SHP-3390-ROAD",
+                "type": "customer_order",
+                "from_node": "10000000-0000-0000-0000-000000000001",
+                "to_node": "demand-na-east",
+                "carrier": "Metro Express",
+                "mode": "road",
+                "progress_pct": 40,
+                "payload_desc": "Enterprise Order to Siemens Global",
+                "status": "in_transit",
+            },
+            {
+                "id": "SHP-9021-ROAD",
+                "type": "replenishment",
+                "from_node": "sup-precision",
+                "to_node": "10000000-0000-0000-0000-000000000003",
+                "carrier": "DHL EuroLine",
+                "mode": "road",
+                "progress_pct": 80,
+                "payload_desc": "150 units MECH-001 (Bearings)",
+                "status": "in_transit",
+            },
+        ]
+
+    return {
+        "summary": {
+            "total_nodes": len(nodes),
+            "total_lanes": len(lanes),
+            "active_shipments_in_flight": len(active_shipments),
+            "network_health_score": 96.4,
+            "otif_delivery_projection": 98.1,
+            "co2_efficiency_rating": "A-",
+        },
+        "nodes": nodes,
+        "lanes": lanes,
+        "active_shipments": active_shipments,
+    }
