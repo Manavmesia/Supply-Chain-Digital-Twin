@@ -1,28 +1,30 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Workflow, Bot, FileText,
-  Package, ChevronRight, Activity, Settings, LogOut,
-  ShoppingCart, Truck, Building2, ShieldAlert,
+  LayoutDashboard,
+  Workflow,
+  Bot,
+  FileText,
+  Package,
+  ChevronRight,
+  Activity,
+  ShoppingCart,
+  Truck,
+  Building2,
+  ShieldAlert,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { path: '/',              label: 'Dashboard',         icon: LayoutDashboard, badge: null },
-  { path: '/orders',         label: 'Orders (OMS)',      icon: ShoppingCart,    badge: null },
-  { path: '/shipments',      label: 'Logistics (TMS)',   icon: Truck,           badge: null },
-  { path: '/procurement',    label: 'Procurement (SRM)', icon: Building2,       badge: null },
-  { path: '/inventory',      label: 'Inventory (WMS)',   icon: Package,         badge: null },
-  { path: '/control-tower',  label: 'Control Tower',     icon: ShieldAlert,     badge: 'Live' },
-  { path: '/workflows',      label: 'AI Agent Engine',   icon: Workflow,        badge: null },
-  { path: '/agents',         label: 'Agent Roster',      icon: Bot,             badge: '18' },
-  { path: '/reports',        label: 'Executive Reports', icon: FileText,        badge: null },
+  { path: '/',             label: 'Dashboard',       icon: LayoutDashboard },
+  { path: '/orders',        label: 'Orders',          icon: ShoppingCart },
+  { path: '/shipments',     label: 'Logistics',       icon: Truck },
+  { path: '/procurement',   label: 'Procurement',     icon: Building2 },
+  { path: '/inventory',     label: 'Inventory',       icon: Package },
+  { path: '/control-tower', label: 'Control Tower',   icon: ShieldAlert },
+  { path: '/workflows',     label: 'Agent Engine',    icon: Workflow },
+  { path: '/agents',        label: 'Agent Directory', icon: Bot },
+  { path: '/reports',       label: 'Reports',         icon: FileText },
 ];
-
-const LAYER_COLORS: Record<string, string> = {
-  operational:  '#10b981',
-  business:     '#f59e0b',
-  coordination: '#8b5cf6',
-};
 
 interface SidebarProps {
   systemOnline: boolean;
@@ -36,19 +38,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
     <aside
       className="sidebar"
       style={{
-        width: collapsed ? '64px' : '260px',
-        transition: 'width 0.25s ease',
+        width: collapsed ? '68px' : '240px',
+        transition: 'width 0.2s ease',
       }}
     >
-      {/* Logo */}
-      <div className="sidebar-logo">
+      {/* Brand Header */}
+      <div className="sidebar-logo" style={{ padding: '1.25rem 1rem' }}>
         <div className="sidebar-logo-icon">
-          <Activity size={20} color="#3b82f6" />
+          <Activity size={18} color="#2563eb" />
         </div>
         {!collapsed && (
           <div className="sidebar-logo-text">
             <span className="sidebar-logo-title">Digital Twin</span>
-            <span className="sidebar-logo-sub">Supply Chain AI</span>
+            <span className="sidebar-logo-sub">Supply Chain Portal</span>
           </div>
         )}
         <button
@@ -66,23 +68,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
         </button>
       </div>
 
-      {/* System status */}
-      <div className="sidebar-status">
-        <div
-          className="sidebar-status-dot"
-          style={{ background: systemOnline ? '#10b981' : '#ef4444' }}
-        />
-        {!collapsed && (
-          <span className="sidebar-status-text">
-            {systemOnline ? 'System Online' : 'System Offline'}
-          </span>
-        )}
-      </div>
-
       {/* Navigation */}
-      <nav className="sidebar-nav">
-        {!collapsed && <p className="sidebar-section-label">Navigation</p>}
-        {NAV_ITEMS.map(({ path, label, icon: Icon, badge }) => {
+      <nav className="sidebar-nav" style={{ padding: '1rem 0.75rem', gap: '4px' }}>
+        {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
           const isActive = path === '/'
             ? location.pathname === '/'
             : location.pathname.startsWith(path);
@@ -93,53 +81,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
               to={path}
               className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
               title={collapsed ? label : undefined}
+              style={{
+                padding: '0.65rem 0.85rem',
+                fontSize: '0.85rem',
+                borderRadius: '8px',
+                marginBottom: '2px',
+              }}
             >
               <Icon size={18} />
               {!collapsed && <span className="sidebar-nav-label">{label}</span>}
-              {!collapsed && badge && (
-                <span className="sidebar-nav-badge">{badge}</span>
-              )}
-              {isActive && !collapsed && (
-                <ChevronRight size={12} className="sidebar-nav-arrow" />
-              )}
             </NavLink>
           );
         })}
       </nav>
 
-      {/* Agent layers legend */}
+      {/* Clean System Status in Footer */}
       {!collapsed && (
-        <div className="sidebar-legend">
-          <p className="sidebar-section-label">Agent Layers</p>
-          {Object.entries(LAYER_COLORS).map(([layer, color]) => (
-            <div key={layer} className="sidebar-legend-item">
-              <span
-                className="sidebar-legend-dot"
-                style={{ background: color }}
-              />
-              <span className="sidebar-legend-label">
-                {layer.charAt(0).toUpperCase() + layer.slice(1)}
-              </span>
-            </div>
-          ))}
+        <div style={{ marginTop: 'auto', padding: '1rem', borderTop: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#64748b' }}>
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: systemOnline ? '#10b981' : '#ef4444',
+                display: 'inline-block',
+              }}
+            />
+            <span>{systemOnline ? 'System Operational' : 'Connecting...'}</span>
+          </div>
         </div>
       )}
-
-      {/* Footer */}
-      <div className="sidebar-footer">
-        <button className="sidebar-footer-btn" title="Settings">
-          <Settings size={16} />
-          {!collapsed && <span>Settings</span>}
-        </button>
-        <button
-          className="sidebar-footer-btn danger"
-          title="Logout"
-          onClick={() => localStorage.removeItem('access_token')}
-        >
-          <LogOut size={16} />
-          {!collapsed && <span>Logout</span>}
-        </button>
-      </div>
     </aside>
   );
 };

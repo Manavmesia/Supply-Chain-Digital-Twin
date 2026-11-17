@@ -22,7 +22,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.core import persistence
 from app.core.catalog import PRODUCT_MAP
 from app.graph.state import SupplyChainState
@@ -116,7 +116,7 @@ class SupplierAgent(BaseAgent):
         decisions = list(state.get("decisions") or [])
 
         for proc_item in items_to_procure:
-            product_id = uuid.UUID(str(proc_item["product_id"]))
+            product_id = safe_uuid(str(proc_item["product_id"]))
             needed_qty = int(proc_item["quantity"])
 
             # Query supplier_products join suppliers for this product
@@ -239,7 +239,7 @@ class SupplierAgent(BaseAgent):
                 po_id=po_id,
                 supplier_id=best_supplier.supplier_id,
                 product_id=product_id,
-                warehouse_id=uuid.UUID(warehouse_id_str) if warehouse_id_str else uuid.uuid4(),
+                warehouse_id=safe_uuid(warehouse_id_str) if warehouse_id_str else uuid.uuid4(),
                 quantity=order_qty,
                 unit_cost=unit_cost_dec,
                 total_cost=total_cost_dec,
@@ -247,7 +247,7 @@ class SupplierAgent(BaseAgent):
                 status="draft",
                 requested_delivery=requested_delivery,
                 triggered_by_agent=self.agent_code,
-                workflow_id=uuid.UUID(state["workflow_id"]) if state.get("workflow_id") else None,
+                workflow_id=safe_uuid(state["workflow_id"]) if state.get("workflow_id") else None,
             )
             session.add(po)
             await session.flush()

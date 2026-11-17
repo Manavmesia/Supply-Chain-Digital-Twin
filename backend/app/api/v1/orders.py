@@ -166,20 +166,21 @@ async def get_order_stats(
     summary="Get order detail with items",
 )
 async def get_order(
-    order_id: uuid.UUID,
+    order_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Fetch full order detail including line items and customer info."""
+    clean_uid = _safe_uuid(order_id)
     try:
         # Get order
         result = await session.execute(
-            select(Order).where(Order.order_id == order_id)
+            select(Order).where(Order.order_id == clean_uid)
         )
         order = result.scalar_one_or_none()
         if order is not None:
             # Get order items
             items_result = await session.execute(
-                select(OrderItem).where(OrderItem.order_id == order_id)
+                select(OrderItem).where(OrderItem.order_id == clean_uid)
             )
             items = items_result.scalars().all()
 
@@ -349,6 +350,7 @@ async def create_commercial_order(
     # Trigger 18-agent LangGraph workflow
     wf_request = OrderWorkflowRequest(
         customer_id=_safe_uuid(payload.customer_id),
+        order_id=order_id,
         items=[OrderItemRequest(product_id=_safe_uuid(it.product_id), quantity=it.quantity) for it in payload.items],
     )
     background_tasks.add_task(_run_workflow, workflow_id, correlation_id, wf_request)

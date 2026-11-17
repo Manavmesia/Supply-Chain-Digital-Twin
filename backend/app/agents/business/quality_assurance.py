@@ -24,7 +24,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.quality_inspection import QualityInspection
 
@@ -152,8 +152,8 @@ class QualityAssuranceAgent(BaseAgent):
                 try:
                     inspection = QualityInspection(
                         inspection_id=inspection_id,
-                        product_id=uuid.UUID(product_id_str),
-                        manufacturing_order_id=uuid.UUID(mo_id_str),
+                        product_id=safe_uuid(product_id_str),
+                        manufacturing_order_id=safe_uuid(mo_id_str),
                         sample_size=sample_size,
                         defect_count=defect_count,
                         defect_rate=Decimal(str(defect_rate)),

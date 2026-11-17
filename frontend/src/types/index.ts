@@ -35,6 +35,7 @@ export interface WorkflowStatus {
   current_node: string | null;
   active_agents: string[];
   order: Record<string, unknown> | null;
+  customer?: Record<string, unknown> | null;
   shipment: Record<string, unknown> | null;
   executive_decision: Record<string, unknown> | null;
   supplier?: Record<string, unknown> | null;

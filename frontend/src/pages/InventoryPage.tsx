@@ -35,7 +35,6 @@ export const InventoryPage: React.FC = () => {
   const [lowOnly, setLowOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [receivingPoId, setReceivingPoId] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isScanning, setIsScanning] = useState(false);
   const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -52,7 +51,6 @@ export const InventoryPage: React.FC = () => {
         setItems(invRes.items);
         setSummary(sumRes);
         setReplenishmentOrders(repRes.items);
-        setLastUpdated(new Date());
       }
     } catch (err) {
       console.error('Inventory load failed:', err);
@@ -122,7 +120,6 @@ export const InventoryPage: React.FC = () => {
         setItems(invRes.items);
         setSummary(sumRes);
         setReplenishmentOrders(repRes.items);
-        setLastUpdated(new Date());
         setLoading(false);
       }
     }).catch((err) => {
@@ -160,77 +157,62 @@ export const InventoryPage: React.FC = () => {
   );
 
   return (
-    <div className="page-content animate-fade-in" style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto', color: '#f8fafc' }}>
-      <div className="page-header" style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#f8fafc' }}>
-          Warehouse Inventory (WMS)
-        </h1>
-        <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-          Stock levels across regional hubs with automated safety stock replenishment
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+    <div className="page-container animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            Warehouse Inventory
+          </h1>
+          <p className="page-subtitle">
+            Stock levels across regional hubs with automated safety stock replenishment.
+          </p>
+        </div>
+        <div className="page-actions">
           <button
-            className="btn btn-primary btn-sm"
-            onClick={handleAutonomousScan}
-            disabled={isScanning || isAutoHealing}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#2563eb', border: 'none', borderRadius: '5px', fontWeight: 600, fontSize: '12px' }}
-          >
-            <Sparkles size={13} className={isScanning ? 'animate-spin' : ''} />
-            {isScanning ? 'Scanning Network...' : 'Run Autonomous Agent Scan'}
-          </button>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleAutoHealAll}
-            disabled={isScanning || isAutoHealing}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '5px', fontSize: '12px' }}
-          >
-            <CheckCircle2 size={13} />
-            Commit All Inbound Stock
-          </button>
-          <button
-            className="btn btn-ghost btn-sm"
             onClick={() => { setLoading(true); fetchInventory(false); }}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '5px', fontSize: '12px' }}
+            className="btn-secondary"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#94a3b8' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-            Synced {lastUpdated.toLocaleTimeString()}
-          </div>
+          <button
+            onClick={handleAutonomousScan}
+            disabled={isScanning || isAutoHealing}
+            className="btn-primary"
+          >
+            <Sparkles size={13} className={isScanning ? 'animate-spin' : ''} />
+            {isScanning ? 'Scanning...' : 'Scan Stock Levels'}
+          </button>
+          <button
+            onClick={handleAutoHealAll}
+            disabled={isScanning || isAutoHealing}
+            className="btn-secondary"
+            style={{ color: '#059669', borderColor: '#a7f3d0', background: '#ecfdf5', fontWeight: 600 }}
+          >
+            <CheckCircle2 size={14} className="text-emerald-600" />
+            Receive Inbound Stock
+          </button>
         </div>
       </div>
 
       {scanMessage && (
-        <div style={{
-          padding: '0.875rem 1.25rem',
-          background: 'rgba(37,99,235,0.08)',
-          border: '1px solid rgba(37,99,235,0.3)',
-          borderRadius: '10px',
-          marginBottom: '1.25rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: 'var(--c-text-primary)',
-          fontSize: '0.85rem',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Bot size={16} className="text-blue-400" />
+        <div className="banner-info" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Bot size={16} className="text-blue-600" />
             <span>{scanMessage}</span>
           </div>
           <button
             onClick={() => setScanMessage(null)}
-            style={{ background: 'none', border: 'none', color: 'var(--c-text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
+            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '16px' }}
           >
-            ×
+            &times;
           </button>
         </div>
       )}
 
       {/* Summary KPIs */}
-      <div className="grid-4 mb-6">
+      <div className="stat-grid">
         {[
           {
             label: 'Total Locations',
@@ -254,30 +236,23 @@ export const InventoryPage: React.FC = () => {
             icon: Target,
           },
         ].map(({ label, value, sub, icon: Icon }) => (
-          <div key={label} className="card">
-            <div className="flex justify-between items-start mb-2">
-              <span className="kpi-label">{label}</span>
+          <div key={label} className="stat-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <span className="stat-label">{label}</span>
               <Icon size={16} className="text-slate-400" />
             </div>
-            <div className="kpi-value" style={{ fontSize: '1.75rem', margin: '0.25rem 0' }}>
+            <div className="stat-value">
               {loading ? <div className="skeleton" style={{ height: '28px', width: '80px' }} /> : value}
             </div>
-            {sub && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>{sub}</div>}
+            {sub && <div className="stat-sub">{sub}</div>}
           </div>
         ))}
       </div>
 
       {/* Filters */}
-      <div className="card mb-4">
-        <div className="flex gap-3 items-center" style={{ flexWrap: 'wrap' }}>
-          <input
-            className="form-input"
-            style={{ maxWidth: '300px' }}
-            placeholder="Search by product, SKU, or warehouse…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <label className="flex items-center gap-2" style={{ cursor: 'pointer', color: '#94a3b8', fontSize: '0.875rem' }}>
+      <div className="filter-toolbar">
+        <div className="filter-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#475569', fontSize: '13px', fontWeight: 500 }}>
             <input
               type="checkbox"
               checked={lowOnly}
@@ -285,11 +260,23 @@ export const InventoryPage: React.FC = () => {
                 setLoading(true);
                 setLowOnly(e.target.checked);
               }}
-              style={{ accentColor: '#f59e0b' }}
+              style={{ accentColor: '#2563eb' }}
             />
-            Show low-stock only
+            Show low-stock SKUs only
           </label>
-          <span className="badge badge-info">{filtered.length} records</span>
+          <span style={{ fontSize: '12px', color: '#64748b', padding: '2px 8px', background: '#f1f5f9', borderRadius: '9999px', fontWeight: 600 }}>
+            {filtered.length} records
+          </span>
+        </div>
+
+        <div className="search-box">
+          <input
+            className="search-input"
+            style={{ width: '260px' }}
+            placeholder="Search by product, SKU, or warehouse..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
@@ -353,8 +340,11 @@ export const InventoryPage: React.FC = () => {
                       <td style={{ color: '#64748b' }}>{item.safety_stock.toLocaleString()}</td>
                       <td>
                         <span
-                          className="badge"
                           style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '3px 10px',
+                            borderRadius: '9999px',
                             background: `${sc.color}22`,
                             color: sc.color,
                             border: `1px solid ${sc.color}44`,
@@ -374,17 +364,19 @@ export const InventoryPage: React.FC = () => {
 
       {/* Autonomous Inbound Replenishment & Purchase Orders */}
       <div className="card mt-6 animate-fade-in">
-        <div className="section-header mb-4">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h3 className="section-title flex items-center gap-2">
-              <RefreshCw size={16} className="text-slate-400" />
-              <span>Autonomous Inbound Replenishment (Self-Healing Digital Twin)</span>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <RefreshCw size={15} style={{ color: '#2563eb' }} />
+              <span>Inbound Replenishment & Safety Stock Automation</span>
             </h3>
-            <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.25rem' }}>
-              When order reservations breach safety stock thresholds, ADS-03 &amp; ADS-05 autonomously draft purchase orders to restore inventory buffers.
+            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
+              When order reservations reach safety stock thresholds, the inventory engine automatically drafts replenishment purchase orders to maintain warehouse buffers.
             </p>
           </div>
-          <span className="badge badge-info">{replenishmentOrders.length} inbound POs</span>
+          <span style={{ fontSize: '12px', color: '#1d4ed8', background: '#eff6ff', padding: '3px 10px', borderRadius: '9999px', fontWeight: 600, border: '1px solid #bfdbfe' }}>
+            {replenishmentOrders.length} inbound POs
+          </span>
         </div>
 
         {replenishmentOrders.length === 0 ? (
@@ -441,10 +433,12 @@ export const InventoryPage: React.FC = () => {
                         </span>
                       </td>
                       <td>
-                        <span className="badge badge-info">{po.quantity.toLocaleString()} units</span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px', background: '#eff6ff', color: '#1d4ed8' }}>
+                          {po.quantity.toLocaleString()} units
+                        </span>
                       </td>
                       <td>{formatCurrency(po.unit_cost)}</td>
-                      <td style={{ fontWeight: 600, color: '#10b981' }}>
+                      <td style={{ fontWeight: 600, color: '#059669' }}>
                         {formatCurrency(po.total_cost)}
                       </td>
                       <td>
@@ -454,8 +448,11 @@ export const InventoryPage: React.FC = () => {
                       </td>
                       <td>
                         <span
-                          className="badge"
                           style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '3px 10px',
+                            borderRadius: '9999px',
                             background: `${psc.color}22`,
                             color: psc.color,
                             border: `1px solid ${psc.color}44`,
@@ -467,17 +464,17 @@ export const InventoryPage: React.FC = () => {
                       </td>
                       <td>
                         {po.status === 'received' ? (
-                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ color: '#059669', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <Check size={13} /> Stock Restored
                           </span>
                         ) : (
                           <button
-                            className="btn btn-sm flex items-center gap-1.5"
+                            className="btn-secondary"
                             style={{
-                              background: '#10b981',
-                              color: '#fff',
-                              border: 'none',
-                              fontSize: '0.75rem',
+                              borderColor: '#a7f3d0',
+                              background: '#ecfdf5',
+                              color: '#059669',
+                              fontSize: '11px',
                               padding: '4px 10px',
                               fontWeight: 600,
                             }}

@@ -65,10 +65,10 @@ export const AgentPipeline: React.FC<AgentPipelineProps> = ({
           </div>
           <div>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--c-text-primary)', margin: 0 }}>
-              Autonomous 18-Agent Consensus Engine
+              Agent Pipeline Status
             </h3>
             <span style={{ fontSize: '11px', color: 'var(--c-text-muted)' }}>
-              LangGraph state-machine orchestrating decentralized supply chain nodes
+              18 specialized agents continuously monitoring and optimizing operations
             </span>
           </div>
         </div>

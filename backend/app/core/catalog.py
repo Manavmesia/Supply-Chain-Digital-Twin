@@ -103,10 +103,35 @@ BASELINE_SUPPLIERS = [
 
 BASELINE_CARRIERS = [
     ("44444444-0000-0000-0000-000000000001", "Global Intermodal Logistics", "GIL-01", '["road", "air", "ocean"]', 95.0, "active"),
+    ("44444444-0000-0000-0000-000000000002", "FedEx Priority Express", "FDX-02", '["air", "road"]', 98.2, "active"),
+    ("44444444-0000-0000-0000-000000000003", "DHL Express Global", "DHL-03", '["road", "air"]', 96.5, "active"),
+    ("44444444-0000-0000-0000-000000000004", "Maersk Line Shipping", "MAE-04", '["ocean", "rail"]', 92.0, "active"),
+    ("44444444-0000-0000-0000-000000000005", "DB Schenker Logistics", "DBS-05", '["rail", "road"]', 94.0, "active"),
 ]
 
 BASELINE_ROUTES = [
+    # From Seattle, US (Pacific Northwest MegaHub)
     ("route000-0000-0000-0000-000000000001", "44444444-0000-0000-0000-000000000001", "Seattle, US", "Dallas, US", "road", 3, 350.00, 1),
+    ("route000-0000-0000-0000-000000000002", "44444444-0000-0000-0000-000000000002", "Seattle, US", "Austin, US", "air", 1, 850.00, 1),
+    ("route000-0000-0000-0000-000000000003", "44444444-0000-0000-0000-000000000005", "Seattle, US", "Chicago, US", "rail", 4, 240.00, 1),
+    ("route000-0000-0000-0000-000000000004", "44444444-0000-0000-0000-000000000004", "Seattle, US", "Tokyo, JP", "ocean", 12, 450.00, 1),
+
+    # From Newark, US (Newark Distribution Center)
+    ("route000-0000-0000-0000-000000000011", "44444444-0000-0000-0000-000000000002", "Newark, US", "Austin, US", "air", 1, 720.00, 1),
+    ("route000-0000-0000-0000-000000000012", "44444444-0000-0000-0000-000000000001", "Newark, US", "New York, US", "road", 1, 220.00, 1),
+    ("route000-0000-0000-0000-000000000013", "44444444-0000-0000-0000-000000000003", "Newark, US", "Charlotte, US", "road", 2, 310.00, 1),
+    ("route000-0000-0000-0000-000000000014", "44444444-0000-0000-0000-000000000002", "Newark, US", "Munich, Germany", "air", 1, 950.00, 1),
+
+    # From Frankfurt, Germany (Frankfurt Logistics Centre)
+    ("route000-0000-0000-0000-000000000021", "44444444-0000-0000-0000-000000000003", "Frankfurt, Germany", "Munich, Germany", "road", 1, 260.00, 1),
+    ("route000-0000-0000-0000-000000000022", "44444444-0000-0000-0000-000000000002", "Frankfurt, Germany", "Paris, France", "air", 1, 680.00, 1),
+    ("route000-0000-0000-0000-000000000023", "44444444-0000-0000-0000-000000000005", "Frankfurt, Germany", "Paris, France", "rail", 1, 195.00, 1),
+    ("route000-0000-0000-0000-000000000024", "44444444-0000-0000-0000-000000000003", "Frankfurt, Germany", "London, UK", "road", 2, 380.00, 1),
+
+    # From Birmingham, UK (Birmingham Fulfilment Hub)
+    ("route000-0000-0000-0000-000000000031", "44444444-0000-0000-0000-000000000003", "Birmingham, UK", "London, UK", "road", 1, 180.00, 1),
+    ("route000-0000-0000-0000-000000000032", "44444444-0000-0000-0000-000000000002", "Birmingham, UK", "Paris, France", "air", 1, 620.00, 1),
+    ("route000-0000-0000-0000-000000000033", "44444444-0000-0000-0000-000000000001", "Birmingham, UK", "Rotterdam, NL", "road", 2, 340.00, 1),
 ]
 
 # ── Baseline Orders ───────────────────────────────────────────────────────────

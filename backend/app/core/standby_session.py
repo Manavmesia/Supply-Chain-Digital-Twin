@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import structlog
 
+from app.agents.base_agent import safe_uuid
 from app.core import persistence
 
 logger = structlog.get_logger(__name__)
@@ -294,12 +295,115 @@ def create_standby_session(
             return _scalar(cust)
 
         if "from transportation_routes" in q or "transportation_routes." in q:
+            try:
+                compile_params = query.compile().params if hasattr(query, "compile") else {}
+                origin_param = compile_params.get("origin_location_1") or compile_params.get("origin_location")
+                mode_param = compile_params.get("freight_mode_1") or compile_params.get("freight_mode")
+
+                with persistence._get_connection() as conn:
+                    sql = "SELECT route_id, carrier_id, origin_location, destination, freight_mode, transit_days, base_cost FROM transportation_routes WHERE is_active = 1"
+                    clauses = []
+                    args_list = []
+                    if origin_param:
+                        clauses.append("origin_location = ?")
+                        args_list.append(str(origin_param))
+                    if mode_param:
+                        clauses.append("freight_mode = ?")
+                        args_list.append(str(mode_param))
+                    if clauses:
+                        sql += " AND " + " AND ".join(clauses)
+
+                    rows = conn.execute(sql, args_list).fetchall()
+                    if not rows and origin_param:
+                        # Fallback to any active routes from this origin
+                        rows = conn.execute(
+                            "SELECT route_id, carrier_id, origin_location, destination, freight_mode, transit_days, base_cost FROM transportation_routes WHERE origin_location = ? AND is_active = 1",
+                            (str(origin_param),)
+                        ).fetchall()
+                    if not rows:
+                        rows = conn.execute(
+                            "SELECT route_id, carrier_id, origin_location, destination, freight_mode, transit_days, base_cost FROM transportation_routes WHERE is_active = 1"
+                        ).fetchall()
+                    if rows:
+                        route_objs = []
+                        for r in rows:
+                            rt = StandbyRoute(
+                                carrier_id=safe_uuid(r["carrier_id"]),
+                                mode=r["freight_mode"],
+                                transit=int(r["transit_days"]),
+                                cost=Decimal(str(r["base_cost"])),
+                            )
+                            rt.route_id = safe_uuid(r["route_id"])
+                            rt.origin_location = r["origin_location"]
+                            rt.destination = r["destination"]
+                            route_objs.append(rt)
+                        return _scalars(route_objs)
+            except Exception as e:
+                logger.warning("Failed to query live routes for standby session", error=str(e))
             return _scalars([route])
 
         if "from carriers" in q or "carriers." in q:
+            try:
+                with persistence._get_connection() as conn:
+                    rows = conn.execute(
+                        "SELECT carrier_id, name, code, modes_json, reliability_score, status FROM carriers WHERE status = 'active'"
+                    ).fetchall()
+                    if rows:
+                        import json
+                        carrier_objs = [
+                            StandbyCarrier(
+                                carrier_id=safe_uuid(r["carrier_id"]),
+                                name=r["name"],
+                                modes=json.loads(r["modes_json"]) if r["modes_json"] else ["road"],
+                                reliability=Decimal(str(r["reliability_score"])),
+                            )
+                            for r in rows
+                        ]
+                        return _scalars(carrier_objs)
+            except Exception as e:
+                logger.warning("Failed to query live carriers for standby session", error=str(e))
             return _scalars([carrier])
 
         if "from warehouses" in q or "warehouses." in q:
+            try:
+                target_wid = None
+                for wid in param_uuids:
+                    if len(wid) == 36:
+                        target_wid = wid
+                        break
+                with persistence._get_connection() as conn:
+                    if target_wid:
+                        row = conn.execute(
+                            "SELECT warehouse_id, name, city, country, capacity_units, current_load, status FROM warehouses WHERE warehouse_id = ?",
+                            (target_wid,)
+                        ).fetchone()
+                        if row:
+                            return _scalar(StandbyWarehouse(
+                                warehouse_id=safe_uuid(row["warehouse_id"]),
+                                name=row["name"],
+                                city=row["city"],
+                                country=row["country"],
+                                capacity=int(row["capacity_units"]),
+                                load=int(row["current_load"]),
+                            ))
+                    rows = conn.execute(
+                        "SELECT warehouse_id, name, city, country, capacity_units, current_load, status FROM warehouses WHERE status = 'active' ORDER BY current_load ASC"
+                    ).fetchall()
+                    if rows:
+                        wh_objs = [
+                            StandbyWarehouse(
+                                warehouse_id=safe_uuid(r["warehouse_id"]),
+                                name=r["name"],
+                                city=r["city"],
+                                country=r["country"],
+                                capacity=int(r["capacity_units"]),
+                                load=int(r["current_load"]),
+                            )
+                            for r in rows
+                        ]
+                        return _scalars(wh_objs)
+            except Exception as e:
+                logger.warning("Failed to query live warehouses for standby session", error=str(e))
             return _scalar(wh)
 
         if "from inventory" in q or "inventory." in q:
@@ -362,6 +466,54 @@ def create_standby_session(
             return _scalars([inv])
 
         if "from supplier" in q or "supplier." in q:
+            try:
+                target_sid = None
+                for sid in param_uuids:
+                    if len(sid) == 36:
+                        target_sid = sid
+                        break
+                with persistence._get_connection() as conn:
+                    if target_sid:
+                        row = conn.execute(
+                            "SELECT supplier_id, name, country, lead_time_days, reliability_score, rating, status FROM suppliers WHERE supplier_id = ?",
+                            (target_sid,)
+                        ).fetchone()
+                        if row:
+                            s_obj = StandbySupplier(
+                                supplier_id=safe_uuid(row["supplier_id"]),
+                                name=row["name"],
+                                lead_time=int(row["lead_time_days"]),
+                                reliability=Decimal(str(row["reliability_score"])),
+                            )
+                            sp = StandbySupplierProduct(s_obj.supplier_id, uuid.uuid4())
+                            m = MagicMock()
+                            m.all.return_value = [(sp, s_obj)]
+                            m.scalars.return_value.all.return_value = [s_obj]
+                            m.scalar_one_or_none.return_value = s_obj
+                            m.scalar_one.return_value = s_obj
+                            return m
+                    rows = conn.execute(
+                        "SELECT supplier_id, name, country, lead_time_days, reliability_score, rating, status FROM suppliers WHERE status = 'active'"
+                    ).fetchall()
+                    if rows:
+                        s_objs = [
+                            StandbySupplier(
+                                supplier_id=safe_uuid(r["supplier_id"]),
+                                name=r["name"],
+                                lead_time=int(r["lead_time_days"]),
+                                reliability=Decimal(str(r["reliability_score"])),
+                            )
+                            for r in rows
+                        ]
+                        sp = StandbySupplierProduct(s_objs[0].supplier_id, uuid.uuid4())
+                        m = MagicMock()
+                        m.all.return_value = [(sp, s) for s in s_objs]
+                        m.scalars.return_value.all.return_value = s_objs
+                        m.scalar_one_or_none.return_value = s_objs[0]
+                        m.scalar_one.return_value = s_objs[0]
+                        return m
+            except Exception as e:
+                logger.warning("Failed to query live suppliers for standby session", error=str(e))
             sp = StandbySupplierProduct(supplier.supplier_id, uuid.uuid4())
             m = MagicMock()
             m.all.return_value = [(sp, supplier)]
@@ -371,10 +523,49 @@ def create_standby_session(
             return m
 
         if "from promotions" in q or "promotions." in q:
+            class StandbyPromotion:
+                def __init__(self, name="Enterprise Growth Promo", discount=12.0):
+                    self.promotion_id = uuid.uuid4()
+                    self.name = name
+                    self.discount_percent = discount
+                    self.status = "active"
+
+            target_pid = None
+            for pid in param_uuids:
+                if len(pid) == 36:
+                    target_pid = pid
+                    break
+            # Make promotions active for select high-velocity products
+            if target_pid and (target_pid.endswith("1") or target_pid.endswith("3") or target_pid.endswith("5")):
+                promo = StandbyPromotion()
+                m = MagicMock()
+                m.scalars.return_value.all.return_value = [promo]
+                m.scalar_one_or_none.return_value = promo
+                return m
             return _scalar(None)
 
         if "coalesce" in q or "avg" in q or "sum" in q or "count" in q:
-            return _scalar(25)
+            try:
+                target_pid = None
+                for pid in param_uuids:
+                    if len(pid) == 36:
+                        target_pid = pid
+                        break
+                with persistence._get_connection() as conn:
+                    if target_pid:
+                        row = conn.execute(
+                            "SELECT COALESCE(SUM(quantity), 0) as total FROM order_items WHERE product_id = ?",
+                            (str(target_pid),)
+                        ).fetchone()
+                        if row and row["total"] > 0:
+                            return _scalar(int(row["total"]))
+                    row2 = conn.execute("SELECT COALESCE(SUM(quantity), 0) as total FROM order_items").fetchone()
+                    if row2 and row2["total"] > 0:
+                        avg_val = max(10, int(row2["total"]) // 4)
+                        return _scalar(avg_val)
+            except Exception:
+                pass
+            return _scalar(65)
 
         if "from products" in q or "products." in q or "product_id" in q:
             try:

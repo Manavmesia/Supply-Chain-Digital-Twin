@@ -25,7 +25,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.pricing_history import PricingHistory
 
@@ -164,7 +164,7 @@ class PricingAgent(BaseAgent):
                 try:
                     record = PricingHistory(
                         price_id=pricing_record_id,
-                        product_id=uuid.UUID(product_id_str),
+                        product_id=safe_uuid(product_id_str),
                         previous_price=unit_price,
                         recommended_price=suggested_price,
                         approved_price=suggested_price if recommendation != "stable" else None,

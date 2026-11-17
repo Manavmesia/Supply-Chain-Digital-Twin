@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
@@ -20,7 +21,9 @@ import {
   getProductInfo,
   formatCurrency,
   CUSTOMER_DIRECTORY,
+  formatDateTime,
 } from '../utils/formatters';
+import { BusinessDataView, BusinessValue, humanizeKey } from '../components/common/BusinessDataView';
 
 const SAMPLE_CUSTOMER_ID = '50000000-0000-0000-0000-000000000001';
 const SAMPLE_PRODUCTS = [
@@ -68,28 +71,7 @@ const AGENT_LAYER: Record<string, { color: string; label: string }> = {
 };
 
 function JsonBlock({ data }: { data: unknown }) {
-  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  return (
-    <pre
-      style={{
-        background: 'var(--c-bg-subtle)',
-        border: '1px solid var(--c-border)',
-        borderRadius: '8px',
-        padding: '1rem',
-        fontSize: '0.72rem',
-        lineHeight: '1.6',
-        color: 'var(--c-text-primary)',
-        overflowX: 'auto',
-        maxHeight: '400px',
-        overflowY: 'auto',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-all',
-        margin: 0,
-      }}
-    >
-      {text}
-    </pre>
-  );
+  return <BusinessDataView data={data} layout="grid" />;
 }
 
 function OutputDiff({ input, output }: { input: Record<string, unknown>; output: Record<string, unknown> }) {
@@ -103,55 +85,60 @@ function OutputDiff({ input, output }: { input: Record<string, unknown>; output:
   return (
     <div>
       {changedKeys.length > 0 && (
-        <div style={{ marginBottom: '1rem' }}>
-          <p style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Changed / Added Keys ({changedKeys.length})
+        <div style={{ marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            State Updated by Agent ({changedKeys.length} attribute{changedKeys.length > 1 ? 's' : ''})
           </p>
-          {changedKeys.map(k => (
-            <div key={k} style={{ marginBottom: '0.75rem' }}>
-              <span style={{
-                display: 'inline-block',
-                fontSize: '0.68rem',
-                background: 'rgba(16,185,129,0.12)',
-                color: '#10b981',
-                border: '1px solid rgba(16,185,129,0.3)',
-                borderRadius: '4px',
-                padding: '1px 8px',
-                marginBottom: '0.25rem',
-                fontFamily: 'monospace',
-              }}>{k}</span>
-              <JsonBlock data={output[k]} />
-            </div>
-          ))}
-        </div>
-      )}
-      {unchangedKeys.length > 0 && (
-        <details>
-          <summary style={{ fontSize: '0.72rem', color: '#475569', cursor: 'pointer', marginBottom: '0.5rem' }}>
-            ↳ {unchangedKeys.length} unchanged keys (pass-through from previous state)
-          </summary>
-          <div style={{ opacity: 0.5 }}>
-            {unchangedKeys.map(k => (
-              <div key={k} style={{ marginBottom: '0.5rem' }}>
-                <span style={{
-                  display: 'inline-block',
-                  fontSize: '0.68rem',
-                  background: '#f1f5f9',
-                  color: '#475569',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '4px',
-                  padding: '1px 8px',
-                  marginBottom: '0.25rem',
-                  fontFamily: 'monospace',
-                }}>{k}</span>
-                <JsonBlock data={output[k]} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+            {changedKeys.map(k => (
+              <div
+                key={k}
+                style={{
+                  background: 'var(--c-bg-card)',
+                  border: '1px solid rgba(16,185,129,0.3)',
+                  borderLeft: '3px solid #10b981',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'capitalize', marginBottom: '4px' }}>
+                  {humanizeKey(k)}
+                </div>
+                <div>
+                  <BusinessValue value={output[k]} fieldKey={k} />
+                </div>
               </div>
             ))}
           </div>
-        </details>
+        </div>
+      )}
+      {unchangedKeys.length > 0 && (
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--c-border)' }}>
+          <details>
+            <summary style={{ fontSize: '0.75rem', color: '#64748b', cursor: 'pointer', marginBottom: '0.5rem' }}>
+              ↳ {unchangedKeys.length} unchanged parameters preserved from previous step
+            </summary>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '0.5rem' }}>
+              {unchangedKeys.map(k => (
+                <span
+                  key={k}
+                  className="tag"
+                  style={{
+                    fontSize: '0.7rem',
+                    background: 'var(--c-bg-subtle)',
+                    color: '#64748b',
+                    border: '1px solid var(--c-border)',
+                  }}
+                >
+                  {humanizeKey(k)}
+                </span>
+              ))}
+            </div>
+          </details>
+        </div>
       )}
       {changedKeys.length === 0 && unchangedKeys.length === 0 && (
-        <p style={{ color: '#475569', fontSize: '0.8rem', fontStyle: 'italic' }}>No output fields captured.</p>
+        <p style={{ color: '#475569', fontSize: '0.8rem', fontStyle: 'italic' }}>No state changes recorded.</p>
       )}
     </div>
   );
@@ -436,7 +423,7 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                   {tab === 'input' && (
                     <div>
                       <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
-                        Full state snapshot this agent received ({inputKeys.length} keys):
+                        Operational state parameters received by this agent:
                       </p>
                       <JsonBlock data={t.input} />
                     </div>
@@ -446,13 +433,13 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                     t.decision ? (
                       <div>
                         <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
-                          Decision recorded by this agent on the shared state:
+                          Autonomous decision and execution parameters:
                         </p>
                         <JsonBlock data={t.decision} />
                       </div>
                     ) : (
                       <p style={{ color: '#334155', fontSize: '0.8rem', fontStyle: 'italic', padding: '0.5rem 0' }}>
-                        This agent did not record a decision (pass-through or coordination node).
+                        This agent completed execution without recording a decision (pass-through or coordination node).
                       </p>
                     )
                   )}
@@ -461,17 +448,17 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
                     eventsWithPayload.length > 0 ? (
                       <div>
                         <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
-                          {eventsWithPayload.length} event{eventsWithPayload.length > 1 ? 's' : ''} published by this agent to the event bus:
+                          {eventsWithPayload.length} event{eventsWithPayload.length > 1 ? 's' : ''} broadcast to supply chain bus:
                         </p>
                         {eventsWithPayload.map((ev, ei) => (
-                          <div key={ei} style={{ marginBottom: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                              <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', fontFamily: 'monospace', fontWeight: 700 }}>
+                          <div key={ei} style={{ marginBottom: '1rem', background: 'var(--c-bg-subtle)', border: '1px solid var(--c-border)', borderRadius: '8px', padding: '10px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                              <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', fontWeight: 600 }}>
                                 {String(ev['event_type'] ?? '?')}
                               </span>
                               {Boolean(ev['timestamp']) && (
-                                <span style={{ fontSize: '0.65rem', color: '#334155', fontFamily: 'monospace' }}>
-                                  @ {String(ev['timestamp'])}
+                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                                  @ {formatDateTime(String(ev['timestamp']))}
                                 </span>
                               )}
                             </div>
@@ -496,6 +483,8 @@ function AgentTracePanel({ trace }: AgentTracePanelProps) {
 }
 
 export const WorkflowPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlWorkflowId = searchParams.get('workflow_id') || searchParams.get('id');
 
   const [customerId, setCustomerId] = useState(SAMPLE_CUSTOMER_ID);
   const [items, setItems] = useState<OrderItem[]>([
@@ -551,9 +540,6 @@ export const WorkflowPage: React.FC = () => {
     try {
       setWorkflowId(id);
       localStorage.setItem('active_workflow_id', id);
-      const url = new URL(window.location.href);
-      url.searchParams.set('id', id);
-      window.history.replaceState(null, '', url.toString());
 
       setPhase('running');
       const [statusRes, traceRes] = await Promise.all([
@@ -576,6 +562,13 @@ export const WorkflowPage: React.FC = () => {
     }
   }, [poll, stopPolling]);
 
+  // Sync when URL query parameter changes
+  useEffect(() => {
+    if (urlWorkflowId && urlWorkflowId !== workflowId) {
+      loadWorkflow(urlWorkflowId);
+    }
+  }, [urlWorkflowId, workflowId, loadWorkflow]);
+
   useEffect(() => {
     let isMounted = true;
     const fetchHistoryAndRestore = async () => {
@@ -586,11 +579,9 @@ export const WorkflowPage: React.FC = () => {
         if (isMounted) {
           setRecentWorkflows(list);
         }
-        const params = new URLSearchParams(window.location.search);
-        const urlId = params.get('id');
         const savedId = localStorage.getItem('active_workflow_id');
-        const targetId = urlId || savedId || (list.length > 0 ? list[0].workflow_id : null);
-        if (targetId && isMounted) {
+        const targetId = urlWorkflowId || savedId || (list.length > 0 ? list[0].workflow_id : null);
+        if (targetId && isMounted && targetId !== workflowId) {
           await loadWorkflow(targetId);
         }
       } catch (err) {
@@ -618,7 +609,7 @@ export const WorkflowPage: React.FC = () => {
       clearInterval(historyInterval);
       stopPolling();
     };
-  }, [loadWorkflow, stopPolling]);
+  }, [loadWorkflow, stopPolling, urlWorkflowId, workflowId]);
 
   const resetForNewWorkflow = () => {
     stopPolling();
@@ -627,9 +618,7 @@ export const WorkflowPage: React.FC = () => {
     setTrace([]);
     setPhase('idle');
     localStorage.removeItem('active_workflow_id');
-    const url = new URL(window.location.href);
-    url.searchParams.delete('id');
-    window.history.replaceState(null, '', url.toString());
+    setSearchParams({}, { replace: true });
   };
 
   const submit = async () => {
@@ -647,9 +636,7 @@ export const WorkflowPage: React.FC = () => {
       });
       setWorkflowId(accepted.workflow_id);
       localStorage.setItem('active_workflow_id', accepted.workflow_id);
-      const url = new URL(window.location.href);
-      url.searchParams.set('id', accepted.workflow_id);
-      window.history.replaceState(null, '', url.toString());
+      setSearchParams({ workflow_id: accepted.workflow_id }, { replace: true });
 
       // Start polling every 2s
       pollRef.current = setInterval(() => poll(accepted.workflow_id), 2000);
@@ -757,10 +744,16 @@ export const WorkflowPage: React.FC = () => {
   }, 0);
 
   return (
-    <div className="page-content animate-fade-in">
+    <div className="page-container animate-fade-in">
       <div className="page-header">
-        <h1><span className="gradient-text">Workflow Management</span></h1>
-        <p>Submit orders to the 18-agent pipeline and watch decisions in real time</p>
+        <div>
+          <h1 className="page-title">
+            Agent Engine & Workflows
+          </h1>
+          <p className="page-subtitle">
+            Submit customer orders and observe autonomous agent routing, inventory reservation, and consensus in real time.
+          </p>
+        </div>
       </div>
 
       {/* Workflow History Bar / Switcher */}
@@ -790,6 +783,7 @@ export const WorkflowPage: React.FC = () => {
               value={workflowId || ''}
               onChange={(e) => {
                 if (e.target.value) {
+                  setSearchParams({ workflow_id: e.target.value });
                   loadWorkflow(e.target.value);
                 } else {
                   resetForNewWorkflow();
@@ -909,7 +903,7 @@ export const WorkflowPage: React.FC = () => {
             disabled={phase === 'running'}
           >
             {phase === 'running' ? (
-              <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Running 18-Agent Pipeline…</>
+              <><span className="loading-spinner" style={{ width: 16, height: 16 }} /> Executing Fulfillment Workflow…</>
             ) : (
               <>
                 <Play size={15} />
@@ -1036,7 +1030,7 @@ export const WorkflowPage: React.FC = () => {
                 Commercial Order & Fulfillment Manifest
               </span>
               <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--c-text-primary)' }}>
-                Order {formatOrderId(String(orderData.order_id || ''))} — {getCustomerName(String(orderData.customer_id || ''))}
+                Order {formatOrderId(String(orderData.order_id || ''))} — {String(status?.customer?.name || orderData.customer_name || getCustomerName(String(orderData.customer_id || '')))}
               </h3>
             </div>
             <div className="flex gap-2 items-center">
@@ -1091,20 +1085,20 @@ export const WorkflowPage: React.FC = () => {
               }}
             >
               <div>
-                <strong style={{ color: '#3b82f6', fontSize: '0.85rem' }}>
-                  Autonomous Inbound Replenishment Triggered (Self-Healing Digital Twin)
+                <strong style={{ color: '#2563eb', fontSize: '0.85rem' }}>
+                  Inbound Stock Replenishment Triggered
                 </strong>
                 <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>
-                  Inventory Agent (ADS-03) detected safety stock breaches and dispatched Supplier Agent (ADS-05) to issue {replenishmentRequests.length} inbound replenishment Purchase Order(s).
+                  Safety stock threshold reached; {replenishmentRequests.length} replenishment purchase order(s) generated.
                 </p>
               </div>
-              <a
-                href="/inventory"
+              <Link
+                to="/inventory"
                 className="btn btn-sm btn-ghost"
-                style={{ fontSize: '0.75rem', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.4)' }}
+                style={{ fontSize: '0.75rem', color: '#2563eb', border: '1px solid rgba(37, 99, 235, 0.3)', textDecoration: 'none' }}
               >
                 Inspect Inbound POs →
-              </a>
+              </Link>
             </div>
           )}
 
@@ -1209,12 +1203,12 @@ export const WorkflowPage: React.FC = () => {
                     <p style={{ fontSize: '0.85rem', color: 'var(--c-text-secondary)', marginTop: '0.5rem', fontStyle: 'italic' }}>
                       &ldquo;{latest.rationale || 'No explanation provided.'}&rdquo;
                     </p>
-                    <details className="mt-2">
-                      <summary style={{ cursor: 'pointer', fontSize: '0.75rem', color: '#60a5fa' }}>View Proposal Payload</summary>
-                      <pre className="code-block mt-2" style={{ fontSize: '0.75rem' }}>
-                        {JSON.stringify(latest.data, null, 2)}
-                      </pre>
-                    </details>
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--c-border)' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--c-text-primary)', marginBottom: '0.5rem' }}>
+                        Proposed Operational Parameters:
+                      </div>
+                      <BusinessDataView data={latest.data} layout="grid" />
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2 justify-end items-end ml-4">

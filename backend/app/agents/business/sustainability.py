@@ -21,7 +21,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.sustainability_metric import SustainabilityMetric
 
@@ -66,21 +66,36 @@ class SustainabilityAgent(BaseAgent):
         if freight_mode not in _CO2_FACTORS:
             freight_mode = "road"
 
-        # ── 1. Calculate CO2 emissions ────────────────────────────────────────
-        # Weight approximation from number of order items * avg item weight
+        # ── 1. Calculate realistic distance and weight ─────────────────────────
+        route_str = shipment_state.get("route", "")
+        distance_km = 1200.0
+        if "Newark" in route_str and "New York" in route_str:
+            distance_km = 45.0
+        elif "Newark" in route_str and "Charlotte" in route_str:
+            distance_km = 950.0
+        elif "Newark" in route_str and "Munich" in route_str:
+            distance_km = 6500.0
+        elif "Seattle" in route_str and ("Dallas" in route_str or "Austin" in route_str):
+            distance_km = 3450.0
+        elif "Frankfurt" in route_str and "Munich" in route_str:
+            distance_km = 390.0
+        elif "Frankfurt" in route_str and "Paris" in route_str:
+            distance_km = 570.0
+        elif "Birmingham" in route_str and "London" in route_str:
+            distance_km = 210.0
+        elif freight_mode in _MOCK_DISTANCES:
+            distance_km = _MOCK_DISTANCES[freight_mode]
+
         items: list[dict] = order.get("items") or []
         total_qty = sum(int(i.get("quantity", 1)) for i in items)
-        estimated_weight_kg = max(total_qty * 5.0, _DEFAULT_SHIPMENT_WEIGHT_KG)
-        distance_km = _MOCK_DISTANCES.get(freight_mode, 2_500.0)
+        estimated_weight_kg = max(5.0, float(total_qty) * 2.8)
 
         # CO2 formula: weight_tonnes × distance_km × emission_factor
         weight_tonnes = estimated_weight_kg / 1000.0
-        co2_kg = weight_tonnes * distance_km * _CO2_FACTORS[freight_mode]
-        co2_kg = round(co2_kg, 3)
+        co2_kg = round(weight_tonnes * distance_km * _CO2_FACTORS[freight_mode], 2)
 
-        # ── 2. Calculate sustainability score (0–100) & Green alternative (LLM-driven if API key present) ──
-        score_calc = max(0.0, 100.0 - (co2_kg / _MAX_CO2_REFERENCE_KG) * 100.0)
-        score_calc = round(score_calc, 1)
+        # ── 2. Calculate sustainability score (0–100) ─────────────────────────
+        score_calc = max(15.0, min(99.0, round(100.0 - (co2_kg / 180.0) * 60.0, 1)))
 
         from pydantic import BaseModel
 
@@ -90,12 +105,12 @@ class SustainabilityAgent(BaseAgent):
             rationale: str
 
         def _fallback_sustainability() -> SustainabilityDecisionSchema:
-            rec = freight_mode == "air" and co2_kg >= _CO2_HIGH_THRESHOLD
+            rec = freight_mode == "air" or (co2_kg >= 150.0)
+            rec_text = " Recommended modal shift to low-emission rail/EV corridor." if rec else " Route meets ESG carbon efficiency thresholds."
             return SustainabilityDecisionSchema(
                 score=score_calc,
                 recommend_green_alternative=rec,
-                rationale=f"CO2 emissions: {co2_kg} kg via {freight_mode} freight. Score: {score_calc}/100."
-                + (" Green alternative available." if rec else ""),
+                rationale=f"CO2 footprint: {co2_kg:.2f} kg ({freight_mode.upper()} freight, {distance_km:.0f} km transit, {estimated_weight_kg:.1f} kg payload). Eco-score: {score_calc}/100.{rec_text}",
             )
 
         sus_context = {
@@ -146,7 +161,7 @@ class SustainabilityAgent(BaseAgent):
             try:
                 metric = SustainabilityMetric(
                     metric_id=metric_id,
-                    shipment_id=uuid.UUID(str(shipment_id_str)),
+                    shipment_id=safe_uuid(str(shipment_id_str)),
                     freight_mode=freight_mode,
                     co2_emission_kg=Decimal(str(co2_kg)),
                     distance_km=Decimal(str(distance_km)) if distance_km is not None else None,

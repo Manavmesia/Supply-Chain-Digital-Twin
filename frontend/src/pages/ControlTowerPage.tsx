@@ -17,12 +17,13 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { formatTimeAgo } from '../utils/formatters';
+import { BusinessDataView } from '../components/common/BusinessDataView';
 
 const INCIDENT_TEMPLATES = [
   {
     type: 'DeliveryDelayed',
     label: 'Carrier Logistics Disruption',
-    source: 'TMS-Sensor',
+    source: 'TMS Sensor Hub',
     defaultPayload: { carrier: 'Global Intermodal Logistics', route: 'North Atlantic', delay_hours: 48, reason: 'Severe maritime weather cell' },
     icon: <Truck className="w-4 h-4 text-slate-600" />,
     badgeColor: '#2563eb',
@@ -30,7 +31,7 @@ const INCIDENT_TEMPLATES = [
   {
     type: 'InventoryLow',
     label: 'Safety Stock Critical Breach',
-    source: 'WMS-Telemetry',
+    source: 'WMS Telemetry Monitor',
     defaultPayload: { sku: 'ELEC-001', warehouse: 'Newark Distribution Center', current_qty: 15, safety_stock: 100 },
     icon: <Box className="w-4 h-4 text-slate-600" />,
     badgeColor: '#dc2626',
@@ -38,7 +39,7 @@ const INCIDENT_TEMPLATES = [
   {
     type: 'QualityAlertRaised',
     label: 'Batch QA Defect Alert',
-    source: 'ADS-14',
+    source: 'Quality Control Engine',
     defaultPayload: { batch_id: 'BATCH-2026-981', defect_rate: '6.4%', inspection_node: 'Inbound Dock 2' },
     icon: <ShieldAlert className="w-4 h-4 text-slate-600" />,
     badgeColor: '#d97706',
@@ -46,7 +47,7 @@ const INCIDENT_TEMPLATES = [
   {
     type: 'DemandSpikeDetected',
     label: 'Demand Anomaly (+250%)',
-    source: 'ADS-02',
+    source: 'Demand Forecasting Engine',
     defaultPayload: { sku: 'ELEC-003', region: 'North America', multiplier: 2.5 },
     icon: <Activity className="w-4 h-4 text-slate-600" />,
     badgeColor: '#475569',
@@ -122,7 +123,7 @@ export const ControlTowerPage: React.FC = () => {
       setActionNotice(`Exception reported: ${tpl.label}. ${rem}`);
       await loadEvents(true);
     } catch (err: any) {
-      alert(`Exception report failed: ${err.message}`);
+      setActionNotice(`Incident report failed: ${err.message}`);
     }
   };
 
@@ -141,10 +142,10 @@ export const ControlTowerPage: React.FC = () => {
       });
       setShowDeclareModal(false);
       const rem = res.remediation?.remediation_summary || 'Autonomous multi-agent remediation executed.';
-      setActionNotice(`Exception logged! ${rem}`);
+      setActionNotice(`Incident logged! ${rem}`);
       await loadEvents(true);
     } catch (err: any) {
-      alert(`Declaration failed: ${err.message}`);
+      setActionNotice(`Incident declaration failed: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -163,117 +164,74 @@ export const ControlTowerPage: React.FC = () => {
   });
 
   return (
-    <div style={{ padding: '28px', maxWidth: '1440px', margin: '0 auto', color: '#0f172a' }}>
+    <div className="page-container animate-fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div className="page-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#0f172a' }}>
-              Supply Chain Control Tower
-            </h1>
-            <span style={{ fontSize: '11px', background: '#fef2f2', color: '#dc2626', padding: '3px 8px', borderRadius: '4px', border: '1px solid #fecaca', fontWeight: 600 }}>
-              Live Incident Cockpit
-            </span>
-          </div>
-          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-            Closed-loop multi-agent exception handling, disruption mitigation, and automated event audit trail.
+          <h1 className="page-title">
+            Incident Control Tower
+          </h1>
+          <p className="page-subtitle">
+            Monitor operational exceptions, logistics delays, and automated incident resolution.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="page-actions">
           <button
             onClick={handleAutonomousScan}
             disabled={isScanning}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              color: '#0f172a',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-            }}
+            className="btn-secondary"
           >
             <Sparkles className={`w-3.5 h-3.5 text-amber-500 ${isScanning ? 'animate-spin' : ''}`} />
-            {isScanning ? 'Scanning Network...' : 'Run Autonomous Scan'}
+            {isScanning ? 'Scanning...' : 'Scan for Exceptions'}
           </button>
           <button
             onClick={() => setShowDeclareModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              background: '#dc2626',
-              border: 'none',
-              borderRadius: '6px',
-              color: '#ffffff',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '13px',
-            }}
+            className="btn-primary"
+            style={{ background: '#dc2626' }}
           >
             <Plus className="w-4 h-4" />
-            Declare Exception
+            Report Incident
           </button>
         </div>
       </div>
 
       {actionNotice && (
-        <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="banner-info">
           <Zap className="w-4 h-4 text-blue-600 flex-shrink-0" />
           <span>{actionNotice}</span>
         </div>
       )}
 
-      {/* Quick Incident Triggers / Exception Playbooks */}
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Radio className="w-3.5 h-3.5 text-red-600 animate-pulse" />
-          Autonomous Exception Playbooks (One-Click Multi-Agent Resolution)
+      {/* Incident Playbooks */}
+      <div style={{ marginBottom: '28px' }}>
+        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Radio className="w-3.5 h-3.5 text-blue-600" />
+          Operational Disruption Scenarios
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+        <div className="stat-grid">
           {INCIDENT_TEMPLATES.map((tpl) => (
             <div
               key={tpl.type}
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '16px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-              }}
+              className="stat-card"
+              style={{ padding: '20px' }}
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   {tpl.icon}
                   <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{tpl.label}</span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px', lineHeight: 1.4 }}>
-                  Triggers closed-loop consensus remediation across subscribed ADS agents.
+                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px', lineHeight: 1.4 }}>
+                  Triggers automated real-time mitigation workflow across fulfillment operations.
                 </div>
               </div>
               <button
                 onClick={() => handleQuickTrigger(tpl)}
+                className="btn-secondary"
                 style={{
-                  padding: '7px 10px',
-                  background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '5px',
-                  color: '#475569',
+                  padding: '6px 10px',
                   fontSize: '11px',
                   fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px',
                 }}
               >
                 <span>Trigger Remediation</span>
@@ -294,44 +252,35 @@ export const ControlTowerPage: React.FC = () => {
             </h2>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
               {['all', 'DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised'].map((t) => (
                 <button
                   key={t}
                   onClick={() => setSelectedType(t)}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: selectedType === t ? 600 : 400,
-                    border: '1px solid',
-                    borderColor: selectedType === t ? '#bfdbfe' : '#cbd5e1',
-                    background: selectedType === t ? '#eff6ff' : '#ffffff',
-                    color: selectedType === t ? '#2563eb' : '#475569',
-                    cursor: 'pointer',
-                  }}
+                  className={`filter-pill ${selectedType === t ? 'active' : ''}`}
                 >
                   {t === 'all' ? 'All' : t.replace('Detected', '').replace('Raised', '')}
                 </button>
               ))}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f8fafc', borderRadius: '6px', padding: '6px 12px', border: '1px solid #cbd5e1' }}>
+            <div className="search-box">
               <Search className="w-3.5 h-3.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search event type, agent, ID..."
+                placeholder="Search event type, sensor, ID..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={{ background: 'transparent', border: 'none', outline: 'none', color: '#0f172a', fontSize: '12px', width: '200px' }}
+                className="search-input"
+                style={{ width: '180px' }}
               />
             </div>
           </div>
         </div>
 
         {/* Events Table */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {filteredEvents.map((ev) => {
             const isExpanded = expandedId === ev.event_id;
             const isException = ['DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised', 'CarrierDelayed'].includes(ev.event_type);
@@ -342,8 +291,8 @@ export const ControlTowerPage: React.FC = () => {
                 style={{
                   background: '#f8fafc',
                   border: isException ? '1px solid #fde68a' : '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '14px 18px',
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -360,7 +309,7 @@ export const ControlTowerPage: React.FC = () => {
                         <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
                           {ev.event_type}
                         </span>
-                        <span style={{ fontSize: '11px', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>
+                        <span style={{ fontSize: '11px', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '9999px' }}>
                           Source: {ev.source_agent}
                         </span>
                       </div>
@@ -371,8 +320,8 @@ export const ControlTowerPage: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <span style={{ fontSize: '11px', color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: '4px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
-                      Closed-Loop Remediated
+                    <span style={{ fontSize: '11px', color: '#059669', background: '#ecfdf5', padding: '3px 10px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
+                      Automated Resolution Active
                     </span>
                     <span style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Clock className="w-3 h-3 text-slate-400" />
@@ -382,27 +331,19 @@ export const ControlTowerPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Expanded Payload & Multi-Agent Consensus */}
+                {/* Expanded Incident Telemetry & Impact Assessment */}
                 {isExpanded && (
-                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '11px', color: '#475569', fontWeight: 600, marginBottom: '6px' }}>
-                      EVENT TELEMETRY PAYLOAD:
+                  <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '11px', color: '#475569', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Incident Telemetry & Impact Details
                     </div>
-                    <pre
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        padding: '10px 14px',
-                        borderRadius: '5px',
-                        fontSize: '11px',
-                        fontFamily: 'monospace',
-                        color: '#0f172a',
-                        margin: '0 0 10px 0',
-                        overflowX: 'auto',
-                      }}
-                    >
-                      {JSON.stringify(ev.payload || {}, null, 2)}
-                    </pre>
+                    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)', padding: '16px' }}>
+                      <BusinessDataView
+                        data={ev.payload || {}}
+                        layout="grid"
+                        emptyMessage="No additional telemetry recorded for this incident."
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -420,21 +361,21 @@ export const ControlTowerPage: React.FC = () => {
       {/* Declare Exception Modal */}
       {showDeclareModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
               Declare Supply Chain Exception
             </h2>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 16px 0' }}>
-              Broadcasts a real operational incident to the 18 autonomous LangGraph agents for immediate remediation.
+              Broadcasts an operational incident across fulfillment pipelines for immediate automated remediation.
             </p>
 
             <form onSubmit={handleDeclareSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Exception Category</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Exception Category</label>
                 <select
                   value={formType}
                   onChange={(e) => setFormType(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                 >
                   <option value="DeliveryDelayed">DeliveryDelayed (Carrier Delay / Storm)</option>
                   <option value="InventoryLow">InventoryLow (Warehouse Stockout Threat)</option>
@@ -444,33 +385,33 @@ export const ControlTowerPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Reporting Sensor / Telemetry Source</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Reporting Sensor / Telemetry Source</label>
                 <input
                   type="text"
                   value={formSource}
                   onChange={(e) => setFormSource(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Affected Facility / Checkpoint</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Affected Facility / Checkpoint</label>
                 <input
                   type="text"
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                   required
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Incident Description & Impact</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Incident Description & Impact</label>
                 <textarea
                   rows={3}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px', resize: 'vertical' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px', resize: 'vertical' }}
                   required
                 />
               </div>
@@ -479,16 +420,17 @@ export const ControlTowerPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowDeclareModal(false)}
-                  style={{ padding: '8px 14px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontSize: '13px' }}
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  style={{ padding: '8px 18px', background: '#dc2626', border: 'none', borderRadius: '5px', color: '#ffffff', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                  className="btn-primary"
+                  style={{ background: '#dc2626' }}
                 >
-                  {submitting ? 'Broadcasting...' : 'Broadcast to Agents'}
+                  {submitting ? 'Broadcasting...' : 'Broadcast Exception'}
                 </button>
               </div>
             </form>

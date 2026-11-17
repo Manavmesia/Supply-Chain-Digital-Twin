@@ -20,14 +20,10 @@ class OrderWorkflowRequest(BaseModel):
     POST /api/v1/workflows/orders
 
     Kicks off the full supply chain workflow for a customer order.
-
-    Note: `priority` is intentionally absent — it is auto-assigned by the
-    Order Management Agent (ADS-01) based on customer tier and order value.
-    End users must not be able to influence routing or approval thresholds
-    by manipulating priority directly.
     """
     customer_id: UUID
     items: list[OrderItemRequest] = Field(min_length=1, max_length=100, description="Order must contain 1-100 items")
+    order_id: str | None = None
 
     @field_validator("items")
     @classmethod

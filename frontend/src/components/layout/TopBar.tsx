@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RefreshCw, Database, Server, MessageSquare } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { healthApi } from '../../services/api';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/':              'Executive Digital Twin',
-  '/orders':        'Commercial Orders (OMS)',
-  '/shipments':     'Transportation & Logistics (TMS)',
-  '/procurement':   'Procurement & Suppliers (SRM)',
-  '/inventory':     'Warehouse Inventory (WMS)',
-  '/control-tower': 'Supply Chain Control Tower',
-  '/workflows':     'AI Agent Workflow Engine',
-  '/agents':        '18-Agent Consensus Swarm',
-  '/reports':       'Executive Synthesis Reports',
+  '/':              'Digital Twin Overview',
+  '/orders':        'Customer Orders',
+  '/shipments':     'Logistics & Shipments',
+  '/procurement':   'Procurement & Suppliers',
+  '/inventory':     'Warehouse Inventory',
+  '/control-tower': 'Incident Control Tower',
+  '/workflows':     'Agent Workflow Engine',
+  '/agents':        'Agent Directory',
+  '/reports':       'Reports & Analytics',
 };
 
 interface TopBarProps {
@@ -20,147 +20,107 @@ interface TopBarProps {
   isLoading?: boolean;
 }
 
-interface HealthStatus {
-  status: string;
-  dependencies: {
-    db: string;
-    redis: string;
-    rabbitmq: string;
-  };
-}
-
 export const TopBar: React.FC<TopBarProps> = ({ onRefresh, isLoading }) => {
   const location = useLocation();
-  const title = PAGE_TITLES[location.pathname] ?? 'Supply Chain Digital Twin';
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light');
-    localStorage.setItem('theme', 'light');
-  }, []);
+  const title = PAGE_TITLES[location.pathname] ?? 'Supply Chain Portal';
+  const [isHealthy, setIsHealthy] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    const checkHealth = async () => {
-      const h = await healthApi.check();
-      if (mounted) setHealth(h);
+    const check = async () => {
+      try {
+        const res = await healthApi.check();
+        if (mounted) setIsHealthy(res.status === 'ok');
+      } catch {
+        if (mounted) setIsHealthy(false);
+      }
     };
-    checkHealth();
-    const interval = setInterval(checkHealth, 8000);
-    return () => { mounted = false; clearInterval(interval); };
+    check();
+    const interval = setInterval(check, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  const depStatus = (val: string | undefined) =>
-    val === 'connected' ? 'ok' : 'err';
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
-    <header className="topbar">
-      <div className="topbar-left">
-        <h2 className="topbar-title">{title}</h2>
-        <span style={{ color: '#475569', fontSize: '0.75rem' }}>/</span>
-        <span className="topbar-timestamp">
-          {new Date().toLocaleDateString('en-US', {
-            weekday: 'short', month: 'short', day: 'numeric',
-          })}
-        </span>
+    <header
+      className="topbar"
+      style={{
+        padding: '0 2rem',
+        height: '64px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: '#ffffff',
+        borderBottom: '1px solid #e2e8f0',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <h1 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#0f172a', margin: 0, letterSpacing: '-0.01em' }}>
+          {title}
+        </h1>
       </div>
 
-      <div className="topbar-right">
-        {/* Subtle live sync status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+        <span style={{ fontSize: '0.825rem', color: '#64748b' }}>
+          {today}
+        </span>
+
         <div
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '0.4rem',
-            fontSize: '0.7rem',
-            color: '#94a3b8',
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            padding: '3px 8px',
-            borderRadius: '4px',
+            gap: '6px',
+            fontSize: '0.78rem',
+            padding: '4px 10px',
+            borderRadius: '6px',
+            background: isHealthy ? '#ecfdf5' : '#fffbeb',
+            color: isHealthy ? '#059669' : '#d97706',
+            border: `1px solid ${isHealthy ? '#a7f3d0' : '#fde68a'}`,
             fontWeight: 500,
           }}
-          title="Telemetry and agent consensus sync automatically"
         >
           <span
             style={{
-              width: 5,
-              height: 5,
+              width: 6,
+              height: 6,
               borderRadius: '50%',
-              background: '#34d399',
+              background: isHealthy ? '#059669' : '#d97706',
             }}
           />
-          Live Telemetry
-        </div>
-
-        {/* Dependency health indicators */}
-        {health && (
-          <div className="topbar-health">
-            <DepIndicator
-              icon={<Database size={11} />}
-              label="DB"
-              status={depStatus(health.dependencies.db)}
-            />
-            <DepIndicator
-              icon={<Server size={11} />}
-              label="Cache"
-              status={depStatus(health.dependencies.redis)}
-            />
-            <DepIndicator
-              icon={<MessageSquare size={11} />}
-              label="EventBus"
-              status={depStatus(health.dependencies.rabbitmq)}
-            />
-          </div>
-        )}
-
-        {/* Overall system badge */}
-        <div
-          className="topbar-system-badge"
-          style={{
-            border: `1px solid ${health?.status === 'ok' ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
-            color: health?.status === 'ok' ? '#34d399' : '#fbbf24',
-          }}
-        >
-          <span
-            className="topbar-system-dot"
-            style={{ background: health?.status === 'ok' ? '#059669' : '#d97706' }}
-          />
-          {health?.status === 'ok' ? 'Operational' : 'Degraded Mode'}
+          {isHealthy ? 'Operational' : 'Degraded'}
         </div>
 
         {onRefresh && (
           <button
-            className="btn btn-ghost btn-sm topbar-refresh-btn"
             onClick={onRefresh}
             disabled={isLoading}
-            title="Refresh data"
-            style={{ border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '4px', padding: '4px 8px', color: '#475569', cursor: 'pointer' }}
+            title="Refresh"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '32px',
+              borderRadius: '6px',
+              border: '1px solid #e2e8f0',
+              background: '#ffffff',
+              color: '#64748b',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
           >
-            <RefreshCw
-              size={13}
-              style={{
-                animation: isLoading ? 'spin 0.7s linear infinite' : 'none',
-              }}
-            />
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
         )}
       </div>
     </header>
   );
 };
-
-const DepIndicator: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  status: 'ok' | 'err';
-}> = ({ icon, label, status }) => (
-  <div className="dep-indicator">
-    {icon}
-    <span>{label}</span>
-    <span
-      className="dep-dot"
-      style={{ background: status === 'ok' ? '#10b981' : '#ef4444' }}
-    />
-  </div>
-);

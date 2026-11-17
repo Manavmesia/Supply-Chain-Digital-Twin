@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.base_agent import safe_uuid
 from app.core.database import get_db_session
 from app.models.supplier import Supplier
 from app.models.purchase_order import PurchaseOrder
@@ -37,7 +38,7 @@ _FALLBACK_SUPPLIERS: list[dict[str, Any]] = [
         "status": s[6],
         "risk_tier": "low" if s[4] >= 90 else ("medium" if s[4] >= 80 else "high"),
     }
-    for s in BASELINE_SUPPLIERS[:4]
+    for s in BASELINE_SUPPLIERS
 ]
 
 
@@ -160,13 +161,14 @@ async def get_supplier_stats(
     summary="Get supplier detail with recent purchase orders",
 )
 async def get_supplier(
-    supplier_id: uuid.UUID,
+    supplier_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Fetch full supplier profile and last 10 purchase orders."""
+    clean_uid = safe_uuid(supplier_id)
     try:
         result = await session.execute(
-            select(Supplier).where(Supplier.supplier_id == supplier_id)
+            select(Supplier).where(Supplier.supplier_id == clean_uid)
         )
         supplier = result.scalar_one_or_none()
 
@@ -174,7 +176,7 @@ async def get_supplier(
             # Fetch recent POs
             po_result = await session.execute(
                 select(PurchaseOrder)
-                .where(PurchaseOrder.supplier_id == supplier_id)
+                .where(PurchaseOrder.supplier_id == clean_uid)
                 .order_by(PurchaseOrder.created_at.desc())
                 .limit(10)
             )

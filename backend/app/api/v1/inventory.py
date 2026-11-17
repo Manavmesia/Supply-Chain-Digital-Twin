@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.base_agent import safe_uuid
 from app.api.v1.auth import require_authenticated_role
 
 from app.core import persistence
@@ -318,21 +319,22 @@ async def auto_heal_all_replenishment(
     summary="Get inventory for a specific product",
 )
 async def get_product_inventory(
-    product_id: uuid.UUID,
+    product_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Fetch inventory levels for a single product across all warehouses."""
+    clean_uid = safe_uuid(product_id)
     try:
         result = await session.execute(
             select(Inventory, Warehouse)
             .join(Warehouse, Inventory.warehouse_id == Warehouse.warehouse_id)
-            .where(Inventory.product_id == product_id)
+            .where(Inventory.product_id == clean_uid)
         )
         rows = result.all()
 
         if rows:
             product_result = await session.execute(
-                select(Product).where(Product.product_id == product_id)
+                select(Product).where(Product.product_id == clean_uid)
             )
             product = product_result.scalar_one_or_none()
 

@@ -80,26 +80,37 @@ async def list_shipments(
         shipments = res.scalars().all()
         cnt = (await session.execute(count_query)).scalar() or 0
 
-        items = [
-            {
+        items = []
+        for s in shipments:
+            route_str = s.route or ""
+            origin = "Distribution Logistics Hub"
+            destination = "Regional Customer Terminal"
+            if " -> " in route_str:
+                parts = route_str.split(" -> ")
+                origin, destination = parts[0], parts[1]
+            elif " → " in route_str:
+                parts = route_str.split(" → ")
+                origin, destination = parts[0], parts[1]
+            elif route_str:
+                destination = route_str
+
+            items.append({
                 "shipment_id": str(s.shipment_id),
                 "order_id": str(s.order_id) if s.order_id else None,
                 "warehouse_id": str(s.warehouse_id) if s.warehouse_id else None,
-                "carrier": s.carrier,
+                "carrier": s.carrier or "Global Intermodal Logistics",
                 "carrier_tracking_id": s.carrier_tracking_id,
                 "route": s.route,
                 "freight_mode": s.freight_mode or "road",
-                "origin": "Distribution Hub",
-                "destination": "Destination Port",
+                "origin": origin,
+                "destination": destination,
                 "eta": s.eta.isoformat() if s.eta else None,
                 "actual_delivery": s.actual_delivery.isoformat() if s.actual_delivery else None,
                 "status": s.status,
                 "delay_reason": s.delay_reason,
-                "current_location": "En route",
+                "current_location": "En Route - Regional Transit Hub" if s.status == "in_transit" else "Origin Hub",
                 "created_at": s.created_at.isoformat() if s.created_at else None,
-            }
-            for s in shipments
-        ]
+            })
         return {"items": items, "total": cnt, "skip": skip, "limit": limit}
     except Exception as exc:
         logger.warning("DB query failed in list_shipments, falling back to SQLite persistence", error=str(exc))

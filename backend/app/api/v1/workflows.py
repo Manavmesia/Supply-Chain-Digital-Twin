@@ -25,8 +25,10 @@ from pydantic import BaseModel, Field
 from app.api.v1.auth import require_authenticated_role
 
 from app.core import persistence
+from app.core.catalog import BASELINE_CUSTOMERS, BASELINE_PRODUCTS
 from app.core.database import AsyncSessionLocal
 from app.core.standby_session import create_standby_session, is_database_connected
+from app.events.dispatcher import dispatch_event
 from app.graph.state import SupplyChainState
 from app.graph.workflow import compile_workflow
 from app.schemas.order_request import (
@@ -105,6 +107,7 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
             "human_overrides": {},
             "loop_count": 0,
             "order": {
+                "order_id": getattr(request, "order_id", None) or f"ord-{workflow_id[:8]}",
                 "customer_id": str(request.customer_id),
                 "items": [
                     {"product_id": str(i.product_id), "quantity": i.quantity}
@@ -217,6 +220,86 @@ async def start_order_workflow(
     workflow_id = str(uuid.uuid4())
     correlation_id = str(uuid.uuid4())
 
+    order_id = getattr(request, "order_id", None) or f"ord-{uuid.uuid4().hex[:12]}"
+    request.order_id = order_id
+
+    # Check if order is already saved in persistence
+    existing_order = persistence.get_order(order_id)
+    if not existing_order:
+        cust_id_str = str(request.customer_id)
+        cust_name = "Enterprise Client"
+        for c in BASELINE_CUSTOMERS:
+            if c[0] == cust_id_str:
+                cust_name = c[1]
+                break
+
+        order_items_records = []
+        total_val = 0.0
+        for it in request.items:
+            pid_str = str(it.product_id)
+            pname = "Enterprise Component"
+            sku = "SKU-001"
+            uprice = 150.0
+            for p in BASELINE_PRODUCTS:
+                if p[0] == pid_str:
+                    sku = p[1]
+                    pname = p[2]
+                    uprice = float(p[5])
+                    break
+            ltotal = round(uprice * it.quantity, 2)
+            total_val += ltotal
+            order_items_records.append({
+                "order_item_id": f"item-{uuid.uuid4().hex[:8]}",
+                "product_id": pid_str,
+                "sku": sku,
+                "product_name": pname,
+                "quantity": it.quantity,
+                "unit_price": uprice,
+                "line_total": ltotal,
+            })
+
+        order_record = {
+            "order_id": order_id,
+            "customer_id": cust_id_str,
+            "customer_name": cust_name,
+            "status": "pending",
+            "priority": "standard",
+            "total_amount": f"{total_val:.2f}",
+            "currency": "USD",
+            "workflow_id": workflow_id,
+        }
+        persistence.save_order_with_items(order_record, order_items_records)
+
+        # Provision linked TMS shipment
+        shipment_id = f"shp-{uuid.uuid4().hex[:12]}"
+        tracking_num = f"TRK-OMS-{uuid.uuid4().hex[:6].upper()}"
+        persistence.save_shipment({
+            "shipment_id": shipment_id,
+            "order_id": order_id,
+            "carrier": "Global Intermodal Logistics",
+            "carrier_tracking_id": tracking_num,
+            "freight_mode": "road",
+            "origin": "Distribution Logistics Hub",
+            "destination": f"{cust_name} Facility",
+            "status": "in_transit",
+            "current_location": "En Route - Regional Transit Hub",
+            "workflow_id": workflow_id,
+        })
+
+        try:
+            await dispatch_event(
+                event_type="OrderPlaced",
+                source_agent="OMS-AutonomousPortal",
+                payload={
+                    "order_id": order_id,
+                    "customer_name": cust_name,
+                    "total_amount": total_val,
+                    "workflow_id": workflow_id,
+                },
+            )
+        except Exception:
+            pass
+
     background_tasks.add_task(
         _run_workflow,
         workflow_id,
@@ -259,11 +342,15 @@ async def get_workflow_status(workflow_id: str) -> WorkflowStatusResponse:
 
     States: received → running → completed | failed
     """
-    state = _WORKFLOW_STORE.get(workflow_id) or persistence.get_workflow(workflow_id)
-    if state is None:
-        state = persistence.get_workflow(workflow_id)
-        if state:
-            _WORKFLOW_STORE[workflow_id] = state
+    persisted = persistence.get_workflow(workflow_id)
+    state = _WORKFLOW_STORE.get(workflow_id) or persisted
+    if persisted and state:
+        if persisted.get("order") and isinstance(state.get("order"), dict):
+            for k in ("order_id", "customer_name", "total_amount", "priority", "status", "items"):
+                if persisted["order"].get(k) and not state["order"].get(k):
+                    state["order"][k] = persisted["order"][k]
+        if persisted.get("customer") and not state.get("customer"):
+            state["customer"] = persisted["customer"]
 
     if state is None:
         raise HTTPException(
@@ -311,11 +398,15 @@ async def get_workflow_trace(workflow_id: str) -> dict[str, Any]:
         if trace:
             _TRACE_STORE[workflow_id] = trace
 
-    state = _WORKFLOW_STORE.get(workflow_id) or persistence.get_workflow(workflow_id)
-    if state is None:
-        state = persistence.get_workflow(workflow_id)
-        if state:
-            _WORKFLOW_STORE[workflow_id] = state
+    persisted = persistence.get_workflow(workflow_id)
+    state = _WORKFLOW_STORE.get(workflow_id) or persisted
+    if persisted and state:
+        if persisted.get("order") and isinstance(state.get("order"), dict):
+            for k in ("order_id", "customer_name", "total_amount", "priority", "status", "items"):
+                if persisted["order"].get(k) and not state["order"].get(k):
+                    state["order"][k] = persisted["order"][k]
+        if persisted.get("customer") and not state.get("customer"):
+            state["customer"] = persisted["customer"]
 
     # Check workflow exists
     if not state and not trace:

@@ -35,47 +35,66 @@ class RiskAgent(BaseAgent):
         finance_state: dict = state.get("finance") or {}
         forecast_state: dict = state.get("forecast") or {}
 
-        risk_score = 10.0  # Base low risk
-        risk_factors: list[dict[str, Any]] = []
+        risk_score = 12.0  # Base network baseline risk
+        risk_factors: list[dict[str, Any]] = [
+            {"factor": "systemic_network_volatility", "points": 12.0}
+        ]
 
-        # ── 1. Evaluate Supplier Risk ─────────────────────────────────────────
+        # ── 1. Evaluate Supplier & Procurement Risk ───────────────────────────
         if supplier_state.get("status") == "unavailable":
-            risk_score += 40.0
-            risk_factors.append({"factor": "supplier_unavailable", "points": 40.0})
+            risk_score += 35.0
+            risk_factors.append({"factor": "supplier_capacity_exhaustion", "points": 35.0})
         elif supplier_state.get("purchase_orders"):
             po = supplier_state["purchase_orders"][0]
-            rel = float(po.get("reliability_score", 90.0))
-            if rel < 85.0:
-                pts = (85.0 - rel) * 2.0
+            rel = float(po.get("reliability_score", 92.0))
+            if rel < 95.0:
+                pts = round((95.0 - rel) * 2.5, 1)
                 risk_score += pts
-                risk_factors.append({"factor": "low_supplier_reliability", "points": pts})
+                risk_factors.append({"factor": "supplier_lead_time_variability", "points": pts})
+        elif supplier_state.get("lead_time_days"):
+            lt = int(supplier_state.get("lead_time_days", 4))
+            if lt > 5:
+                pts = round(lt * 2.0, 1)
+                risk_score += pts
+                risk_factors.append({"factor": "extended_procurement_lead_time", "points": pts})
 
-        # ── 2. Evaluate Carrier & Transit Risk ────────────────────────────────
-        if shipment_state.get("freight_mode") == "air":
-            risk_score += 15.0  # Air transport has flight delay / customs risk
-            risk_factors.append({"factor": "air_freight_delay_risk", "points": 15.0})
+        # ── 2. Evaluate Carrier, Mode & Transit Corridor Risk ─────────────────
+        freight_mode = (shipment_state.get("freight_mode") or "road").lower()
+        if freight_mode == "air":
+            risk_score += 15.0  # Air transport has airspace / weather vulnerability
+            risk_factors.append({"factor": "air_freight_corridor_risk", "points": 15.0})
+        elif freight_mode == "ocean":
+            risk_score += 25.0
+            risk_factors.append({"factor": "maritime_port_dwell_risk", "points": 25.0})
+        elif freight_mode == "rail":
+            risk_score += 8.0
+            risk_factors.append({"factor": "intermodal_rail_transfer_risk", "points": 8.0})
 
-        transit_days = int(shipment_state.get("transit_days", 3))
-        if transit_days > 10:
-            risk_score += 20.0
-            risk_factors.append({"factor": "long_transit_time", "points": 20.0})
+        transit_days = int(shipment_state.get("transit_days", 2))
+        if transit_days >= 3:
+            pts = round(transit_days * 3.5, 1)
+            risk_score += pts
+            risk_factors.append({"factor": "multi_day_transit_exposure", "points": pts})
 
-        # ── 3. Evaluate Forecast Confidence Risk ──────────────────────────────
-        for _, fc in forecast_state.items():
-            if isinstance(fc, dict):
-                conf = float(fc.get("confidence", 0.85))
-                if conf < 0.70:
-                    pts = (0.70 - conf) * 50.0
-                    risk_score += pts
-                    risk_factors.append({"factor": "low_forecast_confidence", "points": pts})
+        # ── 3. Evaluate Order SLA & Priority Risk ─────────────────────────────
+        priority = (order.get("priority") or "standard").lower()
+        if priority == "critical":
+            risk_score += 16.0
+            risk_factors.append({"factor": "enterprise_sla_breach_penalties", "points": 16.0})
+        elif priority == "high":
+            risk_score += 9.0
+            risk_factors.append({"factor": "expedited_order_sla_commitment", "points": 9.0})
 
         # ── 4. Evaluate Financial Margin Risk ─────────────────────────────────
         margin_pct = float(finance_state.get("gross_margin_pct", 25.0))
-        if margin_pct < 10.0:
-            risk_score += 30.0
-            risk_factors.append({"factor": "low_margin_exposure", "points": 30.0})
+        if margin_pct < 0.0:
+            risk_score += 28.0
+            risk_factors.append({"factor": "negative_gross_margin_breach", "points": 28.0})
+        elif margin_pct < 15.0:
+            risk_score += 14.0
+            risk_factors.append({"factor": "sub_hurdle_margin_exposure", "points": 14.0})
 
-        risk_score_calc = min(100.0, round(risk_score, 1))
+        risk_score_calc = min(98.0, max(8.0, round(risk_score, 1)))
 
         # ── LLM Risk Synthesis & Level Classification ─────────────────────────
         from pydantic import BaseModel

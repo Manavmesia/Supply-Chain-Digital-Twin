@@ -115,7 +115,7 @@ export const ShipmentsPage: React.FC = () => {
       setActionMessage('New freight dispatch created successfully!');
       await loadData(true);
     } catch (err: any) {
-      alert(`Creation failed: ${err.message}`);
+      setActionMessage(`Creation failed: ${err.message}`);
     }
   };
 
@@ -132,7 +132,7 @@ export const ShipmentsPage: React.FC = () => {
       setActionMessage(`Shipment ${showStatusModal.carrier_tracking_id} waypoint updated.`);
       await loadData(true);
     } catch (err: any) {
-      alert(`Update failed: ${err.message}`);
+      setActionMessage(`Update failed: ${err.message}`);
     }
   };
 
@@ -152,58 +152,21 @@ export const ShipmentsPage: React.FC = () => {
   });
 
   return (
-    <div style={{ padding: '28px', maxWidth: '1440px', margin: '0 auto', color: '#0f172a' }}>
+    <div className="page-container animate-fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div className="page-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: '#0f172a' }}>
-              Logistics & Transportation (TMS)
-            </h1>
-            <span style={{ fontSize: '11px', background: '#eff6ff', color: '#2563eb', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bfdbfe', fontWeight: 600 }}>
-              Live Carrier Telemetry
-            </span>
-          </div>
-          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-            Multi-modal freight tracking, IoT waypoint monitoring, and autonomous disruption bypass (ADS-06).
+          <h1 className="page-title">Logistics & Shipments</h1>
+          <p className="page-subtitle">
+            Multi-modal freight tracking, transit status, and carrier waypoint monitoring.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={() => loadData()}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              color: '#475569',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
-          >
+        <div className="page-actions">
+          <button onClick={() => loadData()} className="btn-secondary">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              background: '#2563eb',
-              border: 'none',
-              borderRadius: '6px',
-              color: '#ffffff',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '13px',
-            }}
-          >
+          <button onClick={() => setShowCreateModal(true)} className="btn-primary">
             <Plus className="w-4 h-4" />
             Dispatch Shipment
           </button>
@@ -211,111 +174,79 @@ export const ShipmentsPage: React.FC = () => {
       </div>
 
       {actionMessage && (
-        <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="banner-info">
           <Zap className="w-4 h-4 text-blue-600" />
           <span>{actionMessage}</span>
         </div>
       )}
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>TOTAL SHIPMENTS</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{stats?.total_shipments ?? shipments.length}</div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Across road, air, ocean & rail</div>
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">TOTAL SHIPMENTS</div>
+          <div className="stat-value">{stats?.total_shipments ?? shipments.length}</div>
+          <div className="stat-sub">Road, air, ocean & rail</div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>IN TRANSIT</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#2563eb' }}>{stats?.in_transit ?? 0}</div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Live active freight consignments</div>
+        <div className="stat-card">
+          <div className="stat-label">IN TRANSIT</div>
+          <div className="stat-value" style={{ color: '#2563eb' }}>{stats?.in_transit ?? 0}</div>
+          <div className="stat-sub">En route to destination</div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>LOGISTICAL EXCEPTIONS</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: stats?.delayed ? '#dc2626' : '#059669' }}>
-            {stats?.delayed ?? 0}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Corridor disruptions detected</div>
+        <div className="stat-card">
+          <div className="stat-label">DELIVERED</div>
+          <div className="stat-value" style={{ color: '#059669' }}>{stats?.delivered ?? 0}</div>
+          <div className="stat-sub">Arrival confirmed</div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>ON-TIME PROJECTION (OTIF)</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#059669' }}>
-            {stats?.on_time_rate_pct ?? 96.5}%
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>SLA adherence across routes</div>
+        <div className="stat-card">
+          <div className="stat-label">DELAYED</div>
+          <div className="stat-value" style={{ color: '#dc2626' }}>{stats?.delayed ?? 0}</div>
+          <div className="stat-sub">Weather & transit exceptions</div>
         </div>
       </div>
 
       {/* Filters and Search Bar */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>Mode:</span>
+      <div className="filter-toolbar">
+        <div className="filter-group">
+          <span className="filter-label">Mode:</span>
           {['all', 'road', 'air', 'ocean'].map((m) => (
             <button
               key={m}
               onClick={() => setModeFilter(m)}
-              style={{
-                padding: '5px 10px',
-                borderRadius: '5px',
-                fontSize: '12px',
-                fontWeight: modeFilter === m ? 600 : 400,
-                border: '1px solid',
-                borderColor: modeFilter === m ? '#bfdbfe' : '#cbd5e1',
-                background: modeFilter === m ? '#eff6ff' : '#ffffff',
-                color: modeFilter === m ? '#2563eb' : '#475569',
-                cursor: 'pointer',
-                textTransform: 'capitalize',
-              }}
+              className={`filter-pill ${modeFilter === m ? 'active' : ''}`}
             >
               {m}
             </button>
           ))}
-          <span style={{ margin: '0 8px', color: '#e2e8f0' }}>|</span>
-          <span style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>Status:</span>
+          <span style={{ margin: '0 4px', color: '#e2e8f0' }}>|</span>
+          <span className="filter-label">Status:</span>
           {['all', 'in_transit', 'delayed', 'delivered'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              style={{
-                padding: '5px 10px',
-                borderRadius: '5px',
-                fontSize: '12px',
-                fontWeight: statusFilter === st ? 600 : 400,
-                border: '1px solid',
-                borderColor: statusFilter === st ? '#bfdbfe' : '#cbd5e1',
-                background: statusFilter === st ? '#eff6ff' : '#ffffff',
-                color: statusFilter === st ? '#2563eb' : '#475569',
-                cursor: 'pointer',
-              }}
+              className={`filter-pill ${statusFilter === st ? 'active' : ''}`}
             >
               {st === 'all' ? 'All' : st.replace('_', ' ')}
             </button>
           ))}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f8fafc', borderRadius: '6px', padding: '6px 12px', border: '1px solid #cbd5e1' }}>
+        <div className="search-box">
           <Search className="w-3.5 h-3.5 text-slate-400" />
           <input
             type="text"
             placeholder="Search tracking, carrier, origin..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: '#0f172a',
-              fontSize: '12px',
-              width: '240px',
-            }}
+            className="search-input"
           />
         </div>
       </div>
 
       {/* Shipments Table / Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {filtered.map((shipment) => {
           const badge = STATUS_BADGES[shipment.status] || STATUS_BADGES.in_transit;
           const isDelayed = shipment.status === 'delayed';
@@ -326,15 +257,15 @@ export const ShipmentsPage: React.FC = () => {
               style={{
                 background: '#ffffff',
                 border: isDelayed ? '1px solid #fecaca' : '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '16px 20px',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px 24px',
                 boxShadow: isDelayed ? '0 2px 8px rgba(239, 68, 68, 0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
                 transition: 'all 0.15s ease',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ padding: '8px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ padding: '8px', background: '#f8fafc', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
                     {MODE_ICONS[shipment.freight_mode] || <Truck className="w-4 h-4 text-slate-600" />}
                   </div>
                   <div>
@@ -346,8 +277,8 @@ export const ShipmentsPage: React.FC = () => {
                         style={{
                           fontSize: '11px',
                           fontWeight: 600,
-                          padding: '2px 8px',
-                          borderRadius: '4px',
+                          padding: '3px 10px',
+                          borderRadius: '9999px',
                           background: badge.bg,
                           color: badge.text,
                           border: `1px solid ${badge.border}`,
@@ -368,19 +299,8 @@ export const ShipmentsPage: React.FC = () => {
                     <button
                       onClick={() => handleRerouteAir(shipment)}
                       disabled={reroutingId === shipment.shipment_id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        background: '#2563eb',
-                        border: 'none',
-                        borderRadius: '5px',
-                        padding: '6px 12px',
-                        color: '#ffffff',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className="btn-primary"
+                      style={{ padding: '6px 12px', fontSize: '12px' }}
                     >
                       <Zap className="w-3.5 h-3.5 text-white" />
                       {reroutingId === shipment.shipment_id ? 'Rerouting...' : 'Autonomous Air Reroute'}
@@ -393,16 +313,8 @@ export const ShipmentsPage: React.FC = () => {
                       setUpdateLocationVal(shipment.current_location || '');
                       setUpdateReasonVal(shipment.delay_reason || '');
                     }}
-                    style={{
-                      padding: '6px 12px',
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '5px',
-                      color: '#475569',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                    }}
+                    className="btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
                   >
                     Update Waypoint
                   </button>
@@ -415,8 +327,8 @@ export const ShipmentsPage: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   background: '#f8fafc',
-                  padding: '10px 14px',
-                  borderRadius: '6px',
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-md)',
                   border: '1px solid #e2e8f0',
                   fontSize: '12px',
                   gap: '12px',
@@ -440,9 +352,9 @@ export const ShipmentsPage: React.FC = () => {
               {isDelayed && shipment.delay_reason && (
                 <div
                   style={{
-                    marginTop: '10px',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
+                    marginTop: '12px',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-md)',
                     background: '#fef2f2',
                     border: '1px solid #fecaca',
                     color: '#b91c1c',
@@ -463,7 +375,7 @@ export const ShipmentsPage: React.FC = () => {
         })}
 
         {filtered.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', padding: '48px', color: '#64748b', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <div style={{ textAlign: 'center', padding: '48px', color: '#64748b', background: '#ffffff', borderRadius: 'var(--radius-lg)', border: '1px solid #e2e8f0' }}>
             No shipments match the current filters.
           </div>
         )}
@@ -472,36 +384,36 @@ export const ShipmentsPage: React.FC = () => {
       {/* Dispatch Modal */}
       {showCreateModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>Dispatch New Freight Consignment</h2>
             <form onSubmit={handleCreateShipment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Origin Hub</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Origin Hub</label>
                 <input
                   type="text"
                   value={newOrigin}
                   onChange={(e) => setNewOrigin(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                   required
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Destination Facility</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Destination Facility</label>
                 <input
                   type="text"
                   value={newDestination}
                   onChange={(e) => setNewDestination(e.target.value)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                   required
                 />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Carrier</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Carrier</label>
                   <select
                     value={newCarrier}
                     onChange={(e) => setNewCarrier(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                   >
                     <option value="Global Intermodal Logistics">Global Intermodal Logistics</option>
                     <option value="DHL Air Express">DHL Air Express</option>
@@ -510,11 +422,11 @@ export const ShipmentsPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Freight Mode</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Freight Mode</label>
                   <select
                     value={newMode}
                     onChange={(e) => setNewMode(e.target.value as any)}
-                    style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                   >
                     <option value="road">Road</option>
                     <option value="air">Air</option>
@@ -528,13 +440,13 @@ export const ShipmentsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  style={{ padding: '8px 14px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontSize: '13px' }}
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '5px', color: '#ffffff', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                  className="btn-primary"
                 >
                   Dispatch
                 </button>
@@ -547,7 +459,7 @@ export const ShipmentsPage: React.FC = () => {
       {/* Update Waypoint Modal */}
       {showStatusModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '24px', width: '460px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '460px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
               Update Waypoint: {showStatusModal.carrier_tracking_id}
             </h2>
@@ -556,11 +468,11 @@ export const ShipmentsPage: React.FC = () => {
             </p>
             <form onSubmit={handleUpdateStatusSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Status</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Status</label>
                 <select
                   value={updateStatusVal}
                   onChange={(e) => setUpdateStatusVal(e.target.value as any)}
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                 >
                   <option value="in_transit">In Transit</option>
                   <option value="delivered">Delivered</option>
@@ -569,24 +481,24 @@ export const ShipmentsPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px' }}>Current Location / Checkpoint</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Current Location / Checkpoint</label>
                 <input
                   type="text"
                   value={updateLocationVal}
                   onChange={(e) => setUpdateLocationVal(e.target.value)}
                   placeholder="e.g. Chicago Intermodal Yard, Gate 4"
-                  style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                 />
               </div>
               {updateStatusVal === 'delayed' && (
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#dc2626', marginBottom: '4px' }}>Delay / Bottleneck Reason</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#dc2626', marginBottom: '4px', fontWeight: 500 }}>Delay / Bottleneck Reason</label>
                   <input
                     type="text"
                     value={updateReasonVal}
                     onChange={(e) => setUpdateReasonVal(e.target.value)}
                     placeholder="e.g. Severe storm causing maritime port suspension"
-                    style={{ width: '100%', padding: '8px 10px', background: '#ffffff', border: '1px solid #fca5a5', borderRadius: '5px', color: '#0f172a', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #fca5a5', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                     required
                   />
                 </div>
@@ -596,13 +508,13 @@ export const ShipmentsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowStatusModal(null)}
-                  style={{ padding: '8px 14px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontSize: '13px' }}
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '5px', color: '#ffffff', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                  className="btn-primary"
                 >
                   Save Waypoint
                 </button>

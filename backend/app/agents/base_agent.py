@@ -27,6 +27,17 @@ from app.graph.state import SupplyChainState
 logger = structlog.get_logger(__name__)
 
 
+def safe_uuid(val: Any) -> uuid.UUID:
+    """Safely converts string or UUID into a valid UUID object without throwing ValueError."""
+    if isinstance(val, uuid.UUID):
+        return val
+    try:
+        return uuid.UUID(str(val))
+    except (ValueError, AttributeError, TypeError):
+        return uuid.uuid5(uuid.NAMESPACE_DNS, str(val))
+
+
+
 class BaseAgent(abc.ABC):
     """
     Abstract base for every LangGraph agent node.
@@ -219,9 +230,9 @@ class BaseAgent(abc.ABC):
             # No publisher in unit-test mode — just record locally
             return
 
-        correlation_id = uuid.UUID(state.get("correlation_id") or str(uuid.uuid4()))
+        correlation_id = safe_uuid(state.get("correlation_id") or str(uuid.uuid4()))
         workflow_id_str = state.get("workflow_id")
-        workflow_id = uuid.UUID(workflow_id_str) if workflow_id_str else None
+        workflow_id = safe_uuid(workflow_id_str) if workflow_id_str else None
 
         await self.publisher.publish(
             event_type=event_type,

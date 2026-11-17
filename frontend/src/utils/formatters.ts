@@ -4,6 +4,7 @@
  */
 
 export const CUSTOMER_DIRECTORY: Record<string, { name: string; tier: string; code: string; icon: string }> = {
+  '10000000-0000-0000-0000-000000000001': { name: 'Acme Enterprise Global', tier: 'Strategic Partner', code: 'CUST-ACME', icon: '🌐' },
   '50000000-0000-0000-0000-000000000001': { name: 'Siemens Global Automations', tier: 'Enterprise Tier', code: 'CUST-SIEMENS', icon: '🏢' },
   '50000000-0000-0000-0000-000000000002': { name: 'Tesla Energy & Storage', tier: 'Strategic Partner', code: 'CUST-TESLA', icon: '⚡' },
   '50000000-0000-0000-0000-000000000003': { name: 'Schneider Electric Grid', tier: 'Critical Infra', code: 'CUST-SCHNEIDER', icon: '🏭' },
@@ -16,6 +17,7 @@ export const CUSTOMER_DIRECTORY: Record<string, { name: string; tier: string; co
 };
 
 export const PRODUCT_DIRECTORY: Record<string, { name: string; sku: string; price: number }> = {
+  '20000000-0000-0000-0000-000000000001': { name: 'Precision Hydraulic Valve', sku: 'HYD-VALVE-01', price: 280.00 },
   '30000000-0000-0000-0000-000000000001': { name: 'Industrial Sensor Module', sku: 'ELEC-001', price: 150.00 },
   '30000000-0000-0000-0000-000000000002': { name: 'High-Torque Servo Motor', sku: 'ELEC-002', price: 280.00 },
   '30000000-0000-0000-0000-000000000003': { name: 'IoT Gateway Device', sku: 'ELEC-003', price: 1249.99 },

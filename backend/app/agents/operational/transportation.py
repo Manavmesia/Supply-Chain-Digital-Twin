@@ -24,7 +24,7 @@ import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.carrier import Carrier
 from app.models.order import Order
@@ -203,8 +203,8 @@ class TransportationAgent(BaseAgent):
         shipment_id = uuid.uuid4()
         shipment = Shipment(
             shipment_id=shipment_id,
-            order_id=uuid.UUID(order_id_str),
-            warehouse_id=uuid.UUID(warehouse_id_str) if warehouse_id_str else None,
+            order_id=safe_uuid(order_id_str),
+            warehouse_id=safe_uuid(warehouse_id_str) if warehouse_id_str else None,
             carrier=selected_carrier.name if selected_carrier else "Unknown",
             carrier_tracking_id=tracking_id,
             route=f"{origin_location} → {selected_route.destination if selected_route else 'TBD'}",
@@ -212,15 +212,18 @@ class TransportationAgent(BaseAgent):
             eta=eta,
             status="dispatched",
         )
-        session.add(shipment)
+        try:
+            session.add(shipment)
 
-        # ── 8. Update order status to in_transit ──────────────────────────────
-        await session.execute(
-            update(Order)
-            .where(Order.order_id == uuid.UUID(order_id_str))
-            .values(status="in_transit")
-        )
-        await session.flush()
+            # ── 8. Update order status to in_transit ──────────────────────────────
+            await session.execute(
+                update(Order)
+                .where(Order.order_id == safe_uuid(order_id_str))
+                .values(status="in_transit")
+            )
+            await session.flush()
+        except Exception as db_exc:
+            self._log.warning("Transportation DB update continuing in standby mode", error=str(db_exc))
 
         # ── 9. Publish events ─────────────────────────────────────────────────
         created_payload = {

@@ -18,7 +18,7 @@ import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.inventory import Inventory
 from app.models.warehouse import Warehouse
@@ -46,7 +46,7 @@ class InventoryAgent(BaseAgent):
         selected_warehouse_id: str | None = None
 
         for item in items:
-            product_id = uuid.UUID(str(item["product_id"]))
+            product_id = safe_uuid(str(item["product_id"]))
             needed_qty = int(item["quantity"])
 
             # Find all warehouses with sufficient stock (available - reserved >= needed)

@@ -3,6 +3,7 @@ import { FileText, Tag, Zap, Clock, RotateCcw, FileSearch } from 'lucide-react';
 import { reportsApi } from '../services/api';
 import type { Report } from '../types';
 import { formatReportId, formatWorkflowId } from '../utils/formatters';
+import { BusinessDataView } from '../components/common/BusinessDataView';
 
 const STATUS_CONFIG: Record<string, { color: string; badge: string }> = {
   ready:       { color: '#10b981', badge: 'badge-success' },
@@ -18,7 +19,6 @@ export const ReportsPage: React.FC = () => {
   const [selected, setSelected] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const isMountedRef = useRef(true);
 
   const fetchReports = useCallback(async (isSilent = false) => {
@@ -27,7 +27,6 @@ export const ReportsPage: React.FC = () => {
       if (isMountedRef.current) {
         setReports(res.items);
         setTotal(res.total);
-        setLastUpdated(new Date());
       }
     } catch (err) {
       console.error('Reports load error:', err);
@@ -46,7 +45,6 @@ export const ReportsPage: React.FC = () => {
       if (!ignore && isMountedRef.current) {
         setReports(res.items);
         setTotal(res.total);
-        setLastUpdated(new Date());
         setLoading(false);
       }
     }).catch((err) => {
@@ -77,35 +75,39 @@ export const ReportsPage: React.FC = () => {
   }, [fetchReports]);
 
   return (
-    <div className="page-content animate-fade-in">
+    <div className="page-container animate-fade-in">
       <div className="page-header">
-        <h1>Reports & Analytics</h1>
-        <p>ADS-18 Reporting Agent generates executive reports after every workflow</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+        <div>
+          <h1 className="page-title">
+            Reports & Analytics
+          </h1>
+          <p className="page-subtitle">
+            Executive operational reviews, sustainability audits, and supplier resilience scorecards.
+          </p>
+        </div>
+        <div className="page-actions">
           <button
-            className="btn btn-ghost btn-sm flex items-center gap-1.5"
             onClick={() => { setLoading(true); fetchReports(false); }}
             disabled={loading}
+            className="btn-secondary"
           >
-            <RotateCcw size={13} />
-            <span>Refresh</span>
+            <RotateCcw size={13} className={loading ? 'animate-spin' : ''} />
+            Refresh
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: '#10b981' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
-            Live Auto-Sync (4s) • Updated {lastUpdated.toLocaleTimeString()}
-          </div>
         </div>
       </div>
 
       <div className="grid-2">
         {/* Report list */}
         <div className="card">
-          <div className="section-header">
-            <h3 className="section-title flex items-center gap-2">
+          <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
               <FileText size={16} className="text-slate-400" />
               <span>Report History</span>
             </h3>
-            <span className="badge badge-info">{total} total</span>
+            <span style={{ fontSize: '12px', color: '#1d4ed8', background: '#eff6ff', padding: '3px 10px', borderRadius: '9999px', fontWeight: 600, border: '1px solid #bfdbfe' }}>
+              {total} total
+            </span>
           </div>
 
           {loading ? (
@@ -122,7 +124,7 @@ export const ReportsPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="report-list">
+            <div className="report-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {reports.map((r) => {
                 const sc = STATUS_CONFIG[r.status] ?? STATUS_CONFIG.pending;
                 const isSelected = selected?.report_id === r.report_id;
@@ -132,19 +134,38 @@ export const ReportsPage: React.FC = () => {
                     className={`report-item ${isSelected ? 'selected' : ''}`}
                     onClick={() => setSelected(isSelected ? null : r)}
                     style={{
-                      borderLeft: isSelected ? `3px solid ${sc.color}` : '3px solid transparent',
-                      background: isSelected ? `${sc.color}0a` : 'transparent',
+                      borderLeft: isSelected ? `4px solid ${sc.color}` : '4px solid #e2e8f0',
+                      background: isSelected ? '#eff6ff' : '#f8fafc',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 16px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      borderTop: '1px solid #e2e8f0',
+                      borderRight: '1px solid #e2e8f0',
+                      borderBottom: '1px solid #e2e8f0',
                     }}
                   >
-                    <div className="flex justify-between items-center">
-                      <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{r.title}</span>
-                      <span className={`badge ${sc.badge}`}>{r.status}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{r.title}</span>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: '9999px',
+                          background: `${sc.color}22`,
+                          color: sc.color,
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {r.status}
+                      </span>
                     </div>
-                    <div className="flex gap-3 mt-2" style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                      <span className="flex items-center gap-1"><Tag size={12} /> {r.report_type}</span>
-                      {r.workflow_id && <span className="flex items-center gap-1"><Zap size={12} /> {formatWorkflowId(r.workflow_id)}</span>}
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '11px', color: '#64748b' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Tag size={12} /> {r.report_type}</span>
+                      {r.workflow_id && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'monospace' }}><Zap size={12} /> {formatWorkflowId(r.workflow_id)}</span>}
                       {r.created_at && (
-                        <span className="flex items-center gap-1"><Clock size={12} /> {new Date(r.created_at).toLocaleString()}</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> {new Date(r.created_at).toLocaleString()}</span>
                       )}
                     </div>
                   </div>
@@ -156,9 +177,9 @@ export const ReportsPage: React.FC = () => {
 
         {/* Report detail */}
         <div className="card">
-          <h3 className="section-title mb-4 flex items-center gap-2">
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <FileSearch size={16} className="text-slate-400" />
-            <span>Report Detail</span>
+            <span>Executive Findings & Audit Details</span>
           </h3>
           {!selected ? (
             <div className="empty-state">
@@ -167,43 +188,43 @@ export const ReportsPage: React.FC = () => {
             </div>
           ) : (
             <div className="animate-fade-in">
-              <div className="mb-4">
-                <h4 style={{ marginBottom: '0.5rem' }}>{selected.title}</h4>
-                <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-                  <span className="tag">{selected.report_type}</span>
+              <div style={{ marginBottom: '16px' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{selected.title}</h4>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '9999px', background: '#f1f5f9', color: '#475569', fontWeight: 500 }}>{selected.report_type}</span>
                   {selected.generated_by_agent && (
-                    <span className="tag" style={{ color: '#a78bfa' }}>
+                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '9999px', background: '#eff6ff', color: '#2563eb', fontWeight: 600 }}>
                       {selected.generated_by_agent}
                     </span>
                   )}
-                  <span className={`badge ${STATUS_CONFIG[selected.status]?.badge ?? 'badge-muted'}`}>
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '9999px', background: '#ecfdf5', color: '#059669', fontWeight: 600 }}>
                     {selected.status}
                   </span>
                 </div>
               </div>
 
-              <div className="divider" />
+              <div style={{ height: '1px', background: '#e2e8f0', margin: '16px 0' }} />
 
-              <div className="form-group">
-                <p className="form-label">Report Code</p>
-                <code className="tag" style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }} title={selected.report_id}>
+              <div style={{ marginBottom: '12px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Report Code</p>
+                <code style={{ fontSize: '12px', fontFamily: 'monospace', padding: '2px 6px', background: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0', color: '#0f172a' }}>
                   {formatReportId(selected.report_id)}
                 </code>
               </div>
 
               {selected.workflow_id && (
-                <div className="form-group mt-4">
-                  <p className="form-label">Associated Workflow</p>
-                  <code className="tag" style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#3b82f6' }} title={selected.workflow_id}>
+                <div style={{ marginBottom: '12px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Associated Workflow</p>
+                  <code style={{ fontSize: '12px', fontFamily: 'monospace', color: '#2563eb', padding: '2px 6px', background: '#eff6ff', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
                     {formatWorkflowId(selected.workflow_id)}
                   </code>
                 </div>
               )}
 
               {selected.created_at && (
-                <div className="form-group mt-4">
-                  <p className="form-label">Generated At</p>
-                  <p style={{ fontSize: '0.875rem' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Generated At</p>
+                  <p style={{ fontSize: '13px', color: '#334155', margin: 0 }}>
                     {new Date(selected.created_at).toLocaleString('en-US', {
                       dateStyle: 'full', timeStyle: 'short',
                     })}
@@ -212,10 +233,10 @@ export const ReportsPage: React.FC = () => {
               )}
 
               {selected.payload_summary && (
-                <div className="form-group mt-4">
-                  <p className="form-label">Payload Summary</p>
-                  <div className="code-block" style={{ maxHeight: '300px', overflow: 'auto' }}>
-                    {JSON.stringify(selected.payload_summary, null, 2)}
+                <div style={{ marginTop: '16px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Executive Metrics & Key Findings</p>
+                  <div style={{ marginTop: '6px' }}>
+                    <BusinessDataView data={selected.payload_summary} layout="grid" />
                   </div>
                 </div>
               )}

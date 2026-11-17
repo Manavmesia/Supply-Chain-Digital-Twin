@@ -35,7 +35,7 @@ logger = structlog.get_logger(__name__)
 
 _PRIORITY_HIGH_AMOUNT_THRESHOLD = Decimal("50000.00")
 
-from app.core.catalog import PRODUCT_UUID_MAP as _PRODUCT_CATALOG
+from app.core.catalog import CUSTOMER_MAP as _CUSTOMER_CATALOG, PRODUCT_MAP as _PRODUCT_STR_CATALOG, PRODUCT_UUID_MAP as _PRODUCT_CATALOG
 
 
 def _derive_priority(customer_tier: str, total_amount: Decimal) -> str:
@@ -74,6 +74,10 @@ class OrderManagementAgent(BaseAgent):
         customer_id = uuid.UUID(customer_id_str)
 
         # ── 2. Validate customer ──────────────────────────────────────────────
+        cust_info = _CUSTOMER_CATALOG.get(str(customer_id))
+        resolved_name = cust_info[0] if cust_info else "Enterprise Customer"
+        resolved_tier = cust_info[1] if cust_info else "enterprise"
+
         customer = None
         if session is not None:
             try:
@@ -82,18 +86,13 @@ class OrderManagementAgent(BaseAgent):
                 )
                 customer = result.scalar_one_or_none()
             except Exception as exc:
-                self._log.warning("DB unavailable for customer lookup, using standby customer", error=str(exc))
-                customer = Customer(
-                    customer_id=customer_id,
-                    name="Siemens Enterprise Client",
-                    customer_tier="enterprise",
-                    is_active=True,
-                )
-        else:
+                self._log.warning("DB unavailable for customer lookup, using catalog customer", error=str(exc))
+        
+        if customer is None:
             customer = Customer(
                 customer_id=customer_id,
-                name="Siemens Enterprise Client",
-                customer_tier="enterprise",
+                name=resolved_name,
+                customer_tier=resolved_tier,
                 is_active=True,
             )
 
@@ -118,14 +117,15 @@ class OrderManagementAgent(BaseAgent):
                     )
                     product = r.scalar_one_or_none()
                 except Exception as exc:
-                    self._log.warning("DB unavailable for product lookup, using standby product", error=str(exc))
+                    self._log.warning("DB unavailable for product lookup, using catalog product", error=str(exc))
                     product = None
 
             if product is None:
                 cat_info = _PRODUCT_CATALOG.get(product_id)
-                p_name = item.get("product_name") or (cat_info[0] if cat_info else "Industrial IoT Sensor Hub v2")
-                p_sku = item.get("sku") or (cat_info[1] if cat_info else "ELEC-001")
-                p_price = Decimal(str(item.get("unit_price") or (cat_info[2] if cat_info else "150.00")))
+                str_cat = _PRODUCT_STR_CATALOG.get(str(product_id))
+                p_name = item.get("product_name") or (cat_info[0] if cat_info else (str_cat[0] if str_cat else "Industrial Sensor Module"))
+                p_sku = item.get("sku") or (cat_info[1] if cat_info else (str_cat[1] if str_cat else "ELEC-001"))
+                p_price = Decimal(str(item.get("unit_price") or (cat_info[2] if cat_info else (str_cat[2] if str_cat else "150.00"))))
                 product = Product(
                     product_id=product_id,
                     name=p_name,
@@ -210,7 +210,17 @@ class OrderManagementAgent(BaseAgent):
         )
 
         # ── 5. Create Order record ────────────────────────────────────────────
-        order_id = uuid.uuid4()
+        raw_order_id = order_input.get("order_id")
+        if raw_order_id:
+            try:
+                order_id = uuid.UUID(str(raw_order_id))
+            except Exception:
+                order_id = uuid.uuid5(uuid.NAMESPACE_DNS, str(raw_order_id))
+            order_id_str = str(raw_order_id)
+        else:
+            order_id = uuid.uuid4()
+            order_id_str = str(order_id)
+
         order = Order(
             order_id=order_id,
             customer_id=customer_id,
@@ -218,7 +228,7 @@ class OrderManagementAgent(BaseAgent):
             priority=priority,
             total_amount=total_amount,
             currency="USD",
-            workflow_id=uuid.UUID(workflow_id),
+            workflow_id=uuid.UUID(workflow_id) if len(workflow_id) == 36 else uuid.uuid5(uuid.NAMESPACE_DNS, workflow_id),
         )
         if session is not None:
             try:
@@ -277,8 +287,9 @@ class OrderManagementAgent(BaseAgent):
 
         return {
             "order": {
-                "order_id": str(order_id),
+                "order_id": order_id_str,
                 "customer_id": str(customer_id),
+                "customer_name": customer.name,
                 "status": "pending",
                 "priority": priority,
                 "total_amount": f"{total_amount:.2f}",

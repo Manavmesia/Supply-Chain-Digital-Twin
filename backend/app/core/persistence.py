@@ -275,19 +275,17 @@ def init_db() -> None:
                 _BASELINE_SUPPLIERS,
             )
 
-        # Seed carriers if empty
-        if conn.execute("SELECT COUNT(*) as count FROM carriers").fetchone()["count"] == 0:
-            conn.executemany(
-                "INSERT OR IGNORE INTO carriers (carrier_id, name, code, modes_json, reliability_score, status) VALUES (?, ?, ?, ?, ?, ?)",
-                _BASELINE_CARRIERS,
-            )
+        # Seed/update carriers
+        conn.executemany(
+            "INSERT OR REPLACE INTO carriers (carrier_id, name, code, modes_json, reliability_score, status) VALUES (?, ?, ?, ?, ?, ?)",
+            _BASELINE_CARRIERS,
+        )
 
-        # Seed routes if empty
-        if conn.execute("SELECT COUNT(*) as count FROM transportation_routes").fetchone()["count"] == 0:
-            conn.executemany(
-                "INSERT OR IGNORE INTO transportation_routes (route_id, carrier_id, origin_location, destination, freight_mode, transit_days, base_cost, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                _BASELINE_ROUTES,
-            )
+        # Seed/update routes
+        conn.executemany(
+            "INSERT OR REPLACE INTO transportation_routes (route_id, carrier_id, origin_location, destination, freight_mode, transit_days, base_cost, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            _BASELINE_ROUTES,
+        )
 
         # Seed baseline orders if table is empty
         cur = conn.execute("SELECT COUNT(*) as count FROM orders")
@@ -809,7 +807,45 @@ def get_workflow(workflow_id: str) -> dict[str, Any] | None:
         ).fetchone()
         if row and row["state_json"]:
             try:
-                return json.loads(row["state_json"])
+                state = json.loads(row["state_json"])
+                # If linked commercial order exists, synchronize order metadata
+                ord_row = conn.execute(
+                    "SELECT order_id, customer_id, customer_name, total_amount, priority, status FROM orders WHERE workflow_id = ?",
+                    (workflow_id,)
+                ).fetchone()
+                if ord_row:
+                    if not isinstance(state.get("order"), dict):
+                        state["order"] = {}
+                    state["order"]["order_id"] = ord_row["order_id"]
+                    state["order"]["customer_id"] = ord_row["customer_id"]
+                    state["order"]["customer_name"] = ord_row["customer_name"]
+                    state["order"]["total_amount"] = str(ord_row["total_amount"])
+                    state["order"]["priority"] = ord_row["priority"]
+                    state["order"]["status"] = ord_row["status"]
+
+                    state["customer"] = {
+                        "customer_id": ord_row["customer_id"],
+                        "name": ord_row["customer_name"],
+                        "tier": ord_row["priority"],
+                    }
+
+                    items_rows = conn.execute(
+                        "SELECT product_id, sku, product_name, quantity, unit_price, line_total FROM order_items WHERE order_id = ?",
+                        (ord_row["order_id"],)
+                    ).fetchall()
+                    if items_rows:
+                        state["order"]["items"] = [
+                            {
+                                "product_id": it["product_id"],
+                                "sku": it["sku"],
+                                "product_name": it["product_name"],
+                                "quantity": it["quantity"],
+                                "unit_price": str(it["unit_price"]),
+                                "line_total": str(it["line_total"]),
+                            }
+                            for it in items_rows
+                        ]
+                return state
             except Exception:
                 return None
     return None
@@ -852,16 +888,26 @@ def list_workflows(limit: int = 50) -> list[dict[str, Any]]:
                 except Exception:
                     pass
             order = st.get("order") or {}
+            ord_row = conn.execute(
+                "SELECT order_id, customer_id, customer_name, total_amount, status FROM orders WHERE workflow_id = ?",
+                (r["workflow_id"],)
+            ).fetchone()
+
+            resolved_order_id = (ord_row["order_id"] if ord_row else None) or order.get("order_id")
+            resolved_customer_id = (ord_row["customer_id"] if ord_row else None) or order.get("customer_id")
+            resolved_total = (str(ord_row["total_amount"]) if ord_row else None) or str(order.get("total_amount") or "0.00")
+            resolved_status = (ord_row["status"] if ord_row else None) or order.get("status")
+
             items.append({
                 "workflow_id": r["workflow_id"],
                 "correlation_id": r["correlation_id"],
                 "workflow_status": r["status"],
                 "created_at": r["created_at"],
                 "updated_at": r["updated_at"],
-                "order_id": order.get("order_id"),
-                "customer_id": order.get("customer_id"),
-                "total_amount": str(order.get("total_amount") or "0.00"),
-                "order_status": order.get("status"),
+                "order_id": resolved_order_id,
+                "customer_id": resolved_customer_id,
+                "total_amount": resolved_total,
+                "order_status": resolved_status,
                 "requires_human_approval": bool(st.get("requires_human_approval")),
                 "active_agents": st.get("active_agents") or [],
                 "event_count": len(st.get("event_history") or []),

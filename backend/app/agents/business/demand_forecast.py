@@ -21,7 +21,7 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.order_item import OrderItem
 from app.models.promotion import Promotion
@@ -45,7 +45,7 @@ class DemandForecastAgent(BaseAgent):
 
         for item in items:
             product_id_str = str(item["product_id"])
-            product_id = uuid.UUID(product_id_str)
+            product_id = safe_uuid(product_id_str)
             order_qty = int(item.get("quantity", 1))
 
             # ── 1. Load historical order item volume for product ──────────────

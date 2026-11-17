@@ -17,6 +17,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.base_agent import safe_uuid
 from app.core import persistence
 from app.core.database import get_db_session
 from app.repositories.report import ReportRepository
@@ -140,13 +141,14 @@ async def list_reports(
     summary="Get report by ID",
 )
 async def get_report_by_id(
-    report_id: uuid.UUID,
+    report_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Fetch specific report details and payload summary."""
+    clean_uid = safe_uuid(report_id)
     try:
         repo = ReportRepository(session)
-        report = await repo.get_by_id(report_id)
+        report = await repo.get_by_id(clean_uid)
 
         if report is not None:
             return {

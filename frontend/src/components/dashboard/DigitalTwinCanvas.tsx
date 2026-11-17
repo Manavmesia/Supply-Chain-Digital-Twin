@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Globe,
   Maximize2,
@@ -111,7 +112,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--c-text-primary)', letterSpacing: '-0.01em' }}>
-                Spatial Digital Twin Topology
+                Supply Chain Network Map
               </h3>
               <span
                 style={{
@@ -128,11 +129,11 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                 }}
               >
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: loading ? '#f59e0b' : '#059669', display: 'inline-block' }} />
-                {loading ? 'SYNCING...' : 'REAL-TIME TELEMETRY'}
+                {loading ? 'SYNCING...' : 'LIVE TELEMETRY'}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--c-text-muted)' }}>
-              Multi-echelon node network with live in-transit freight corridors & inventory buffers
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>
+              Distribution centers, manufacturing facilities, suppliers, and active freight corridors
             </p>
           </div>
         </div>
@@ -487,13 +488,13 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
                   </div>
                 )}
 
-                <a
-                  href="/inventory"
+                <Link
+                  to="/inventory"
                   className="btn btn-secondary btn-sm"
-                  style={{ width: '100%', textAlign: 'center', marginTop: '4px', textDecoration: 'none', fontSize: '0.75rem' }}
+                  style={{ width: '100%', textAlign: 'center', marginTop: '4px', textDecoration: 'none', fontSize: '0.75rem', display: 'block' }}
                 >
                   Inspect Warehouse Inventory →
-                </a>
+                </Link>
               </div>
             )}
 

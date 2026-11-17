@@ -45,6 +45,11 @@ class CEOAgent(BaseAgent):
             workflow_status: str
             rationale: str
 
+        cust_name = order.get("customer_name") or "Enterprise Client"
+        item_count = len(order.get("items") or [])
+        wh_name = state.get("warehouse", {}).get("name") or "Regional Distribution Center"
+        carrier_name = state.get("shipment", {}).get("carrier") or "Global Logistics"
+
         def _fallback_ceo() -> CEODecisionSchema:
             wf_st = state.get("workflow_status") if state.get("workflow_status") in {"escalated", "failed"} else "completed"
             req_h = bool(state.get("requires_human_approval"))
@@ -54,7 +59,7 @@ class CEOAgent(BaseAgent):
                     approval_tier="risk_denied",
                     requires_human_approval=False,
                     workflow_status="failed",
-                    rationale=f"Risk score {risk_score} exceeds policy limit of 85.0.",
+                    rationale=f"CEO governance hold: Risk score ({risk_score:.1f}) breaches risk tolerance ceiling (85.0) for order {order.get('order_id')}.",
                 )
             elif errors and priority != "critical":
                 return CEODecisionSchema(
@@ -62,7 +67,7 @@ class CEOAgent(BaseAgent):
                     approval_tier="error_denied",
                     requires_human_approval=False,
                     workflow_status="failed",
-                    rationale="Standard workflow contains unresolved errors.",
+                    rationale=f"CEO governance rejection: Operational workflow encountered {len(errors)} unresolved exceptions.",
                 )
             elif total_amount >= Decimal("500000.00"):
                 return CEODecisionSchema(
@@ -70,7 +75,7 @@ class CEOAgent(BaseAgent):
                     approval_tier="human_required",
                     requires_human_approval=True,
                     workflow_status=wf_st,
-                    rationale="Very high-value order requires human executive oversight.",
+                    rationale=f"CEO executive escalation: Capital tier order of ${total_amount:,.2f} for {cust_name} flagged for executive board sign-off.",
                 )
             elif (wf_st == "escalated" or req_h) and not (
                 state.get("planning", {}).get("remanufacture_required") and "ADS-07" in (state.get("active_agents") or [])
@@ -80,7 +85,7 @@ class CEOAgent(BaseAgent):
                     approval_tier="human_required",
                     requires_human_approval=True,
                     workflow_status="escalated",
-                    rationale="Workflow escalated for human review and approval.",
+                    rationale=f"CEO governance review: Order {order.get('order_id')} escalated for human authorization.",
                 )
             elif total_amount >= Decimal("10000.00"):
                 return CEODecisionSchema(
@@ -88,7 +93,7 @@ class CEOAgent(BaseAgent):
                     approval_tier="finance_review",
                     requires_human_approval=False,
                     workflow_status="completed",
-                    rationale="Mid-value order requires finance review.",
+                    rationale=f"CEO strategic approval granted: Commercial consignment of ${total_amount:,.2f} ({item_count} items) for {cust_name}. Cleared fulfillment via {carrier_name} from {wh_name}.",
                 )
             else:
                 return CEODecisionSchema(
@@ -96,7 +101,7 @@ class CEOAgent(BaseAgent):
                     approval_tier="auto",
                     requires_human_approval=False,
                     workflow_status="completed",
-                    rationale="Order satisfied standard approval criteria.",
+                    rationale=f"CEO autonomous sign-off: Order {order.get('order_id')} (${total_amount:,.2f}) for {cust_name} verified across inventory, risk ({risk_score:.1f}), and carrier dispatch.",
                 )
 
         ceo_context = {

@@ -20,7 +20,7 @@ import structlog
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.manufacturing_order import ManufacturingOrder
 from app.models.warehouse import Warehouse
@@ -56,7 +56,7 @@ class ManufacturingAgent(BaseAgent):
             if wh:
                 warehouse_id_str = str(wh.warehouse_id)
 
-        target_warehouse_id = uuid.UUID(warehouse_id_str) if warehouse_id_str else uuid.uuid4()
+        target_warehouse_id = safe_uuid(warehouse_id_str) if warehouse_id_str else uuid.uuid4()
 
         # Identify items requiring manufacturing (e.g. supplier unavailable or explicit request)
         items_to_manufacture = []
@@ -87,7 +87,7 @@ class ManufacturingAgent(BaseAgent):
         all_mo_payloads: list[dict[str, Any]] = []
 
         for item in items_to_manufacture:
-            product_id = uuid.UUID(str(item["product_id"]))
+            product_id = safe_uuid(str(item["product_id"]))
             planned_qty = int(item.get("quantity", 100))
 
             # ── Capacity Check ────────────────────────────────────────────────
@@ -142,7 +142,7 @@ class ManufacturingAgent(BaseAgent):
                 actual_start=now,
                 actual_end=now + timedelta(hours=2),
                 triggered_by="demand_forecast" if not order else "inventory_agent",
-                workflow_id=uuid.UUID(state["workflow_id"]) if state.get("workflow_id") else None,
+                workflow_id=safe_uuid(state["workflow_id"]) if state.get("workflow_id") else None,
                 created_at=now,
                 updated_at=now,
             )

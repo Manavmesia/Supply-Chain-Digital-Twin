@@ -18,7 +18,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, safe_uuid
 from app.graph.state import SupplyChainState
 from app.models.customer import Customer
 from app.models.support_ticket import SupportTicket
@@ -58,19 +58,25 @@ class CustomerServiceAgent(BaseAgent):
         # ── 1. Milestone Notification Processing ──────────────────────────────
         notifications_sent: list[dict[str, Any]] = []
 
+        carrier_name = shipment_state.get("carrier") or "Global Logistics"
+        tracking_id = shipment_state.get("carrier_tracking_id") or "TRK-EXP"
+        eta_str = shipment_state.get("eta") or "3 business days"
+        cust_name = order.get("customer_name") or "Enterprise Partner"
+        order_num = order.get("order_id", "")
+
         # Determine milestone channel message (LLM-synthesized if key present)
         milestone_type = "order_update"
         if shipment_state.get("status") == "delivered":
             milestone_type = "shipment_delivered"
-            default_msg = f"Your order {order.get('order_id', '')} has been delivered successfully."
+            default_msg = f"Delivery Confirmed: Order {order_num} has been delivered to {cust_name} via {carrier_name} (Tracking: {tracking_id})."
         elif shipment_state.get("status") in ("dispatched", "in_transit"):
             milestone_type = "shipment_dispatched"
-            default_msg = f"Your order {order.get('order_id', '')} is in transit via carrier."
+            default_msg = f"Dispatch Notice: Order {order_num} for {cust_name} is in transit with {carrier_name} (Tracking: {tracking_id}, ETA: {eta_str})."
         elif order.get("order_id"):
             milestone_type = "order_created"
-            default_msg = f"Your order {order.get('order_id', '')} has been confirmed and is being processed."
+            default_msg = f"Order Confirmation: Order {order_num} received from {cust_name} for total amount ${order.get('total_amount', '0.00')}."
         else:
-            default_msg = "Notification: Your supply chain request is being processed."
+            default_msg = f"Notification: Order for {cust_name} is currently being fulfilled."
 
         from pydantic import BaseModel
 
@@ -81,7 +87,7 @@ class CustomerServiceAgent(BaseAgent):
         def _fallback_cs() -> CSNotificationSchema:
             return CSNotificationSchema(
                 message=default_msg,
-                rationale=f"Sent {milestone_type} notification to customer {customer_id}",
+                rationale=f"Formulated {milestone_type} SLA communication to {cust_name} ({carrier_name}, Tracking: {tracking_id})",
             )
 
         llm_cs_dec, cs_src = await self.decide_with_llm(
@@ -133,7 +139,7 @@ class CustomerServiceAgent(BaseAgent):
             sla_deadline = now + timedelta(hours=sla_hours)
 
             ticket_id = uuid.uuid4()
-            order_id = uuid.UUID(str(order["order_id"])) if order.get("order_id") else None
+            order_id = safe_uuid(str(order["order_id"])) if order.get("order_id") else None
 
             ticket = SupportTicket(
                 ticket_id=ticket_id,

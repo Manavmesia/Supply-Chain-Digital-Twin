@@ -629,6 +629,21 @@ async def get_network_topology() -> dict[str, Any]:
             "status": "in_transit",
         })
 
+    # 3. Dedicated live TMS Shipments
+    live_shipments, _ = persistence.list_shipments(limit=6, status_filter="in_transit")
+    for idx, shp in enumerate(live_shipments):
+        active_shipments.append({
+            "id": shp.get("shipment_id", f"SHP-TMS-{idx}"),
+            "type": "customer_order",
+            "from_node": "10000000-0000-0000-0000-000000000001",
+            "to_node": "demand-na-east" if "Tesla" in shp.get("destination", "") or "Schneider" in shp.get("destination", "") else "demand-na-west",
+            "carrier": shp.get("carrier") or "Global Intermodal Logistics",
+            "mode": shp.get("freight_mode") or "road",
+            "progress_pct": min(95, 40 + (idx * 15)),
+            "payload_desc": f"Transit to {shp.get('destination', 'Customer facility')}",
+            "status": "in_transit",
+        })
+
     # Default baseline active shipments if no live in-transit items
     if not active_shipments:
         active_shipments = [
