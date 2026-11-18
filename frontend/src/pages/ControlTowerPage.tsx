@@ -108,10 +108,23 @@ export const ControlTowerPage: React.FC = () => {
   useEffect(() => {
     isMountedRef.current = true;
     loadEvents();
-    const interval = setInterval(() => loadEvents(true), 8000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadEvents(true);
+      }
+    }, 3500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadEvents(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       isMountedRef.current = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadEvents]);
 
@@ -156,6 +169,8 @@ export const ControlTowerPage: React.FC = () => {
   const activeExceptions = events.filter((ev) =>
     EXCEPTION_TYPES.includes(ev.event_type)
   );
+
+  const reportingNodes = Array.from(new Set(events.map((e) => e.source_agent))).filter(Boolean);
 
   const filteredEvents = events.filter((ev) => {
     if (filterExceptionsOnly && !EXCEPTION_TYPES.includes(ev.event_type)) return false;
@@ -268,11 +283,11 @@ export const ControlTowerPage: React.FC = () => {
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">SUPERVISED HUBS</div>
+          <div className="stat-label">SUPERVISED NODES</div>
           <div className="stat-value" style={{ color: '#2563eb' }}>
-            4 Nodes
+            {loading ? '—' : `${reportingNodes.length || 4} Active`}
           </div>
-          <div className="stat-sub">TMS, WMS, QA & Demand Engine</div>
+          <div className="stat-sub">Live telemetry reporting sources</div>
         </div>
       </div>
 

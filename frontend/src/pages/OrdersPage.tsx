@@ -71,6 +71,11 @@ export const OrdersPage: React.FC = () => {
       if (isMountedRef.current) {
         setOrders(listRes.items || []);
         setStats(statRes);
+        setSelectedOrder((prev) => {
+          if (!prev) return null;
+          const updated = (listRes.items || []).find((o: Order) => o.order_id === prev.order_id);
+          return updated || prev;
+        });
       }
     } catch (err) {
       console.error('Failed to load orders:', err);
@@ -84,10 +89,23 @@ export const OrdersPage: React.FC = () => {
   useEffect(() => {
     isMountedRef.current = true;
     loadData();
-    const interval = setInterval(() => loadData(true), 12000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    }, 3500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       isMountedRef.current = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadData]);
 

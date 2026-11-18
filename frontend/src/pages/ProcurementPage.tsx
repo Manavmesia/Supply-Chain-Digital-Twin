@@ -63,10 +63,23 @@ export const ProcurementPage: React.FC = () => {
   useEffect(() => {
     isMountedRef.current = true;
     loadData();
-    const interval = setInterval(() => loadData(true), 12000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    }, 3500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       isMountedRef.current = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadData]);
 

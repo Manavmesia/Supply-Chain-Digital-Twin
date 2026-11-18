@@ -185,7 +185,6 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ kpis, loading }) => {
       label: 'OTIF Fill Rate',
       value: `${kpis.fill_rate_pct}%`,
       sub: 'Service level target ≥ 98%',
-      trend: { value: 2.4, positive: true },
       icon: <Target size={16} />,
     },
     {

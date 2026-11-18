@@ -1292,14 +1292,18 @@ def get_dashboard_metrics() -> dict[str, Any]:
         o_stock = inv_summary["out_of_stock_locations"]
         h_stock = max(0, tot_locs - l_stock - o_stock)
 
+        sup_rows = conn.execute("SELECT count(*), AVG(reliability_score) FROM suppliers WHERE status != 'inactive'").fetchone()
+        active_sups = sup_rows[0] if sup_rows and sup_rows[0] is not None else 0
+        avg_rel = round(float(sup_rows[1] or 0.0), 1) if sup_rows and sup_rows[1] is not None else 0.0
+
         return {
             "kpis": {
                 "total_orders": total_orders,
                 "total_revenue": f"{total_revenue:.2f}",
                 "delivered_orders": delivered,
                 "fill_rate_pct": fill_rate,
-                "active_suppliers": 4,
-                "avg_supplier_reliability": 89.5,
+                "active_suppliers": active_sups,
+                "avg_supplier_reliability": avg_rel,
                 "low_stock_alerts": l_stock,
                 "out_of_stock_alerts": o_stock,
                 "total_inventory_locations": tot_locs,
