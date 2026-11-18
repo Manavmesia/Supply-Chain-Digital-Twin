@@ -261,9 +261,8 @@ class TestSupplyChainScenariosEndToEnd:
         assert final["order"]["status"] == "delivered"
         assert final["shipment"]["carrier"] == "FedEx"
         assert "reports" in final
-        # 15 nodes executed in standard happy path:
-        # om, df, inv, wh, trans, sustainability, qa, finance, pricing, risk, procurement, planner, negotiation, ceo, cs, cs-routing -> reporting
-        assert len(final["active_agents"]) >= 13
+        # Dynamic routing: in-stock standard orders bypass procurement, supplier negotiation, and planner
+        assert len(final["active_agents"]) >= 11
 
     # ── Scenario B: Out-of-Stock Supplier Procurement Path ────────────────────
     @pytest.mark.asyncio

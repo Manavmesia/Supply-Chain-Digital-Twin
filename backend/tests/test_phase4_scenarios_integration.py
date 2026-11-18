@@ -77,10 +77,12 @@ class TestPhase4ScenariosIntegration:
         assert final["shipment"]["freight_mode"] == "road"
         assert final["sustainability"]["sustainability_score"] > 90.0
         assert final["quality"]["status"] == "passed"
-        assert final["pricing"]["results"][0]["recommendation"] == "stable"
-        assert final["planning"]["remanufacture_required"] is False
-        assert "ADS-15" in final["active_agents"]  # Planner ran
-        assert "ADS-16" in final["active_agents"]  # Negotiation ran
+        # Dynamic routing: in-stock standard orders bypass unnecessary procurement negotiation, planner replanning, and pricing
+        assert "ADS-05" not in final["active_agents"]
+        assert "ADS-16" not in final["active_agents"]
+        assert "ADS-15" not in final["active_agents"]
+        assert "ADS-04" in final["active_agents"]  # Warehouse ran
+        assert "ADS-06" in final["active_agents"]  # Transportation ran
 
     # ── Scenario B: Out of Stock -> Supplier Procurement ─────────────────────
     @pytest.mark.asyncio

@@ -198,10 +198,54 @@ def route_after_order_management(state: SupplyChainState) -> str:
 
 
 def route_after_supplier(state: SupplyChainState) -> str:
+    supplier_state = state.get("supplier") or {}
+    if supplier_state.get("purchase_orders"):
+        return "procurement_strategy"
+    next_node = state.get("next_node")
+    if next_node in ("procurement_strategy", "warehouse", "transportation"):
+        return next_node
+    return "transportation"
+
+
+def route_after_negotiation(state: SupplyChainState) -> str:
     next_node = state.get("next_node")
     if next_node in ("warehouse", "transportation"):
         return next_node
-    return "transportation"
+    active = state.get("active_agents") or []
+    if "ADS-04" in active:
+        return "transportation"
+    return "warehouse"
+
+
+def route_after_finance(state: SupplyChainState) -> str:
+    next_node = state.get("next_node")
+    if next_node in ("pricing", "risk"):
+        return next_node
+    finance_state = state.get("finance") or {}
+    margin_pct = float(finance_state.get("gross_margin_pct", 25.0))
+    event_history = state.get("event_history") or []
+    has_spike = any(e.get("event_type") == "DemandSpikeDetected" for e in event_history)
+    forecast_state = state.get("forecast") or {}
+    has_promo = any(
+        isinstance(f, dict) and float(f.get("promo_multiplier", 1.0)) > 1.05
+        for f in forecast_state.values()
+    )
+    if margin_pct < 15.0 or finance_state.get("approval_status") == "denied" or has_spike or has_promo:
+        return "pricing"
+    return "risk"
+
+
+def route_after_risk(state: SupplyChainState) -> str:
+    next_node = state.get("next_node")
+    if next_node in ("planner", "consensus_checker"):
+        return next_node
+    risk_state = state.get("risk") or {}
+    quality_state = state.get("quality") or {}
+    risk_score = float(risk_state.get("score", 0.0))
+    quality_failed = not quality_state.get("all_passed", True)
+    if risk_score >= 70.0 or quality_failed:
+        return "planner"
+    return "consensus_checker"
 
 
 def route_after_customer_service(state: SupplyChainState) -> str:
@@ -270,24 +314,43 @@ def build_workflow(
 
     graph.add_edge("warehouse", "transportation")
 
+    # Sourcing path: supplier -> procurement_strategy -> negotiation -> warehouse/transportation
     graph.add_conditional_edges(
         "supplier",
         route_after_supplier,
+        {
+            "procurement_strategy": "procurement_strategy",
+            "warehouse": "warehouse",
+            "transportation": "transportation",
+        },
+    )
+    graph.add_edge("procurement_strategy", "negotiation")
+    graph.add_conditional_edges(
+        "negotiation",
+        route_after_negotiation,
         {"warehouse": "warehouse", "transportation": "transportation"},
     )
 
-    # Parallel pipeline review loop
+    # In-stock path / Sourcing handoff to Logistics
     graph.add_edge("transportation",       "sustainability")
     graph.add_edge("sustainability",       "quality_assurance")
     graph.add_edge("quality_assurance",    "finance")
-    graph.add_edge("finance",              "pricing")
-    graph.add_edge("pricing",              "risk")
-    graph.add_edge("risk",                 "procurement_strategy")
-    graph.add_edge("procurement_strategy", "planner")
-    graph.add_edge("planner",              "negotiation")
-    
-    # Negotiation routes to consensus evaluator
-    graph.add_edge("negotiation", "consensus_checker")
+
+    # Dynamic Pricing branch
+    graph.add_conditional_edges(
+        "finance",
+        route_after_finance,
+        {"pricing": "pricing", "risk": "risk"},
+    )
+    graph.add_edge("pricing", "risk")
+
+    # Dynamic Planning branch
+    graph.add_conditional_edges(
+        "risk",
+        route_after_risk,
+        {"planner": "planner", "consensus_checker": "consensus_checker"},
+    )
+    graph.add_edge("planner", "consensus_checker")
 
     # Consensus evaluator conditional edge
     graph.add_conditional_edges(
