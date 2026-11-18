@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { eventsApi, inventoryApi } from '../services/api';
 import type { EventRecord } from '../types';
 import {
@@ -11,15 +12,70 @@ import {
   ChevronRight,
   Clock,
   Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { formatTimeAgo } from '../utils/formatters';
 import { BusinessDataView } from '../components/common/BusinessDataView';
+
+const EXCEPTION_TYPES = [
+  'DeliveryDelayed',
+  'InventoryLow',
+  'QualityAlertRaised',
+  'CarrierDelayed',
+  'WarehouseStockout',
+  'SupplierUnavailable',
+  'AnomalyDetected',
+];
+
+const getExceptionSummary = (ev: EventRecord): {
+  title: string;
+  details: string;
+  linkText?: string;
+  linkTo?: string;
+  secondaryLinkText?: string;
+  secondaryLinkTo?: string;
+} => {
+  const p = ev.payload || {};
+  switch (ev.event_type) {
+    case 'InventoryLow':
+    case 'WarehouseStockout':
+      return {
+        title: `Low Inventory Deficit: ${p.product_name || p.sku || 'SKU'}`,
+        details: `Available: ${p.available_qty ?? 0} units vs Safety Buffer: ${p.safety_stock ?? 0} units at ${p.warehouse_name || 'Warehouse'}`,
+        linkText: 'View in Inventory',
+        linkTo: '/inventory',
+        secondaryLinkText: 'Check Replenishment PO',
+        secondaryLinkTo: '/procurement',
+      };
+    case 'DeliveryDelayed':
+    case 'CarrierDelayed':
+      return {
+        title: `Transit Bottleneck: ${p.location || 'Transit Corridor'}`,
+        details: typeof p.description === 'string' ? p.description : 'Shipment route experienced transit delay and dynamic rerouting is underway.',
+        linkText: 'Track Shipments',
+        linkTo: '/shipments',
+      };
+    case 'QualityAlertRaised':
+      return {
+        title: `Quality Defect: ${p.defect_type || 'Defect detected'}`,
+        details: typeof p.defect_type === 'string' ? `Lot inspection flagged: ${p.defect_type} on ${p.product_name || 'batch'}.` : `Lot inspection flagged for ${p.product_name || 'product batch'}.`,
+        linkText: 'View Orders',
+        linkTo: '/orders',
+      };
+    default:
+      return {
+        title: `${ev.event_type} Exception`,
+        details: typeof p.description === 'string' ? p.description : (typeof p.reason === 'string' ? p.reason : 'Operational bottleneck detected and placed under multi-agent mitigation.'),
+      };
+  }
+};
 
 export const ControlTowerPage: React.FC = () => {
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState('all');
+  const [filterExceptionsOnly, setFilterExceptionsOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showDeclareModal, setShowDeclareModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -97,21 +153,25 @@ export const ControlTowerPage: React.FC = () => {
     }
   };
 
+  const activeExceptions = events.filter((ev) =>
+    EXCEPTION_TYPES.includes(ev.event_type)
+  );
+
   const filteredEvents = events.filter((ev) => {
+    if (filterExceptionsOnly && !EXCEPTION_TYPES.includes(ev.event_type)) return false;
     if (selectedType !== 'all' && ev.event_type !== selectedType) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchType = ev.event_type.toLowerCase().includes(q);
       const matchSource = ev.source_agent.toLowerCase().includes(q);
       const matchId = ev.event_id.toLowerCase().includes(q);
-      return matchType || matchSource || matchId;
+      const matchPayload = JSON.stringify(ev.payload || {}).toLowerCase().includes(q);
+      return matchType || matchSource || matchId || matchPayload;
     }
     return true;
   });
 
-  const exceptionCount = events.filter((ev) =>
-    ['DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised', 'CarrierDelayed'].includes(ev.event_type)
-  ).length;
+  const exceptionCount = activeExceptions.length;
 
   return (
     <div className="page-container animate-fade-in">
@@ -162,8 +222,37 @@ export const ControlTowerPage: React.FC = () => {
           <div className="stat-sub">Live supply chain signals</div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-label">ACTIVE EXCEPTIONS</div>
+        <div
+          className="stat-card"
+          onClick={() => {
+            setFilterExceptionsOnly((prev) => !prev);
+            if (!filterExceptionsOnly) setSelectedType('all');
+          }}
+          style={{
+            cursor: 'pointer',
+            border: filterExceptionsOnly ? '2px solid #dc2626' : undefined,
+            background: filterExceptionsOnly ? '#fef2f2' : undefined,
+            transition: 'all 0.15s ease',
+          }}
+          title="Click to toggle filter for active exceptions"
+        >
+          <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>ACTIVE EXCEPTIONS</span>
+            {exceptionCount > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  background: filterExceptionsOnly ? '#dc2626' : '#fee2e2',
+                  color: filterExceptionsOnly ? '#ffffff' : '#dc2626',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  fontWeight: 700,
+                }}
+              >
+                {filterExceptionsOnly ? 'FILTERED ON' : 'CLICK TO FILTER'}
+              </span>
+            )}
+          </div>
           <div className="stat-value" style={{ color: exceptionCount > 0 ? '#dc2626' : '#059669' }}>
             {loading ? '—' : exceptionCount}
           </div>
@@ -187,6 +276,112 @@ export const ControlTowerPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Active Exceptions Under Mitigation Banner */}
+      {activeExceptions.length > 0 && (
+        <div
+          style={{
+            background: '#fffbeb',
+            border: '1px solid #fde68a',
+            borderRadius: 'var(--radius-lg)',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#92400e' }}>
+                Active Exceptions ({activeExceptions.length} Bottleneck{activeExceptions.length > 1 ? 's' : ''} Under Autonomous Mitigation)
+              </h3>
+            </div>
+            <button
+              onClick={() => {
+                setFilterExceptionsOnly((prev) => !prev);
+                if (!filterExceptionsOnly) setSelectedType('all');
+              }}
+              className="btn-secondary"
+              style={{
+                fontSize: '11px',
+                padding: '3px 10px',
+                height: '28px',
+                background: '#ffffff',
+                borderColor: '#fcd34d',
+                color: '#92400e',
+                fontWeight: 600,
+              }}
+            >
+              {filterExceptionsOnly ? 'Show All Telemetry Events' : 'Filter Telemetry Stream Below'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {activeExceptions.map((ex) => {
+              const info = getExceptionSummary(ex);
+              return (
+                <div
+                  key={ex.event_id}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #fef3c7',
+                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: '240px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                        {info.title}
+                      </span>
+                      <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                        Source: {ex.source_agent}
+                      </span>
+                      <span style={{ fontSize: '11px', background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                        Mitigation Active
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                      {info.details}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
+                      Event ID: {ex.event_id} • Reported {formatTimeAgo(ex.timestamp)}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {info.linkTo && (
+                      <Link
+                        to={info.linkTo}
+                        className="btn-secondary"
+                        style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <span>{info.linkText}</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    )}
+                    {info.secondaryLinkTo && (
+                      <Link
+                        to={info.secondaryLinkTo}
+                        className="btn-primary"
+                        style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <span>{info.secondaryLinkText}</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Incident Stream & Telemetry Log */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
@@ -198,12 +393,25 @@ export const ControlTowerPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  setFilterExceptionsOnly((prev) => !prev);
+                  if (!filterExceptionsOnly) setSelectedType('all');
+                }}
+                className={`filter-pill ${filterExceptionsOnly ? 'active' : ''}`}
+                style={filterExceptionsOnly ? { background: '#dc2626', color: '#ffffff', borderColor: '#dc2626' } : { borderColor: '#fca5a5', color: '#b91c1c', fontWeight: 600 }}
+              >
+                Exceptions Only ({exceptionCount})
+              </button>
               {['all', 'DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised'].map((t) => (
                 <button
                   key={t}
-                  onClick={() => setSelectedType(t)}
-                  className={`filter-pill ${selectedType === t ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedType(t);
+                    setFilterExceptionsOnly(false);
+                  }}
+                  className={`filter-pill ${selectedType === t && !filterExceptionsOnly ? 'active' : ''}`}
                 >
                   {t === 'all' ? 'All' : t.replace('Detected', '').replace('Raised', '')}
                 </button>
@@ -228,7 +436,8 @@ export const ControlTowerPage: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {filteredEvents.map((ev) => {
             const isExpanded = expandedId === ev.event_id;
-            const isException = ['DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised', 'CarrierDelayed'].includes(ev.event_type);
+            const isException = EXCEPTION_TYPES.includes(ev.event_type);
+            const info = getExceptionSummary(ev);
 
             return (
               <div
@@ -250,14 +459,24 @@ export const ControlTowerPage: React.FC = () => {
                       {isException ? <AlertTriangle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
                     </div>
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
-                          {ev.event_type}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '13px', color: isException ? '#92400e' : '#0f172a' }}>
+                          {isException ? info.title : ev.event_type}
                         </span>
+                        {isException && (
+                          <span style={{ fontSize: '10px', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                            {ev.event_type}
+                          </span>
+                        )}
                         <span style={{ fontSize: '11px', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '9999px' }}>
                           Source: {ev.source_agent}
                         </span>
                       </div>
+                      {isException && (
+                        <div style={{ fontSize: '12px', color: '#475569', marginTop: '3px' }}>
+                          {info.details}
+                        </div>
+                      )}
                       <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontFamily: 'monospace' }}>
                         ID: {ev.event_id}
                       </div>
