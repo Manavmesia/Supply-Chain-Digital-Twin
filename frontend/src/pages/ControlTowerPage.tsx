@@ -2,57 +2,18 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { eventsApi, inventoryApi } from '../services/api';
 import type { EventRecord } from '../types';
 import {
-  ShieldAlert,
   AlertTriangle,
   Zap,
   Activity,
-  Radio,
   Search,
   Plus,
   ChevronDown,
   ChevronRight,
-  Truck,
-  Box,
   Clock,
   Sparkles,
 } from 'lucide-react';
 import { formatTimeAgo } from '../utils/formatters';
 import { BusinessDataView } from '../components/common/BusinessDataView';
-
-const INCIDENT_TEMPLATES = [
-  {
-    type: 'DeliveryDelayed',
-    label: 'Carrier Logistics Disruption',
-    source: 'TMS Sensor Hub',
-    defaultPayload: { carrier: 'Global Intermodal Logistics', route: 'North Atlantic', delay_hours: 48, reason: 'Severe maritime weather cell' },
-    icon: <Truck className="w-4 h-4 text-slate-600" />,
-    badgeColor: '#2563eb',
-  },
-  {
-    type: 'InventoryLow',
-    label: 'Safety Stock Critical Breach',
-    source: 'WMS Telemetry Monitor',
-    defaultPayload: { sku: 'ELEC-001', warehouse: 'Newark Distribution Center', current_qty: 15, safety_stock: 100 },
-    icon: <Box className="w-4 h-4 text-slate-600" />,
-    badgeColor: '#dc2626',
-  },
-  {
-    type: 'QualityAlertRaised',
-    label: 'Batch QA Defect Alert',
-    source: 'Quality Control Engine',
-    defaultPayload: { batch_id: 'BATCH-2026-981', defect_rate: '6.4%', inspection_node: 'Inbound Dock 2' },
-    icon: <ShieldAlert className="w-4 h-4 text-slate-600" />,
-    badgeColor: '#d97706',
-  },
-  {
-    type: 'DemandSpikeDetected',
-    label: 'Demand Anomaly (+250%)',
-    source: 'Demand Forecasting Engine',
-    defaultPayload: { sku: 'ELEC-003', region: 'North America', multiplier: 2.5 },
-    icon: <Activity className="w-4 h-4 text-slate-600" />,
-    badgeColor: '#475569',
-  },
-];
 
 export const ControlTowerPage: React.FC = () => {
   const [events, setEvents] = useState<EventRecord[]>([]);
@@ -65,7 +26,7 @@ export const ControlTowerPage: React.FC = () => {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   // Modal form states
-  const [formType, setFormType] = useState(INCIDENT_TEMPLATES[0].type);
+  const [formType, setFormType] = useState('DeliveryDelayed');
   const [formSource, setFormSource] = useState('Operator-Cockpit');
   const [formLocation, setFormLocation] = useState('Newark Distribution Center');
   const [formDescription, setFormDescription] = useState('Severe transit bottleneck detected by regional control hub.');
@@ -112,21 +73,6 @@ export const ControlTowerPage: React.FC = () => {
     }
   };
 
-  const handleQuickTrigger = async (tpl: typeof INCIDENT_TEMPLATES[0]) => {
-    try {
-      const res = await eventsApi.inject({
-        event_type: tpl.type,
-        source_agent: tpl.source,
-        payload: tpl.defaultPayload,
-      });
-      const rem = res.remediation?.remediation_summary || 'Autonomous multi-agent remediation executed.';
-      setActionNotice(`Exception reported: ${tpl.label}. ${rem}`);
-      await loadEvents(true);
-    } catch (err: any) {
-      setActionNotice(`Incident report failed: ${err.message}`);
-    }
-  };
-
   const handleDeclareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -162,6 +108,10 @@ export const ControlTowerPage: React.FC = () => {
     }
     return true;
   });
+
+  const exceptionCount = events.filter((ev) =>
+    ['DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised', 'CarrierDelayed'].includes(ev.event_type)
+  ).length;
 
   return (
     <div className="page-container animate-fade-in">
@@ -202,43 +152,38 @@ export const ControlTowerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Incident Playbooks */}
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Radio className="w-3.5 h-3.5 text-blue-600" />
-          Operational Disruption Scenarios
+      {/* Control Tower Operational Metrics */}
+      <div className="stat-grid" style={{ marginBottom: '24px' }}>
+        <div className="stat-card">
+          <div className="stat-label">TOTAL TELEMETRY EVENTS</div>
+          <div className="stat-value" style={{ color: '#0f172a' }}>
+            {loading ? '—' : events.length}
+          </div>
+          <div className="stat-sub">Live supply chain signals</div>
         </div>
-        <div className="stat-grid">
-          {INCIDENT_TEMPLATES.map((tpl) => (
-            <div
-              key={tpl.type}
-              className="stat-card"
-              style={{ padding: '20px' }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  {tpl.icon}
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{tpl.label}</span>
-                </div>
-                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px', lineHeight: 1.4 }}>
-                  Triggers automated real-time mitigation across fulfillment operations.
-                </div>
-              </div>
-              <button
-                onClick={() => handleQuickTrigger(tpl)}
-                className="btn-secondary"
-                style={{
-                  padding: '6px 10px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  justifyContent: 'center',
-                }}
-              >
-                <span>Trigger Remediation</span>
-                <ChevronRight className="w-3 h-3 text-slate-400" />
-              </button>
-            </div>
-          ))}
+
+        <div className="stat-card">
+          <div className="stat-label">ACTIVE EXCEPTIONS</div>
+          <div className="stat-value" style={{ color: exceptionCount > 0 ? '#dc2626' : '#059669' }}>
+            {loading ? '—' : exceptionCount}
+          </div>
+          <div className="stat-sub">{exceptionCount > 0 ? 'Bottlenecks under mitigation' : 'All lanes nominal'}</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-label">AUTOMATED MITIGATIONS</div>
+          <div className="stat-value" style={{ color: '#059669' }}>
+            {loading ? '—' : events.length}
+          </div>
+          <div className="stat-sub">Autonomous resolutions active</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-label">SUPERVISED HUBS</div>
+          <div className="stat-value" style={{ color: '#2563eb' }}>
+            4 Nodes
+          </div>
+          <div className="stat-sub">TMS, WMS, QA & Demand Engine</div>
         </div>
       </div>
 
