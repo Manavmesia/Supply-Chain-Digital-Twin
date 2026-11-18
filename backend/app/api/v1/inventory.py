@@ -278,6 +278,24 @@ async def run_autonomous_inventory_scan(
     # Retrieve all recent active purchase orders
     pos = persistence.list_purchase_orders(limit=10, status_filter="in_transit")
 
+    deficit_details = [
+        {
+            "sku": b.get("sku"),
+            "product_name": b.get("product_name"),
+            "warehouse_name": b.get("warehouse_name"),
+            "available_qty": b.get("available_qty"),
+            "safety_stock": b.get("safety_stock"),
+            "status": b.get("status"),
+        }
+        for b in breaches
+    ]
+
+    if breaches:
+        first_names = ", ".join(f"{b.get('product_name')} ({b.get('available_qty')}/{b.get('safety_stock')} at {b.get('warehouse_name')})" for b in breaches[:2])
+        msg = f"Autonomous scan complete. {len(breaches)} deficit{'s' if len(breaches) != 1 else ''} detected & remediated by ADS-03 & ADS-05: {first_names}."
+    else:
+        msg = "Autonomous scan complete. All warehouse locations are operating within target safety buffers."
+
     return {
         "status": "completed",
         "scanned_sku_locations": len(items),
@@ -285,7 +303,8 @@ async def run_autonomous_inventory_scan(
         "autonomous_remediations_executed": len(breaches),
         "active_replenishment_orders": pos,
         "remediation_actions": remediation_actions,
-        "message": f"Autonomous scan complete. {len(breaches)} deficits remediated by ADS-03 & ADS-05.",
+        "deficits": deficit_details,
+        "message": msg,
     }
 
 

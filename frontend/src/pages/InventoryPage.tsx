@@ -61,6 +61,9 @@ export const InventoryPage: React.FC = () => {
       const res = await inventoryApi.runAutonomousScan();
       if (isMountedRef.current) {
         setScanMessage(res.message);
+        if (res.deficits_detected > 0) {
+          setLowOnly(true);
+        }
         await fetchInventory(true);
       }
     } catch (err) {
@@ -176,17 +179,27 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {scanMessage && (
-        <div className="banner-info" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bot size={16} className="text-blue-600" />
-            <span>{scanMessage}</span>
+        <div className="banner-info" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+            <Bot size={16} className="text-blue-600" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '13px' }}>{scanMessage}</span>
           </div>
-          <button
-            onClick={() => setScanMessage(null)}
-            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '16px' }}
-          >
-            &times;
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setLowOnly(!lowOnly)}
+              className="btn-secondary"
+              style={{ fontSize: '11px', padding: '3px 10px', height: '28px', whiteSpace: 'nowrap' }}
+            >
+              {lowOnly ? 'View All SKUs' : 'Filter to Deficit SKUs'}
+            </button>
+            <button
+              onClick={() => setScanMessage(null)}
+              style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '16px' }}
+              title="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
         </div>
       )}
 

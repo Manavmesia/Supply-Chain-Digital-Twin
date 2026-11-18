@@ -346,6 +346,14 @@ export const inventoryApi = {
     deficits_detected: number;
     autonomous_remediations_executed: number;
     message: string;
+    deficits?: Array<{
+      sku: string;
+      product_name: string;
+      warehouse_name: string;
+      available_qty: number;
+      safety_stock: number;
+      status: string;
+    }>;
     remediation_actions: Array<{ agent: string; action: string; details: string; timestamp: string }>;
   }> => {
     try {
