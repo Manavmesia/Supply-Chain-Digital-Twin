@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import type { DashboardKPIs } from '../../types';
 import {
   Package,
@@ -21,6 +22,7 @@ interface KPICardProps {
   trend?: { value: number; positive: boolean };
   badgeText?: string;
   isAlert?: boolean;
+  link?: string;
 }
 
 const KPICard: React.FC<KPICardProps> = ({
@@ -31,7 +33,9 @@ const KPICard: React.FC<KPICardProps> = ({
   trend,
   badgeText,
   isAlert,
-}) => (
+  link,
+}) => {
+  const content = (
   <div
     style={{
       background: 'var(--c-bg-card)',
@@ -128,7 +132,18 @@ const KPICard: React.FC<KPICardProps> = ({
       {sub && <div style={{ fontSize: '11px', color: 'var(--c-text-secondary)' }}>{sub}</div>}
     </div>
   </div>
-);
+  );
+
+  if (link) {
+    return (
+      <Link to={link} style={{ textDecoration: 'none', display: 'block', color: 'inherit' }}>
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
+};
 
 interface KPIGridProps {
   kpis: DashboardKPIs | null;
@@ -178,6 +193,8 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ kpis, loading }) => {
       value: `${kpis.total_agents} Online`,
       sub: 'All operations supervised',
       icon: <Cpu size={16} />,
+      link: '/agents',
+      badgeText: 'Roster →',
     },
     {
       label: 'Tier-1 Suppliers',

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { inventoryApi } from '../services/api';
 import type { InventoryRecord, InventorySummary, PurchaseOrder } from '../types';
-import { formatCurrency, formatPoId } from '../utils/formatters';
 import {
   Sparkles,
   CheckCircle2,
@@ -11,20 +11,14 @@ import {
   AlertTriangle,
   Target,
   Bot,
-  Check,
-  Boxes,
+  Building2,
+  ArrowRight,
 } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
   ok:       { color: '#34d399', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.2)', label: 'Normal' },
   low:      { color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.2)', label: 'Low Stock' },
   critical: { color: '#f87171', bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.2)', label: 'Critical' },
-};
-
-const PO_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  in_transit: { color: '#60a5fa', label: 'In Transit' },
-  draft:      { color: '#94a3b8', label: 'Drafted' },
-  received:   { color: '#34d399', label: 'Received' },
 };
 
 export const InventoryPage: React.FC = () => {
@@ -34,7 +28,6 @@ export const InventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [lowOnly, setLowOnly] = useState(false);
   const [search, setSearch] = useState('');
-  const [receivingPoId, setReceivingPoId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -90,20 +83,6 @@ export const InventoryPage: React.FC = () => {
       console.error('Auto heal error:', err);
     } finally {
       if (isMountedRef.current) setIsAutoHealing(false);
-    }
-  };
-
-  const handleReceiveStock = async (poId: string) => {
-    setReceivingPoId(poId);
-    try {
-      await inventoryApi.receiveReplenishmentOrder(poId);
-      await fetchInventory(true);
-    } catch (err) {
-      console.error('Failed to receive replenishment PO:', err);
-    } finally {
-      if (isMountedRef.current) {
-        setReceivingPoId(null);
-      }
     }
   };
 
@@ -362,137 +341,63 @@ export const InventoryPage: React.FC = () => {
         )}
       </div>
 
-      {/* Autonomous Inbound Replenishment & Purchase Orders */}
-      <div className="card mt-6 animate-fade-in">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      {/* Inbound Replenishment & Safety Stock Buffer Card */}
+      <div
+        style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px 24px',
+          marginTop: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#2563eb',
+            }}
+          >
+            <Building2 size={20} />
+          </div>
           <div>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <RefreshCw size={15} style={{ color: '#2563eb' }} />
-              <span>Inbound Replenishment & Safety Stock Automation</span>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
+              Inbound Replenishment & Purchase Orders
             </h3>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
-              When order reservations reach safety stock thresholds, the inventory engine automatically drafts replenishment purchase orders to maintain warehouse buffers.
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '3px 0 0 0' }}>
+              {replenishmentOrders.length > 0
+                ? `${replenishmentOrders.length} inbound purchase order${replenishmentOrders.length > 1 ? 's' : ''} currently active to replenish safety stock buffers.`
+                : 'All warehouse locations are currently operating within target safety buffers.'}
             </p>
           </div>
-          <span style={{ fontSize: '12px', color: '#1d4ed8', background: '#eff6ff', padding: '3px 10px', borderRadius: '9999px', fontWeight: 600, border: '1px solid #bfdbfe' }}>
-            {replenishmentOrders.length} inbound POs
-          </span>
         </div>
 
-        {replenishmentOrders.length === 0 ? (
-          <div className="empty-state">
-            <Boxes size={32} className="text-slate-600 mb-2" />
-            <p>No active replenishment purchase orders</p>
-            <p style={{ fontSize: '0.8rem', color: '#475569' }}>
-              All inventory levels are currently above reorder points
-            </p>
-          </div>
-        ) : (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>PO Reference</th>
-                  <th>Target SKU / Product</th>
-                  <th>Assigned Supplier</th>
-                  <th>Destination Hub</th>
-                  <th>Order Qty</th>
-                  <th>Unit Cost</th>
-                  <th>Total Cost</th>
-                  <th>Lead Time</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {replenishmentOrders.map((po) => {
-                  const psc = PO_STATUS_CONFIG[po.status] ?? PO_STATUS_CONFIG.draft;
-                  return (
-                    <tr key={po.po_id}>
-                      <td>
-                        <span className="tag" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                          {formatPoId(po.po_id)}
-                        </span>
-                      </td>
-                      <td>
-                        <div>
-                          <strong>{po.product_name}</strong>
-                          <div className="tag" style={{ marginTop: '2px', fontSize: '0.7rem' }}>
-                            {po.sku}
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: 500, color: 'var(--c-text-primary)' }}>
-                          {po.supplier_name}
-                        </span>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
-                          {po.warehouse_name || 'Main Fulfillment Hub'}
-                        </span>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px', background: '#eff6ff', color: '#1d4ed8' }}>
-                          {po.quantity.toLocaleString()} units
-                        </span>
-                      </td>
-                      <td>{formatCurrency(po.unit_cost)}</td>
-                      <td style={{ fontWeight: 600, color: '#059669' }}>
-                        {formatCurrency(po.total_cost)}
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                          {po.lead_time_days} days
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            padding: '3px 10px',
-                            borderRadius: '9999px',
-                            background: `${psc.color}22`,
-                            color: psc.color,
-                            border: `1px solid ${psc.color}44`,
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          {psc.label}
-                        </span>
-                      </td>
-                      <td>
-                        {po.status === 'received' ? (
-                          <span style={{ color: '#059669', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Check size={13} /> Stock Restored
-                          </span>
-                        ) : (
-                          <button
-                            className="btn-secondary"
-                            style={{
-                              borderColor: '#a7f3d0',
-                              background: '#ecfdf5',
-                              color: '#059669',
-                              fontSize: '11px',
-                              padding: '4px 10px',
-                              fontWeight: 600,
-                            }}
-                            onClick={() => handleReceiveStock(po.po_id)}
-                            disabled={receivingPoId === po.po_id}
-                          >
-                            <Check size={13} />
-                            <span>{receivingPoId === po.po_id ? 'Receiving…' : 'Receive Stock'}</span>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Link
+          to="/procurement"
+          className="btn-primary"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            textDecoration: 'none',
+            padding: '8px 14px',
+            fontSize: '12px',
+          }}
+        >
+          <span>Manage Inbound POs in Procurement</span>
+          <ArrowRight size={13} />
+        </Link>
       </div>
     </div>
   );

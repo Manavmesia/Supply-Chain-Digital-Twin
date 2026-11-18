@@ -2,9 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { analyticsApi } from '../services/api';
 import { Link } from 'react-router-dom';
 import { KPIGrid } from '../components/dashboard/KPIGrid';
-import { AgentPipeline } from '../components/dashboard/AgentPipeline';
 import { DigitalTwinCanvas } from '../components/dashboard/DigitalTwinCanvas';
-import type { DashboardData, AgentDefinition, RecentOrder, TwinNetworkData } from '../types';
+import type { DashboardData, RecentOrder, TwinNetworkData } from '../types';
 import {
   BarChart3,
   Layers,
@@ -22,7 +21,6 @@ import {
 
 export const DashboardPage: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [networkData, setNetworkData] = useState<TwinNetworkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -31,14 +29,12 @@ export const DashboardPage: React.FC = () => {
   const fetchDashboardData = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsUpdating(true);
     try {
-      const [dash, agentsRes, netRes] = await Promise.all([
+      const [dash, netRes] = await Promise.all([
         analyticsApi.getDashboard(),
-        analyticsApi.getAgents(),
         analyticsApi.getNetworkTopology(),
       ]);
       if (isMountedRef.current) {
         setDashboard(dash);
-        setAgents(agentsRes.agents);
         setNetworkData(netRes);
       }
     } catch (err) {
@@ -57,12 +53,10 @@ export const DashboardPage: React.FC = () => {
 
     Promise.all([
       analyticsApi.getDashboard(),
-      analyticsApi.getAgents(),
       analyticsApi.getNetworkTopology(),
-    ]).then(([dash, agentsRes, netRes]) => {
+    ]).then(([dash, netRes]) => {
       if (!ignore && isMountedRef.current) {
         setDashboard(dash);
-        setAgents(agentsRes.agents);
         setNetworkData(netRes);
         setLoading(false);
       }
@@ -240,9 +234,6 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* Agent Pipeline */}
-      <AgentPipeline agents={agents} loading={loading} />
 
       {/* Recent Orders */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
