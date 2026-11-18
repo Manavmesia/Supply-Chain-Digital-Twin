@@ -179,6 +179,24 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
                     final_state["workflow_status"] = "completed"
 
         _save_workflow_state(workflow_id, final_state, trace)
+
+        # Synchronize order and shipment database records to reflect final multi-agent decisions
+        final_order = final_state.get("order") or {}
+        order_id = final_order.get("order_id")
+        order_status = final_order.get("status")
+        if order_id and order_status:
+            persistence.update_order_status(order_id, order_status)
+
+        final_shipment = final_state.get("shipment") or {}
+        if order_id and final_shipment:
+            shp = persistence.get_shipment_by_order(order_id)
+            if shp:
+                persistence.update_shipment_status(
+                    shp["shipment_id"],
+                    final_shipment.get("status", "delivered"),
+                    final_shipment.get("current_location") or "Destination Fulfilled",
+                )
+
         logger.info(
             "Workflow completed",
             workflow_id=workflow_id,

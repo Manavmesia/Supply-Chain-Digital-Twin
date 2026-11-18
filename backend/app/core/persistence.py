@@ -1512,6 +1512,17 @@ def receive_purchase_order(po_id: str) -> dict[str, Any] | None:
             "UPDATE purchase_orders SET status = 'received' WHERE po_id = ?",
             (po_id,),
         )
+        # Mark any active deficit events for this product as remediated
+        conn.execute(
+            """
+            UPDATE events 
+            SET status = 'remediated' 
+            WHERE event_type IN ('InventoryLow', 'InventoryOutOfStock', 'WarehouseStockout') 
+              AND status != 'remediated'
+              AND payload_json LIKE ?
+            """,
+            (f'%"{row["product_id"]}"%',),
+        )
     # Add units to inventory
     replenish_inventory_units(
         product_id=row["product_id"],
@@ -1682,6 +1693,16 @@ def reroute_shipment(
             (shipment_id,),
         ).fetchone()
         return dict(updated) if updated else None
+
+
+def get_shipment_by_order(order_id: str) -> dict[str, Any] | None:
+    """Retrieve shipment associated with an order ID."""
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM shipments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1",
+            (order_id,),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 # ── Commercial Orders (OMS) ──────────────────────────────────────────────────

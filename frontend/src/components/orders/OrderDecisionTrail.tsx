@@ -58,9 +58,9 @@ export const OrderDecisionTrail: React.FC<OrderDecisionTrailProps> = ({
   const [approvalNotes, setApprovalNotes] = useState('');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isSilent = false) => {
     if (!workflowId) return;
-    setLoading(true);
+    if (!isSilent) setLoading(true);
     try {
       const [statusRes, traceRes] = await Promise.all([
         workflowApi.getStatus(workflowId),
@@ -71,13 +71,20 @@ export const OrderDecisionTrail: React.FC<OrderDecisionTrailProps> = ({
     } catch {
       // Keep existing data on error
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [workflowId]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadData(false);
+    if (status?.workflow_status === 'completed' || status?.workflow_status === 'failed') return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [loadData, status?.workflow_status]);
 
   const handleApprove = async () => {
     if (!workflowId) return;
