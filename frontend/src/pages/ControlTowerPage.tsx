@@ -166,8 +166,15 @@ export const ControlTowerPage: React.FC = () => {
     }
   };
 
+  const RESOLVED_STATUSES = ['remediated', 'resolved', 'completed'];
+
+  // An active exception is an event in EXCEPTION_TYPES that has NOT been remediated or completed
   const activeExceptions = events.filter((ev) =>
-    EXCEPTION_TYPES.includes(ev.event_type)
+    EXCEPTION_TYPES.includes(ev.event_type) && !RESOLVED_STATUSES.includes(ev.status?.toLowerCase() || '')
+  );
+
+  const remediatedExceptions = events.filter((ev) =>
+    EXCEPTION_TYPES.includes(ev.event_type) && RESOLVED_STATUSES.includes(ev.status?.toLowerCase() || '')
   );
 
   const reportingNodes = Array.from(new Set(events.map((e) => e.source_agent))).filter(Boolean);
@@ -277,9 +284,9 @@ export const ControlTowerPage: React.FC = () => {
         <div className="stat-card">
           <div className="stat-label">AUTOMATED MITIGATIONS</div>
           <div className="stat-value" style={{ color: '#059669' }}>
-            {loading ? '—' : events.length}
+            {loading ? '—' : remediatedExceptions.length}
           </div>
-          <div className="stat-sub">Autonomous resolutions active</div>
+          <div className="stat-sub">Autonomous resolutions completed</div>
         </div>
 
         <div className="stat-card">
@@ -415,9 +422,9 @@ export const ControlTowerPage: React.FC = () => {
                   if (!filterExceptionsOnly) setSelectedType('all');
                 }}
                 className={`filter-pill ${filterExceptionsOnly ? 'active' : ''}`}
-                style={filterExceptionsOnly ? { background: '#dc2626', color: '#ffffff', borderColor: '#dc2626' } : { borderColor: '#fca5a5', color: '#b91c1c', fontWeight: 600 }}
+                style={filterExceptionsOnly ? { background: '#dc2626', color: '#ffffff', borderColor: '#dc2626' } : { borderColor: activeExceptions.length > 0 ? '#fca5a5' : '#e2e8f0', color: activeExceptions.length > 0 ? '#b91c1c' : '#475569', fontWeight: 600 }}
               >
-                Exceptions Only ({exceptionCount})
+                Exceptions ({activeExceptions.length > 0 ? `${activeExceptions.length} active` : `${remediatedExceptions.length} remediated`})
               </button>
               {['all', 'DeliveryDelayed', 'InventoryLow', 'QualityAlertRaised'].map((t) => (
                 <button
@@ -499,9 +506,21 @@ export const ControlTowerPage: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <span style={{ fontSize: '11px', color: '#059669', background: '#ecfdf5', padding: '3px 10px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
-                      Automated Resolution Active
-                    </span>
+                    {isException ? (
+                      RESOLVED_STATUSES.includes(ev.status?.toLowerCase() || '') ? (
+                        <span style={{ fontSize: '11px', color: '#059669', background: '#ecfdf5', padding: '3px 10px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 600 }}>
+                          Remediation Complete
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: '#dc2626', background: '#fef2f2', padding: '3px 10px', borderRadius: '9999px', border: '1px solid #fecaca', fontWeight: 600 }}>
+                          Mitigation In Progress
+                        </span>
+                      )
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#2563eb', background: '#eff6ff', padding: '3px 10px', borderRadius: '9999px', border: '1px solid #bfdbfe', fontWeight: 600 }}>
+                        Telemetry Recorded
+                      </span>
+                    )}
                     <span style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Clock className="w-3 h-3 text-slate-400" />
                       {formatTimeAgo(ev.timestamp)}

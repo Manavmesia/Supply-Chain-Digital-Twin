@@ -352,6 +352,11 @@ async def dispatch_event(
     }
     persistence.save_event(event_record)
     result = await dispatch_event_remediation(event_record)
+    event_record["status"] = "remediated"
+    event_record["subscribers"] = result.get("subscribers", [])
+    event_record["remediation_summary"] = result.get("remediation_summary", "")
+    event_record["autonomous_actions"] = result.get("autonomous_actions", [])
+    persistence.save_event(event_record)
     return {
         "event_id": event_id,
         "event_type": event_type,
