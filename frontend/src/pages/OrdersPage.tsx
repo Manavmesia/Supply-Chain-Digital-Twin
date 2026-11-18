@@ -1,17 +1,19 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ordersApi } from '../services/api';
 import type { Order } from '../types';
 import {
   Plus,
   RefreshCw,
   Search,
-  ExternalLink,
   ChevronRight,
   X,
   Zap,
+  Cpu,
+  FileText,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
-import { Link } from 'react-router-dom';
+import { OrderDecisionTrail } from '../components/orders/OrderDecisionTrail';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
   pending:    { label: 'Evaluating', bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
@@ -44,6 +46,9 @@ const CATALOG_PRODUCTS = [
 ];
 
 export const OrdersPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const urlOrderId = searchParams.get('order_id') || searchParams.get('id');
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +56,7 @@ export const OrdersPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [drawerTab, setDrawerTab] = useState<'overview' | 'decision-trail'>('overview');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -92,6 +98,18 @@ export const OrdersPage: React.FC = () => {
     };
   }, [loadData]);
 
+  useEffect(() => {
+    if (urlOrderId && orders.length > 0) {
+      const match = orders.find(o => o.order_id === urlOrderId);
+      if (match) {
+        setSelectedOrder(match);
+        if (searchParams.get('tab') === 'decision') {
+          setDrawerTab('decision-trail');
+        }
+      }
+    }
+  }, [urlOrderId, orders, searchParams]);
+
   const handleCreateOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -101,7 +119,7 @@ export const OrdersPage: React.FC = () => {
         items: orderItems,
       });
       setShowCreateModal(false);
-      setActionMessage(`Commercial Order ${res.order_id} created! Autonomous LangGraph workflow kicked off (WF: ${res.workflow_id.slice(0, 8)}).`);
+      setActionMessage(`Commercial Order ${res.order_id} booked! Autonomous decision pipeline initiated (Audit Ref: ${res.workflow_id ? res.workflow_id.slice(0, 8) : 'ACT-' + res.order_id.slice(0, 8)}).`);
       await loadData(true);
     } catch (err: any) {
       setActionMessage(`Order creation failed: ${err.message}`);
@@ -249,7 +267,7 @@ export const OrdersPage: React.FC = () => {
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>PRIORITY</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>ORDER VALUE</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>STATUS</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>WORKFLOW</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>DECISION AUDIT</th>
               <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>ACTION</th>
             </tr>
           </thead>
@@ -262,7 +280,10 @@ export const OrdersPage: React.FC = () => {
                 <tr
                   key={ord.order_id}
                   style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
-                  onClick={() => setSelectedOrder(ord)}
+                  onClick={() => {
+                    setSelectedOrder(ord);
+                    setDrawerTab('overview');
+                  }}
                 >
                   <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
                     {ord.order_id.slice(0, 16)}...
@@ -310,25 +331,33 @@ export const OrdersPage: React.FC = () => {
                   </td>
                   <td style={{ padding: '14px 16px' }}>
                     {ord.workflow_id ? (
-                      <Link
-                        to={`/workflows?workflow_id=${ord.workflow_id}`}
-                        onClick={(e) => e.stopPropagation()}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedOrder(ord);
+                          setDrawerTab('decision-trail');
+                        }}
+                        title="Inspect Autonomous Decision Audit Trail"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '6px',
                           color: '#2563eb',
-                          textDecoration: 'none',
-                          fontSize: '12px',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '6px',
+                          padding: '4px 8px',
+                          fontSize: '11px',
                           fontFamily: 'monospace',
-                          fontWeight: 500,
+                          fontWeight: 600,
+                          cursor: 'pointer',
                         }}
                       >
+                        <Cpu className="w-3.5 h-3.5 text-blue-600" />
                         <span>{ord.workflow_id.slice(0, 8)}...</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </Link>
+                      </button>
                     ) : (
-                      <span style={{ color: '#64748b', fontSize: '11px' }}>Manual</span>
+                      <span style={{ color: '#64748b', fontSize: '11px' }}>Direct Log</span>
                     )}
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
@@ -371,11 +400,12 @@ export const OrdersPage: React.FC = () => {
       {/* Order Detail Drawer */}
       {selectedOrder && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', zIndex: 110 }}>
-          <div style={{ width: '520px', maxWidth: '100%', background: '#ffffff', height: '100%', padding: '24px', borderLeft: '1px solid #e2e8f0', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ width: '600px', maxWidth: '100%', background: '#ffffff', height: '100%', padding: '24px', borderLeft: '1px solid #e2e8f0', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)', overflowY: 'auto' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  Order Details
+                  Commercial Order File
                 </h2>
                 <div style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748b', marginTop: '2px' }}>
                   {selectedOrder.order_id}
@@ -389,82 +419,156 @@ export const OrdersPage: React.FC = () => {
               </button>
             </div>
 
-            <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '8px' }}>
-                Customer Account
-              </div>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>
-                {selectedOrder.customer?.name || (selectedOrder as any).customer_name || 'Enterprise Customer'}
-              </div>
-              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                {selectedOrder.customer?.email || 'procurement@client.com'}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '10px' }}>
-                Line Items ({selectedOrder.items?.length || 1})
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {(selectedOrder.items || []).map((item, idx) => (
-                  <div
-                    key={item.order_item_id || idx}
-                    style={{
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      padding: '12px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
-                        {(item as any).product_name || 'Industrial System Component'}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>
-                        {(item as any).sku || 'SKU-001'} &bull; Qty: {item.quantity}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 600, color: '#059669', fontSize: '13px' }}>
-                        {formatCurrency(parseFloat(item.line_total || '0'))}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>
-                        @{formatCurrency(parseFloat(item.unit_price || '0'))}/unit
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ background: '#f8fafc', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748b', fontSize: '13px' }}>Total Commercial Value:</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: '#059669' }}>
-                  {formatCurrency(parseFloat(selectedOrder.total_amount))}
-                </span>
-              </div>
-            </div>
-
-            {selectedOrder.workflow_id && (
-              <Link
-                to={`/workflows?workflow_id=${selectedOrder.workflow_id}`}
-                className="btn-primary"
+            {/* Tab selector */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '20px' }}>
+              <button
+                onClick={() => setDrawerTab('overview')}
                 style={{
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '100%',
-                  padding: '12px',
-                  textDecoration: 'none',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: drawerTab === 'overview' ? 600 : 500,
+                  color: drawerTab === 'overview' ? '#2563eb' : '#64748b',
+                  background: drawerTab === 'overview' ? '#eff6ff' : 'transparent',
+                  border: drawerTab === 'overview' ? '1px solid #bfdbfe' : '1px solid transparent',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
                 }}
               >
-                <span>Inspect Autonomous Fulfillment Workflow</span>
-                <ExternalLink className="w-4 h-4" />
-              </Link>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Order Summary & Items</span>
+              </button>
+
+              <button
+                onClick={() => setDrawerTab('decision-trail')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: drawerTab === 'decision-trail' ? 600 : 500,
+                  color: drawerTab === 'decision-trail' ? '#2563eb' : '#64748b',
+                  background: drawerTab === 'decision-trail' ? '#eff6ff' : 'transparent',
+                  border: drawerTab === 'decision-trail' ? '1px solid #bfdbfe' : '1px solid transparent',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Cpu className="w-3.5 h-3.5" />
+                <span>Autonomous Decision Trail</span>
+                {selectedOrder.workflow_id && (
+                  <span style={{ fontSize: '10px', background: '#dbeafe', color: '#1d4ed8', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                    Active
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {drawerTab === 'overview' ? (
+              <div>
+                <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '8px' }}>
+                    Customer Account
+                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>
+                    {selectedOrder.customer?.name || (selectedOrder as any).customer_name || 'Enterprise Customer'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    {selectedOrder.customer?.email || 'procurement@client.com'}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '10px' }}>
+                    Line Items ({selectedOrder.items?.length || 1})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {(selectedOrder.items || []).map((item, idx) => (
+                      <div
+                        key={item.order_item_id || idx}
+                        style={{
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          padding: '12px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
+                            {(item as any).product_name || 'Industrial System Component'}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            {(item as any).sku || 'SKU-001'} &bull; Qty: {item.quantity}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: 600, color: '#059669', fontSize: '13px' }}>
+                            {formatCurrency(parseFloat(item.line_total || '0'))}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            @{formatCurrency(parseFloat(item.unit_price || '0'))}/unit
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b', fontSize: '13px' }}>Total Commercial Value:</span>
+                    <span style={{ fontSize: '18px', fontWeight: 700, color: '#059669' }}>
+                      {formatCurrency(parseFloat(selectedOrder.total_amount))}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedOrder.workflow_id ? (
+                  <button
+                    onClick={() => setDrawerTab('decision-trail')}
+                    className="btn-primary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      width: '100%',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      borderRadius: '6px',
+                      border: 'none',
+                    }}
+                  >
+                    <Cpu className="w-4 h-4" />
+                    <span>View Multi-Agent Decision & Audit Trail</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', padding: '12px' }}>
+                    No automated decision audit trail attached to this manual transaction.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {selectedOrder.workflow_id ? (
+                  <OrderDecisionTrail
+                    workflowId={selectedOrder.workflow_id}
+                    orderId={selectedOrder.order_id}
+                    onRefresh={loadData}
+                  />
+                ) : (
+                  <div style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    No multi-agent execution pipeline recorded for this direct order.
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

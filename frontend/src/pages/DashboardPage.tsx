@@ -338,7 +338,7 @@ export const DashboardPage: React.FC = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                         <Link
-                          to={`/workflows${order.workflow_id ? `?workflow_id=${order.workflow_id}` : ''}`}
+                          to={`/orders?order_id=${order.order_id}&tab=decision`}
                           style={{
                             fontSize: '12px',
                             color: '#2563eb',

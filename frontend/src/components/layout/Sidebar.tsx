@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Workflow,
   Bot,
   FileText,
   Package,
@@ -21,7 +20,6 @@ const NAV_ITEMS = [
   { path: '/procurement',   label: 'Procurement',     icon: Building2 },
   { path: '/inventory',     label: 'Inventory',       icon: Package },
   { path: '/control-tower', label: 'Control Tower',   icon: ShieldAlert },
-  { path: '/workflows',     label: 'Agent Engine',    icon: Workflow },
   { path: '/agents',        label: 'Agent Directory', icon: Bot },
   { path: '/reports',       label: 'Reports',         icon: FileText },
 ];

@@ -221,7 +221,7 @@ export const ControlTowerPage: React.FC = () => {
                   <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{tpl.label}</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px', lineHeight: 1.4 }}>
-                  Triggers automated real-time mitigation workflow across fulfillment operations.
+                  Triggers automated real-time mitigation across fulfillment operations.
                 </div>
               </div>
               <button

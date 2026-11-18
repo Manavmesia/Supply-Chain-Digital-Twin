@@ -10,7 +10,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/procurement':   'Procurement & Suppliers',
   '/inventory':     'Warehouse Inventory',
   '/control-tower': 'Incident Control Tower',
-  '/workflows':     'Agent Workflow Engine',
   '/agents':        'Agent Directory',
   '/reports':       'Reports & Analytics',
 };

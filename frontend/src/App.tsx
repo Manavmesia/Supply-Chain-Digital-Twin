@@ -8,7 +8,6 @@ import { ShipmentsPage } from './pages/ShipmentsPage';
 import { ProcurementPage } from './pages/ProcurementPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { ControlTowerPage } from './pages/ControlTowerPage';
-import { WorkflowPage } from './pages/WorkflowPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { healthApi } from './services/api';
@@ -43,8 +42,8 @@ const App: React.FC = () => {
               <Route path="/control-tower" element={<ControlTowerPage />} />
               <Route path="/events"        element={<Navigate to="/control-tower" replace />} />
               <Route path="/simulate"      element={<Navigate to="/control-tower" replace />} />
-              <Route path="/workflows"     element={<WorkflowPage />} />
-              <Route path="/workflow"      element={<WorkflowPage />} />
+              <Route path="/workflows"     element={<Navigate to="/orders" replace />} />
+              <Route path="/workflow"      element={<Navigate to="/orders" replace />} />
               <Route path="/agents"        element={<AgentsPage />} />
               <Route path="/reports"       element={<ReportsPage />} />
             </Routes>

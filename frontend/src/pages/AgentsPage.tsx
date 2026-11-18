@@ -84,7 +84,7 @@ export const AgentsPage: React.FC = () => {
             Agent Directory
           </h1>
           <p className="page-subtitle">
-            Operational, business intelligence, and coordination agents supervising enterprise workflows.
+            Operational, business intelligence, and coordination agents supervising enterprise operations.
           </p>
         </div>
         <div className="page-actions">
@@ -237,11 +237,11 @@ export const AgentsPage: React.FC = () => {
 
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px', display: 'flex', gap: '10px' }}>
               <Link
-                to="/workflows"
+                to="/orders"
                 className="btn-primary"
                 style={{ flex: 1, justifyContent: 'center', textDecoration: 'none', padding: '10px 16px', fontSize: '13px' }}
               >
-                Trigger Workflow in Agent Engine →
+                Inspect Live Order Decision Pipelines →
               </Link>
             </div>
           </div>

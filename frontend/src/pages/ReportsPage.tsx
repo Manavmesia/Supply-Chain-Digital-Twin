@@ -120,7 +120,7 @@ export const ReportsPage: React.FC = () => {
               <FileText size={32} className="text-slate-600 mb-2" />
               <p>No reports generated yet</p>
               <p style={{ fontSize: '0.8rem', color: '#475569' }}>
-                Complete a workflow to generate your first report
+                Process transactions to generate operational reports
               </p>
             </div>
           ) : (
@@ -214,7 +214,7 @@ export const ReportsPage: React.FC = () => {
 
               {selected.workflow_id && (
                 <div style={{ marginBottom: '12px' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Associated Workflow</p>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Execution Audit Ref</p>
                   <code style={{ fontSize: '12px', fontFamily: 'monospace', color: '#2563eb', padding: '2px 6px', background: '#eff6ff', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
                     {formatWorkflowId(selected.workflow_id)}
                   </code>
