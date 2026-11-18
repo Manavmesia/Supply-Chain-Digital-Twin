@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { analyticsApi } from '../services/api';
 import { Link } from 'react-router-dom';
 import { KPIGrid } from '../components/dashboard/KPIGrid';
-import { DigitalTwinCanvas } from '../components/dashboard/DigitalTwinCanvas';
-import type { DashboardData, RecentOrder, TwinNetworkData } from '../types';
+import type { DashboardData, RecentOrder } from '../types';
 import {
   BarChart3,
   Layers,
@@ -21,7 +20,6 @@ import {
 
 export const DashboardPage: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [networkData, setNetworkData] = useState<TwinNetworkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const isMountedRef = useRef(true);
@@ -29,13 +27,9 @@ export const DashboardPage: React.FC = () => {
   const fetchDashboardData = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsUpdating(true);
     try {
-      const [dash, netRes] = await Promise.all([
-        analyticsApi.getDashboard(),
-        analyticsApi.getNetworkTopology(),
-      ]);
+      const dash = await analyticsApi.getDashboard();
       if (isMountedRef.current) {
         setDashboard(dash);
-        setNetworkData(netRes);
       }
     } catch (err) {
       console.error('Dashboard load failed:', err);
@@ -51,13 +45,9 @@ export const DashboardPage: React.FC = () => {
     let ignore = false;
     isMountedRef.current = true;
 
-    Promise.all([
-      analyticsApi.getDashboard(),
-      analyticsApi.getNetworkTopology(),
-    ]).then(([dash, netRes]) => {
+    analyticsApi.getDashboard().then((dash) => {
       if (!ignore && isMountedRef.current) {
         setDashboard(dash);
-        setNetworkData(netRes);
         setLoading(false);
       }
     }).catch((err) => {
@@ -108,7 +98,7 @@ export const DashboardPage: React.FC = () => {
         <div>
           <h1 className="page-title">Digital Twin Overview</h1>
           <p className="page-subtitle">
-            Real-time fulfillment metrics, network topology, and active operations.
+            Real-time fulfillment metrics, warehouse inventory distribution, and commercial operations.
           </p>
         </div>
         <div className="page-actions">
@@ -125,15 +115,6 @@ export const DashboardPage: React.FC = () => {
 
       {/* KPI Grid */}
       <KPIGrid kpis={dashboard?.kpis ?? null} loading={loading} />
-
-      {/* Spatial Digital Twin Network Topology Canvas */}
-      <div style={{ marginBottom: '24px' }}>
-        <DigitalTwinCanvas
-          data={networkData}
-          loading={loading}
-          onRefresh={() => fetchDashboardData(false)}
-        />
-      </div>
 
       {/* Charts / Distribution row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
