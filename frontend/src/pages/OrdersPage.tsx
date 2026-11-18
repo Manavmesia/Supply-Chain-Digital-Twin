@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ordersApi } from '../services/api';
 import type { Order } from '../types';
 import {
@@ -11,6 +11,7 @@ import {
   Zap,
   Cpu,
   FileText,
+  Truck,
 } from 'lucide-react';
 import { formatCurrency, CATALOG_PRODUCTS } from '../utils/formatters';
 import { OrderDecisionTrail } from '../components/orders/OrderDecisionTrail';
@@ -348,50 +349,75 @@ export const OrdersPage: React.FC = () => {
                           setSelectedOrder(ord);
                           setDrawerTab('decision-trail');
                         }}
-                        title="Inspect Autonomous Decision Audit Trail"
+                        title="Open Autonomous Multi-Agent Decision Trail"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '6px',
-                          color: '#2563eb',
-                          background: '#eff6ff',
-                          border: '1px solid #bfdbfe',
+                          color: '#4338ca',
+                          background: '#eef2ff',
+                          border: '1px solid #c7d2fe',
                           borderRadius: '6px',
-                          padding: '4px 8px',
+                          padding: '4px 9px',
                           fontSize: '11px',
-                          fontFamily: 'monospace',
                           fontWeight: 600,
                           cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <Cpu className="w-3.5 h-3.5 text-blue-600" />
-                        <span>{ord.workflow_id.slice(0, 8)}...</span>
+                        <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Decision Audit</span>
                       </button>
                     ) : (
-                      <span style={{ color: '#64748b', fontSize: '11px' }}>Direct Log</span>
+                      <span style={{ color: '#94a3b8', fontSize: '11px', fontStyle: 'italic' }}>Direct Ingestion</span>
                     )}
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedOrder(ord);
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#2563eb',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <span>View</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedOrder(ord);
+                          setDrawerTab('overview');
+                        }}
+                        title="View Order Specification & Line Items"
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          color: '#0f172a',
+                          borderRadius: '6px',
+                          padding: '4px 9px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                        }}
+                      >
+                        <FileText className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Order Details</span>
+                      </button>
+                      <Link
+                        to={`/shipments?search=${ord.order_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Track Connected Logistics Shipment"
+                        style={{
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          color: '#1d4ed8',
+                          borderRadius: '6px',
+                          padding: '4px 7px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          textDecoration: 'none',
+                          fontSize: '11px',
+                        }}
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               );
