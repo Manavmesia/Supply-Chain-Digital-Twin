@@ -75,21 +75,10 @@ class NegotiationAgent(BaseAgent):
         # ── 2. Load supplier data from state ──────────────────────────────────
         pos: list[dict] = supplier_state.get("purchase_orders") or []
         if not pos:
-            cust_tier = order.get("customer_tier") or "enterprise"
-            priority = order.get("priority") or "standard"
-            carrier_name = state.get("shipment", {}).get("carrier") or "Carrier Network"
-            terms = f"Negotiated guaranteed dispatch window and SLA terms with {carrier_name} under {cust_tier.upper()} contract protocol."
-            decisions = self._record_decision(
-                decisions,
-                "carrier_terms_locked",
-                terms,
-                {"tier": cust_tier, "priority": priority, "carrier": carrier_name},
-            )
             return {
                 "negotiation": {
-                    "status": "completed",
-                    "strategy": "carrier_sla_lock",
-                    "terms": terms,
+                    "status": "skipped",
+                    "reason": "no_purchase_orders",
                 },
                 "decisions": decisions,
                 "event_history": event_history,

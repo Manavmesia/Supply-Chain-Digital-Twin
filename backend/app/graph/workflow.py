@@ -208,7 +208,7 @@ def route_after_customer_service(state: SupplyChainState) -> str:
     planning = state.get("planning") or {}
     if planning.get("remanufacture_required"):
         return "manufacturing"
-    return "reporting"
+    return "legacy_ceo_compat"
 
 
 # ---------------------------------------------------------------------------
@@ -299,12 +299,12 @@ def build_workflow(
     graph.add_conditional_edges(
         "customer_service",
         route_after_customer_service,
-        {"reporting": "reporting", "manufacturing": "manufacturing"},
+        {"legacy_ceo_compat": "legacy_ceo_compat", "manufacturing": "manufacturing"},
     )
 
-    graph.add_edge("manufacturing", "reporting")
-    graph.add_edge("reporting", "legacy_ceo_compat")
-    graph.add_edge("legacy_ceo_compat", END)
+    graph.add_edge("manufacturing", "legacy_ceo_compat")
+    graph.add_edge("legacy_ceo_compat", "reporting")
+    graph.add_edge("reporting", END)
 
     return graph
 

@@ -82,29 +82,32 @@ class BaseAgent(abc.ABC):
                 if entry.get("status") != "superseded":
                     latest = entry
                     break
-            if latest:
-                state[topic] = latest["data"]
+            if latest and isinstance(latest.get("data"), dict):
+                current_val = state.get(topic)
+                if isinstance(current_val, dict):
+                    state[topic] = {**current_val, **latest["data"]}
+                else:
+                    state[topic] = latest["data"]
+            elif latest:
+                state[topic] = latest.get("data")
 
         try:
             result = await self._execute(state)
             result["active_agents"] = active
             result["current_node"] = self.agent_code
 
-            if not state.get("blackboard"):
-                state["blackboard"] = {}
+            # ── Data Preservation: Ensure core entities retain baseline fields ─────
+            if "order" in result and isinstance(result["order"], dict) and isinstance(state.get("order"), dict):
+                result["order"] = {**state["order"], **result["order"]}
+            if "shipment" in result and isinstance(result["shipment"], dict) and isinstance(state.get("shipment"), dict):
+                result["shipment"] = {**state["shipment"], **result["shipment"]}
 
-            for key in ("order", "inventory", "warehouse", "supplier", "shipment", "finance", "risk", "forecast", "quality", "sustainability", "manufacturing", "customer_service", "pricing", "procurement", "planning", "negotiation"):
-                if key in result and isinstance(result[key], dict):
-                    record_agent_message(
-                        state,
-                        agent_id=self.agent_code,
-                        topic=key,
-                        message_type="COMMIT",
-                        confidence=0.9,
-                        rationale=f"{self.agent_name} updated {key} autonomously",
-                        data=result[key],
-                    )
-                    break
+            if "event_history" not in result and state.get("event_history"):
+                result["event_history"] = state["event_history"]
+            if "decisions" not in result and state.get("decisions"):
+                result["decisions"] = state["decisions"]
+            if "errors" not in result and state.get("errors"):
+                result["errors"] = state["errors"]
 
             # ── Post-processing: Mirror result keys back to the Blackboard ─────
             new_blackboard = dict(state.get("blackboard") or {})
@@ -125,10 +128,12 @@ class BaseAgent(abc.ABC):
                 "procurement": "procurement",
                 "planning": "planning",
                 "negotiation": "negotiation",
+                "executive_decision": "executive_decision",
+                "reports": "reports",
             }
 
             is_operational = self.agent_code in (
-                "ADS-01", "ADS-03", "ADS-04", "ADS-05", "ADS-06", "ADS-07", "ADS-08"
+                "ADS-01", "ADS-03", "ADS-04", "ADS-05", "ADS-06", "ADS-07", "ADS-08", "ADS-17"
             )
 
             for key, value in list(result.items()):
@@ -136,20 +141,24 @@ class BaseAgent(abc.ABC):
                     topic = topics_mapping[key]
                     
                     status = "accepted" if is_operational else "proposed"
+                    message_type = "COMMIT" if is_operational else "SUPPORT"
                     confidence = 1.0
                     rationale = f"Updated by {self.agent_name}"
                     
                     # BI Agent constraint evaluation mapping
                     if key == "risk" and float(value.get("score", 0.0)) > 85.0:
                         status = "contested"
+                        message_type = "OBJECT"
                         confidence = 0.3
                         rationale = f"Risk score {value.get('score')} exceeds policy limit of 85."
                     elif key == "finance" and value.get("approval_status") == "denied":
                         status = "contested"
+                        message_type = "OBJECT"
                         confidence = 0.4
                         rationale = "Finance review failed: margin threshold breach."
                     elif key == "quality" and value.get("status") == "failed":
                         status = "contested"
+                        message_type = "OBJECT"
                         confidence = 0.2
                         rationale = "Quality QA check failed."
 
@@ -157,6 +166,7 @@ class BaseAgent(abc.ABC):
                     overrides = state.get("human_overrides") or {}
                     if topic in overrides:
                         status = "accepted"
+                        message_type = "COMMIT"
                         value = overrides[topic]
                         rationale = "User locked this decision via override."
 
@@ -175,11 +185,12 @@ class BaseAgent(abc.ABC):
                         "rationale": rationale,
                         "status": status,
                         "data": value,
-                        "message_type": "PROPOSE",
+                        "message_type": message_type,
                         "topic": topic,
                     })
                     new_blackboard[topic] = new_entries
                     result["blackboard"] = new_blackboard
+                    state["blackboard"] = new_blackboard
 
             self._log.info("Agent completed", workflow_id=state.get("workflow_id"))
             return result

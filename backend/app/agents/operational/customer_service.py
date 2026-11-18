@@ -59,7 +59,7 @@ class CustomerServiceAgent(BaseAgent):
         notifications_sent: list[dict[str, Any]] = []
 
         carrier_name = shipment_state.get("carrier") or "Global Logistics"
-        tracking_id = shipment_state.get("carrier_tracking_id") or "TRK-EXP"
+        tracking_id = shipment_state.get("tracking_id") or shipment_state.get("carrier_tracking_id") or "TRK-EXP"
         eta_str = shipment_state.get("eta") or "3 business days"
         cust_name = order.get("customer_name") or "Enterprise Partner"
         order_num = order.get("order_id", "")
@@ -209,7 +209,7 @@ class CustomerServiceAgent(BaseAgent):
             )
             is_escalated = True
 
-        next_node = "ceo" if is_escalated else "reporting"
+        next_node = "ceo" if is_escalated else "legacy_ceo_compat"
 
         return {
             "customer_service": {

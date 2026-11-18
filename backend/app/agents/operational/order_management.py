@@ -79,22 +79,25 @@ class OrderManagementAgent(BaseAgent):
         resolved_tier = cust_info[1] if cust_info else "enterprise"
 
         customer = None
+        db_queried = False
         if session is not None:
             try:
                 result = await session.execute(
                     select(Customer).where(Customer.customer_id == customer_id)
                 )
                 customer = result.scalar_one_or_none()
+                db_queried = True
             except Exception as exc:
-                self._log.warning("DB unavailable for customer lookup, using catalog customer", error=str(exc))
+                self._log.warning("DB unavailable for customer lookup, checking catalog", error=str(exc))
         
-        if customer is None:
-            customer = Customer(
-                customer_id=customer_id,
-                name=resolved_name,
-                customer_tier=resolved_tier,
-                is_active=True,
-            )
+        if customer is None and not db_queried:
+            if str(customer_id) in _CUSTOMER_CATALOG:
+                customer = Customer(
+                    customer_id=customer_id,
+                    name=resolved_name,
+                    customer_tier=resolved_tier,
+                    is_active=True,
+                )
 
         if customer is None:
             return self._reject(state, f"Customer {customer_id} not found")

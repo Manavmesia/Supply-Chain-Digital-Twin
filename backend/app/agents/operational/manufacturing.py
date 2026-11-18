@@ -87,7 +87,7 @@ class ManufacturingAgent(BaseAgent):
         all_mo_payloads: list[dict[str, Any]] = []
 
         for item in items_to_manufacture:
-            product_id = safe_uuid(str(item["product_id"]))
+            product_id = uuid.UUID(str(item["product_id"]))
             planned_qty = int(item.get("quantity", 100))
 
             # ── Capacity Check ────────────────────────────────────────────────

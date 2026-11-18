@@ -105,9 +105,9 @@ class TestRoutingFunctions:
         state.pop("next_node", None)
         assert route_after_inventory(state) == "warehouse"
 
-    def test_route_after_customer_service_defaults_to_reporting(self):
+    def test_route_after_customer_service_defaults_to_ceo(self):
         state = _base_state()
-        assert route_after_customer_service(state) == "reporting"
+        assert route_after_customer_service(state) == "legacy_ceo_compat"
 
     def test_route_after_customer_service_goes_to_manufacturing_when_remanufacture_required(self):
         state = _base_state(planning={"remanufacture_required": True})

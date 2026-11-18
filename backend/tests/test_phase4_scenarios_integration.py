@@ -43,7 +43,7 @@ class TestPhase4ScenariosIntegration:
         wh_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("2000.00"))
         inv = FakeInventory(prod_id, wh_id, available=50, reserved=0)
         wh = FakeWarehouse(wh_id)
@@ -93,7 +93,7 @@ class TestPhase4ScenariosIntegration:
         sup_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("3000.00"))
         wh = FakeWarehouse(wh_id)
         supplier = FakeSupplier(sup_id, "Global Micro")
@@ -145,7 +145,7 @@ class TestPhase4ScenariosIntegration:
         wh_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("4000.00"))
         inv = FakeInventory(prod_id, wh_id, available=20)
         wh = FakeWarehouse(wh_id)
@@ -190,7 +190,7 @@ class TestPhase4ScenariosIntegration:
         wh_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("600000.00"))  # $600k total
         inv = FakeInventory(prod_id, wh_id, available=10)
         wh = FakeWarehouse(wh_id)
@@ -232,7 +232,7 @@ class TestPhase4ScenariosIntegration:
         sup_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("100.00"))  # unit price
         wh = FakeWarehouse(wh_id)
         supplier = FakeSupplier(sup_id)
@@ -283,7 +283,7 @@ class TestPhase4ScenariosIntegration:
         prod_id = uuid.uuid4()
         wh_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("500.00"))
         wh = FakeWarehouse(wh_id)
         carrier_id = uuid.uuid4()
@@ -358,7 +358,7 @@ class TestPhase4ScenariosIntegration:
         wh_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("100.00"))
         inv = FakeInventory(prod_id, wh_id, available=1000)
         wh = FakeWarehouse(wh_id)
@@ -409,7 +409,7 @@ class TestPhase4ScenariosIntegration:
         sup_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod1 = FakeProduct(p1_id, name="In-Stock Widget", price=Decimal("100.00"))
         prod2 = FakeProduct(p2_id, name="Out-of-Stock Widget", price=Decimal("500.00"))
         inv1 = FakeInventory(p1_id, wh_id, available=100)
@@ -464,7 +464,7 @@ class TestPhase4ScenariosIntegration:
         wh_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("2000.00"))
         inv = FakeInventory(prod_id, wh_id, available=50, reserved=0)
         wh = FakeWarehouse(wh_id)
@@ -510,7 +510,7 @@ class TestPhase4ScenariosIntegration:
         prod_id = uuid.uuid4()
         wh_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("500.00"))
         wh = FakeWarehouse(wh_id)
         carrier_id = uuid.uuid4()
@@ -572,7 +572,7 @@ class TestPhase4ScenariosIntegration:
         sup_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("100.00"))
         wh = FakeWarehouse(wh_id)
         supplier = FakeSupplier(sup_id)
@@ -630,7 +630,7 @@ class TestPhase4ScenariosIntegration:
         sup_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("100.00"))
         wh = FakeWarehouse(wh_id)
         supplier = FakeSupplier(sup_id, reliability=Decimal("75.0"))
@@ -691,7 +691,7 @@ class TestPhase4ScenariosIntegration:
         sup_id = uuid.uuid4()
         carrier_id = uuid.uuid4()
 
-        cust = FakeCustomer(cust_id)
+        cust = FakeCustomer(cust_id, tier="standard")
         prod = FakeProduct(prod_id, price=Decimal("100.00"))
         wh = FakeWarehouse(wh_id)
         supplier = FakeSupplier(sup_id)
