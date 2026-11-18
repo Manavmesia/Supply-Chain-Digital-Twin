@@ -31,6 +31,19 @@ export const PRODUCT_DIRECTORY: Record<string, { name: string; sku: string; pric
   '00000000-0000-0000-0000-000000000002': { name: 'Industrial IoT Sensor Hub v2', sku: 'ELEC-001', price: 150.00 },
 };
 
+export const CATALOG_PRODUCTS = [
+  { id: '30000000-0000-0000-0000-000000000001', sku: 'ELEC-001', name: 'Industrial Sensor Module', price: 150.00 },
+  { id: '30000000-0000-0000-0000-000000000002', sku: 'ELEC-002', name: 'High-Torque Servo Motor', price: 280.00 },
+  { id: '30000000-0000-0000-0000-000000000003', sku: 'ELEC-003', name: 'IoT Gateway Device', price: 1249.99 },
+  { id: '30000000-0000-0000-0000-000000000004', sku: 'MECH-001', name: 'Precision Ball Bearing Set', price: 95.00 },
+  { id: '30000000-0000-0000-0000-000000000005', sku: 'MECH-002', name: 'Hydraulic Actuator Cylinder', price: 3450.00 },
+  { id: '30000000-0000-0000-0000-000000000006', sku: 'MECH-003', name: 'Stainless Steel Valve Assembly', price: 575.00 },
+  { id: '30000000-0000-0000-0000-000000000007', sku: 'CHEM-001', name: 'Industrial Lubricant (20L)', price: 185.00 },
+  { id: '30000000-0000-0000-0000-000000000008', sku: 'CHEM-002', name: 'Epoxy Adhesive Kit', price: 95.00 },
+  { id: '30000000-0000-0000-0000-000000000009', sku: 'SAFE-001', name: 'Safety Relay Module', price: 120.00 },
+  { id: '30000000-0000-0000-0000-000000000010', sku: 'SAFE-002', name: 'Emergency Stop Assembly', price: 145.00 },
+];
+
 /** Formats an order ID into a branded code: e.g. ORD-3E52C323 */
 export function formatOrderId(id: string | null | undefined): string {
   if (!id) return 'ORD-PENDING';

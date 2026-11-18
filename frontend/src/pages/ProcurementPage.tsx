@@ -10,7 +10,7 @@ import {
   Search,
   ArrowDownLeft,
 } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, CATALOG_PRODUCTS } from '../utils/formatters';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
   in_transit: { label: 'In Transit', bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
@@ -406,10 +406,11 @@ export const ProcurementPage: React.FC = () => {
                   onChange={(e) => setSelectedProductId(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                 >
-                  <option value="30000000-0000-0000-0000-000000000001">Industrial Sensor Module (ELEC-001)</option>
-                  <option value="30000000-0000-0000-0000-000000000002">High-Torque Servo Motor (ELEC-002)</option>
-                  <option value="30000000-0000-0000-0000-000000000004">Precision Ball Bearing Set (MECH-001)</option>
-                  <option value="30000000-0000-0000-0000-000000000005">Hydraulic Actuator Cylinder (MECH-002)</option>
+                  {CATALOG_PRODUCTS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.sku})
+                    </option>
+                  ))}
                 </select>
               </div>
 

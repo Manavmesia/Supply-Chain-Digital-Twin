@@ -12,7 +12,7 @@ import {
   Cpu,
   FileText,
 } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, CATALOG_PRODUCTS } from '../utils/formatters';
 import { OrderDecisionTrail } from '../components/orders/OrderDecisionTrail';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -37,13 +37,6 @@ const BASELINE_CUSTOMERS = [
   { id: '50000000-0000-0000-0000-000000000004', name: 'Honeywell Aerospace', tier: 'Standard' },
 ];
 
-const CATALOG_PRODUCTS = [
-  { id: '30000000-0000-0000-0000-000000000001', sku: 'ELEC-001', name: 'Industrial Sensor Module', price: 150.00 },
-  { id: '30000000-0000-0000-0000-000000000002', sku: 'ELEC-002', name: 'High-Torque Servo Motor', price: 280.00 },
-  { id: '30000000-0000-0000-0000-000000000003', sku: 'ELEC-003', name: 'IoT Gateway Device', price: 1249.99 },
-  { id: '30000000-0000-0000-0000-000000000004', sku: 'MECH-001', name: 'Precision Ball Bearing Set', price: 95.00 },
-  { id: '30000000-0000-0000-0000-000000000005', sku: 'MECH-002', name: 'Hydraulic Actuator Cylinder', price: 3450.00 },
-];
 
 export const OrdersPage: React.FC = () => {
   const [searchParams] = useSearchParams();
