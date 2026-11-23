@@ -55,6 +55,7 @@ from app.agents.operational.order_management import OrderManagementAgent
 from app.agents.operational.supplier import SupplierAgent
 from app.agents.operational.transportation import TransportationAgent
 from app.agents.operational.warehouse import WarehouseAgent
+from app.core.execution_config import get_agent_delay
 from app.graph.state import SupplyChainState, BlackboardEntry
 
 
@@ -62,14 +63,23 @@ from app.graph.state import SupplyChainState, BlackboardEntry
 # Node factory — creates a bound async callable for each agent
 # ---------------------------------------------------------------------------
 
-def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=None):
+def _make_node(
+    agent_cls,
+    session_factory=None,
+    publisher=None,
+    trace_collector=None,
+    delay_seconds: float | None = None,
+    on_step_update=None,
+):
     """
     Return an async function that:
       1. Creates a new agent instance (with session + publisher injected)
-      2. Calls agent.run(state)
-      3. Records input snapshot + output diff in trace_collector (if provided)
-      4. Returns the partial state update
+      2. Invokes on_step_update callback (if provided) and injects visual delay
+      3. Calls agent.run(state)
+      4. Records input snapshot + output diff in trace_collector (if provided)
+      5. Returns the partial state update
     """
+    import asyncio
     import time
     from datetime import datetime, timezone
 
@@ -90,6 +100,24 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
         return snap
 
     async def node_fn(state: SupplyChainState) -> dict[str, Any]:
+        # Determine delay for visual pacing
+        effective_delay = delay_seconds if delay_seconds is not None else get_agent_delay()
+
+        # Step start notification
+        if on_step_update:
+            try:
+                await on_step_update(
+                    agent_code=agent_cls.agent_code,
+                    agent_name=agent_cls.agent_name,
+                    status="running",
+                    state=state,
+                )
+            except Exception:
+                pass
+
+        if effective_delay > 0:
+            await asyncio.sleep(effective_delay)
+
         t_start = time.perf_counter()
         started_at = datetime.now(tz=timezone.utc).isoformat()
 
@@ -102,26 +130,41 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
         duration_ms = round((time.perf_counter() - t_start) * 1000, 1)
         finished_at = datetime.now(tz=timezone.utc).isoformat()
 
+        trace_entry = {
+            "agent_code": agent_cls.agent_code,
+            "agent_name": agent_cls.agent_name,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "duration_ms": duration_ms,
+            "status": "failed" if output.get("workflow_status") == "failed" else "completed",
+            "input": input_snapshot,
+            "output": {k: v for k, v in output.items() if k not in _SKIP_KEYS},
+            "decision": next(
+                (d for d in reversed(output.get("decisions") or [])
+                 if d.get("agent") == agent_cls.agent_code),
+                None,
+            ),
+            "events_published": [
+                e for e in (output.get("event_history") or [])
+                 if e.get("source_agent") == agent_cls.agent_code
+            ],
+        }
+
         if trace_collector is not None:
-            trace_collector.append({
-                "agent_code": agent_cls.agent_code,
-                "agent_name": agent_cls.agent_name,
-                "started_at": started_at,
-                "finished_at": finished_at,
-                "duration_ms": duration_ms,
-                "status": "failed" if output.get("workflow_status") == "failed" else "completed",
-                "input": input_snapshot,
-                "output": {k: v for k, v in output.items() if k not in _SKIP_KEYS},
-                "decision": next(
-                    (d for d in reversed(output.get("decisions") or [])
-                     if d.get("agent") == agent_cls.agent_code),
-                    None,
-                ),
-                "events_published": [
-                    e for e in (output.get("event_history") or [])
-                     if e.get("source_agent") == agent_cls.agent_code
-                ],
-            })
+            trace_collector.append(trace_entry)
+
+        # Step complete notification
+        if on_step_update:
+            try:
+                await on_step_update(
+                    agent_code=agent_cls.agent_code,
+                    agent_name=agent_cls.agent_name,
+                    status="completed",
+                    state={**state, **output},
+                    trace_entry=trace_entry,
+                )
+            except Exception:
+                pass
 
         return output
 
@@ -136,34 +179,28 @@ def _make_node(agent_cls, session_factory=None, publisher=None, trace_collector=
 async def consensus_checker(state: SupplyChainState) -> dict[str, Any]:
     """
     Evaluates the Blackboard status:
-      - If there are any active contested topics and loop_count < 2, increment loop and retry.
-      - If loops are exhausted and topics remain contested, escalate to human.
-      - Otherwise, commit consensus.
+      - Validates consensus across active blackboard topics.
+      - If active contested constraints exist, marks for executive sign-off and proceeds
+        cleanly to customer service and CEO governance without redundant full-pipeline restarts.
+      - Otherwise, commits clean consensus.
     """
     blackboard = state.get("blackboard") or {}
-    loop_count = state.get("loop_count", 0)
 
     has_contested = False
     contested_topics = []
     for topic, entries in blackboard.items():
-        for entry in entries:
-            if entry.get("status") == "contested":
-                has_contested = True
-                contested_topics.append(topic)
-                break
+        active_entries = [e for e in entries if e.get("status") in ("proposed", "contested", "accepted")]
+        if active_entries and active_entries[-1].get("status") == "contested":
+            has_contested = True
+            contested_topics.append(topic)
 
     if has_contested:
-        if loop_count < 2:
-            return {
-                "loop_count": loop_count + 1,
-                "next_node": "demand_forecast",
-            }
-        else:
-            return {
-                "workflow_status": "escalated",
-                "requires_human_approval": True,
-                "next_node": "customer_service",
-            }
+        return {
+            "workflow_status": "escalated",
+            "requires_human_approval": True,
+            "next_node": "customer_service",
+            "contested_topics": contested_topics,
+        }
 
     return {
         "workflow_status": "completed",
@@ -263,12 +300,21 @@ def build_workflow(
     session_factory=None,
     publisher=None,
     trace_collector=None,
+    delay_seconds: float | None = None,
+    on_step_update=None,
 ) -> StateGraph:
     """Assemble and compile the LangGraph StateGraph."""
     graph = StateGraph(SupplyChainState)
 
     def _node(cls):
-        return _make_node(cls, session_factory, publisher, trace_collector)
+        return _make_node(
+            cls,
+            session_factory=session_factory,
+            publisher=publisher,
+            trace_collector=trace_collector,
+            delay_seconds=delay_seconds,
+            on_step_update=on_step_update,
+        )
 
     # ── Operational Nodes ─────────────────────────────────────────────────────
     graph.add_node("order_management", _node(OrderManagementAgent))
@@ -372,12 +418,20 @@ def build_workflow(
     return graph
 
 
-def compile_workflow(session_factory=None, publisher=None, trace_collector=None):
+def compile_workflow(
+    session_factory=None,
+    publisher=None,
+    trace_collector=None,
+    delay_seconds: float | None = None,
+    on_step_update=None,
+):
     """Build and compile the workflow graph with in-memory checkpointing."""
     graph = build_workflow(
         session_factory=session_factory,
         publisher=publisher,
         trace_collector=trace_collector,
+        delay_seconds=delay_seconds,
+        on_step_update=on_step_update,
     )
     checkpointer = MemorySaver()
     return graph.compile(checkpointer=checkpointer)

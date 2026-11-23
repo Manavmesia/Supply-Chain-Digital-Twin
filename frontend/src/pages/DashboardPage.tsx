@@ -117,79 +117,79 @@ export const DashboardPage: React.FC = () => {
       <KPIGrid kpis={dashboard?.kpis ?? null} loading={loading} />
 
       {/* Charts / Distribution row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         {/* Orders by status */}
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <BarChart3 size={15} style={{ color: '#64748b' }} />
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+            <BarChart3 size={16} style={{ color: 'var(--c-text-muted)' }} />
+            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--c-text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: 'var(--track-wide)' }}>
               Fulfillment Pipeline by Status
             </h3>
           </div>
 
           {loading ? (
-            <div style={{ height: '140px', background: '#f8fafc', borderRadius: 'var(--radius-md)' }} />
+            <div style={{ height: '140px', background: 'var(--c-bg-subtle)', borderRadius: 'var(--radius-md)' }} />
           ) : dashboard?.orders_by_status ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               {Object.entries(dashboard.orders_by_status).map(([st, count]) => {
                 const total = Object.values(dashboard.orders_by_status).reduce((a, b) => a + b, 0);
                 const pct = total > 0 ? (count / total) * 100 : 0;
                 return (
                   <div key={st}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                      <span style={{ color: '#475569', textTransform: 'capitalize' }}>{st.replace('_', ' ')}</span>
-                      <span style={{ color: '#0f172a', fontWeight: 600, fontFamily: 'monospace' }}>{count} ({Math.round(pct)}%)</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
+                      <span style={{ color: 'var(--c-text-secondary)', textTransform: 'capitalize' }}>{st.replace('_', ' ')}</span>
+                      <span style={{ color: 'var(--c-text-primary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{count} ({Math.round(pct)}%)</span>
                     </div>
-                    <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: st === 'delivered' ? '#059669' : st === 'in_transit' ? '#2563eb' : '#d97706', borderRadius: '9999px' }} />
+                    <div style={{ height: '6px', background: 'var(--c-bg-subtle)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: st === 'delivered' ? 'var(--c-success)' : st === 'in_transit' ? 'var(--c-info)' : 'var(--c-warning)', borderRadius: 'var(--radius-full)' }} />
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+            <div style={{ textAlign: 'center', padding: '32px', color: 'var(--c-text-muted)' }}>
               <Inbox size={20} style={{ margin: '0 auto 6px' }} />
-              <p style={{ margin: 0, fontSize: '12px' }}>No order distribution data</p>
+              <p style={{ margin: 0, fontSize: 'var(--text-xs)' }}>No order distribution data</p>
             </div>
           )}
         </div>
 
         {/* Inventory health */}
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <Layers size={15} style={{ color: '#64748b' }} />
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+            <Layers size={16} style={{ color: 'var(--c-text-muted)' }} />
+            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--c-text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: 'var(--track-wide)' }}>
               Warehouse Inventory Distribution
             </h3>
           </div>
 
           {loading ? (
-            <div style={{ height: '140px', background: '#f8fafc', borderRadius: 'var(--radius-md)' }} />
+            <div style={{ height: '140px', background: 'var(--c-bg-subtle)', borderRadius: 'var(--radius-md)' }} />
           ) : dashboard?.inventory_health ? (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Healthy SKUs</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#059669', fontFamily: 'monospace', marginTop: '2px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-2-5)', marginBottom: 'var(--space-4)' }}>
+                <div style={{ background: 'var(--c-bg-subtle)', padding: 'var(--space-3) var(--space-3-5)', borderRadius: 'var(--radius-md)', border: '1px solid var(--c-border)' }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 'var(--track-wide)' }}>Healthy SKUs</div>
+                  <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--c-success)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
                     {dashboard.inventory_health.healthy}
                   </div>
                 </div>
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Low Stock</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#d97706', fontFamily: 'monospace', marginTop: '2px' }}>
+                <div style={{ background: 'var(--c-bg-subtle)', padding: 'var(--space-3) var(--space-3-5)', borderRadius: 'var(--radius-md)', border: '1px solid var(--c-border)' }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 'var(--track-wide)' }}>Low Stock</div>
+                  <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--c-warning)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
                     {dashboard.inventory_health.low_stock}
                   </div>
                 </div>
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Out of Stock</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#dc2626', fontFamily: 'monospace', marginTop: '2px' }}>
+                <div style={{ background: 'var(--c-bg-subtle)', padding: 'var(--space-3) var(--space-3-5)', borderRadius: 'var(--radius-md)', border: '1px solid var(--c-border)' }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 'var(--track-wide)' }}>Out of Stock</div>
+                  <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--c-danger)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
                     {dashboard.inventory_health.out_of_stock}
                   </div>
                 </div>
               </div>
 
-              <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '9999px', overflow: 'hidden' }}>
+              <div style={{ height: '6px', background: 'var(--c-bg-subtle)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
                 <div
                   style={{
                     height: '100%',
@@ -197,12 +197,12 @@ export const DashboardPage: React.FC = () => {
                       (dashboard.inventory_health.healthy /
                         Math.max(dashboard.inventory_health.total_locations, 1)) * 100
                     )}%`,
-                    background: '#059669',
-                    borderRadius: '9999px',
+                    background: 'var(--c-success)',
+                    borderRadius: 'var(--radius-full)',
                   }}
                 />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', marginTop: 'var(--space-2)' }}>
                 <span>SKU Coverage Target: &gt;95%</span>
                 <span>{dashboard.inventory_health.total_locations} SKU location checkpoints</span>
               </div>

@@ -5,9 +5,10 @@ Revises:
 Create Date: 2026-07-28 12:08:30.594996
 
 """
+import os
 from collections.abc import Sequence
-
 from alembic import op
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = '922ae13073d0'
@@ -17,16 +18,27 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    import os
-    import subprocess
-    # Locate the sql/01_schema.sql DDL script
+    """Upgrade schema using bound connection rather than host-dependent subprocess."""
     file_path = "sql/01_schema.sql"
     if not os.path.exists(file_path):
         file_path = "../sql/01_schema.sql"
-        
-    # Execute DDL using native psql tool to support triggers and enums correctly
-    subprocess.run(["psql", "-d", "supply_chain", "-f", file_path], check=True)
+    if not os.path.exists(file_path):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.abspath(os.path.join(current_dir, "../../../sql/01_schema.sql"))
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        ddl = f.read()
+
+    connection = op.get_bind()
+    raw_conn = getattr(connection, "connection", None)
+    dbapi_conn = getattr(raw_conn, "dbapi_connection", raw_conn)
+
+    if hasattr(dbapi_conn, "run_async"):
+        dbapi_conn.run_async(lambda c: c.execute(ddl))
+    elif hasattr(dbapi_conn, "executescript"):
+        dbapi_conn.executescript(ddl)
+    else:
+        connection.execute(text(ddl))
 
 
 def downgrade() -> None:

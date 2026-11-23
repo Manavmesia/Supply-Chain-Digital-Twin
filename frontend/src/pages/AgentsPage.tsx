@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { RotateCcw, Bot, X } from 'lucide-react';
+import { RotateCcw, Bot, X, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { analyticsApi } from '../services/api';
 import { AgentPipeline } from '../components/dashboard/AgentPipeline';
@@ -22,6 +22,11 @@ export const AgentsPage: React.FC = () => {
       const res = await analyticsApi.getAgents();
       if (isMountedRef.current) {
         setAgents(res.agents);
+        setSelectedAgent((prev) => {
+          if (!prev) return null;
+          const match = res.agents.find((a) => a.code === prev.code);
+          return match || prev;
+        });
       }
     } catch (err) {
       console.error('Agents load error:', err);
@@ -39,6 +44,11 @@ export const AgentsPage: React.FC = () => {
     analyticsApi.getAgents().then((res) => {
       if (!ignore && isMountedRef.current) {
         setAgents(res.agents);
+        setSelectedAgent((prev) => {
+          if (!prev) return null;
+          const match = res.agents.find((a) => a.code === prev.code);
+          return match || prev;
+        });
         setLoading(false);
       }
     }).catch((err) => {
@@ -88,6 +98,14 @@ export const AgentsPage: React.FC = () => {
           </p>
         </div>
         <div className="page-actions">
+          <Link
+            to="/workflows"
+            className="btn-primary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Activity size={14} />
+            Live Workflow Visualizer
+          </Link>
           <button
             onClick={() => { setLoading(true); fetchAgents(false); }}
             disabled={loading}
@@ -128,12 +146,12 @@ export const AgentsPage: React.FC = () => {
       <AgentPipeline agents={agents} loading={loading} />
 
       {/* Agent cards grid */}
-      <div style={{ marginTop: '28px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+      <div style={{ marginTop: 'var(--space-6)' }}>
+        <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--c-text-primary)', letterSpacing: 'var(--track-snug)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <Bot size={16} className="text-slate-400" />
           <span>Active Enterprise Agent Roster</span>
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
           {loading
             ? Array.from({ length: 18 }).map((_, i) => (
                 <div key={i} className="skeleton" style={{ height: '120px', borderRadius: 'var(--radius-lg)' }} />
@@ -149,7 +167,7 @@ export const AgentsPage: React.FC = () => {
                       cursor: 'pointer',
                       borderLeft: `4px solid ${style.color}`,
                       transition: 'all 0.2s ease',
-                      padding: '20px',
+                      padding: 'var(--space-5)',
                       marginBottom: 0,
                     }}
                     onClick={() => setSelectedAgent(isSelected ? null : agent)}
@@ -157,13 +175,14 @@ export const AgentsPage: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                       <span
                         style={{
-                          fontSize: '11px',
+                          fontSize: 'var(--text-xs)',
+                          fontFamily: 'var(--font-mono)',
                           fontWeight: 700,
                           padding: '2px 8px',
-                          borderRadius: '9999px',
+                          borderRadius: 'var(--radius-full)',
                           color: style.color,
                           border: `1px solid ${style.color}44`,
-                          background: '#ffffff',
+                          background: 'var(--c-bg-card)',
                         }}
                       >
                         {agent.code}
@@ -173,10 +192,10 @@ export const AgentsPage: React.FC = () => {
                           background: style.bg,
                           color: style.color,
                           border: `1px solid ${style.color}44`,
-                          fontSize: '11px',
+                          fontSize: 'var(--text-xs)',
                           fontWeight: 600,
                           padding: '2px 8px',
-                          borderRadius: '9999px',
+                          borderRadius: 'var(--radius-full)',
                           textTransform: 'capitalize',
                         }}
                       >

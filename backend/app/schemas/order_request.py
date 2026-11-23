@@ -24,6 +24,7 @@ class OrderWorkflowRequest(BaseModel):
     customer_id: UUID
     items: list[OrderItemRequest] = Field(min_length=1, max_length=100, description="Order must contain 1-100 items")
     order_id: str | None = None
+    delay_seconds: float | None = Field(default=None, ge=0.0, le=10.0, description="Optional visual delay per agent")
 
     @field_validator("items")
     @classmethod

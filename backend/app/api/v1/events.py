@@ -40,6 +40,7 @@ class ManualEventRequest(BaseModel):
     source_agent: str = Field(default="manual", min_length=1, max_length=50)
     payload: dict[str, Any] = Field(default_factory=dict)
     workflow_id: str | None = Field(default=None, max_length=100)
+    delay_seconds: float | None = Field(default=None, ge=0.0, le=10.0, description="Optional delay per agent call")
 
 
 class EventResponse(BaseModel):
@@ -98,11 +99,12 @@ async def inject_event(
     # Autonomous Multi-Agent Dispatch & Closed-Loop Remediation
     remediation: dict[str, Any] = {}
     try:
-        remediation = await dispatch_event_remediation(event_record)
+        remediation = await dispatch_event_remediation(event_record, delay_seconds=request.delay_seconds)
         event_record["status"] = "remediated"
         event_record["subscribers"] = remediation.get("subscribers", [])
         event_record["remediation_summary"] = remediation.get("remediation_summary", "")
         event_record["autonomous_actions"] = remediation.get("autonomous_actions", [])
+        event_record["remediation_trace"] = remediation.get("remediation_trace", [])
         persistence.save_event(event_record)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Event dispatcher remediation error", event_id=event_id, error=str(exc))
@@ -125,6 +127,32 @@ async def inject_event(
         "remediation_status": "remediated",
         "remediation_summary": remediation.get("remediation_summary", ""),
         "autonomous_actions": remediation.get("autonomous_actions", []),
+        "remediation_trace": remediation.get("remediation_trace", []),
+    }
+
+
+@router.get(
+    "/{event_id}/trace",
+    summary="Get multi-agent remediation trace for an event",
+)
+async def get_event_trace(event_id: str) -> dict[str, Any]:
+    """Retrieve the per-agent remediation call trace for a specific event."""
+    ev = persistence.get_event(event_id)
+    if not ev:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Event '{event_id}' not found",
+        )
+    return {
+        "event_id": ev["event_id"],
+        "event_type": ev["event_type"],
+        "source_agent": ev["source_agent"],
+        "status": ev["status"],
+        "timestamp": ev["timestamp"],
+        "subscribers": ev.get("subscribers", []),
+        "remediation_summary": ev.get("remediation_summary", ""),
+        "autonomous_actions": ev.get("autonomous_actions", []),
+        "remediation_trace": ev.get("remediation_trace", []),
     }
 
 

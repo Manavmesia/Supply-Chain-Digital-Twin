@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -114,7 +115,20 @@ async def lifespan(app: FastAPI):
         rabbitmq=mq_status,
     )
 
+    # Initialize shared RabbitMQ publisher (with graceful offline fallback)
+    try:
+        from app.core.rabbitmq import connect_rabbitmq
+        await connect_rabbitmq()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("RabbitMQ publisher connection failed at startup (offline mode)", error=str(exc))
+
     yield
+
+    try:
+        from app.core.rabbitmq import disconnect_rabbitmq
+        await disconnect_rabbitmq()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("RabbitMQ publisher disconnection error at shutdown", error=str(exc))
 
     logger.info("Shutting down AI Supply Chain Digital Twin")
 
@@ -156,17 +170,21 @@ async def security_headers_middleware(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error("Unhandled server error", path=request.url.path, error=str(exc))
+    error_id = str(uuid.uuid4())
+    logger.error("Unhandled server error", path=request.url.path, error=str(exc), error_id=error_id, exc_info=True)
     origin = request.headers.get("origin")
     # Only echo origin if it matches local/trusted domains
     allowed_origin = "*"
     if origin and ("localhost" in origin or "127.0.0.1" in origin):
         allowed_origin = origin
 
-    error_msg = str(exc)
-    # Sanitize sensitive database credentials/connection strings if present
-    if "postgresql" in error_msg.lower() or "password" in error_msg.lower():
-        error_msg = "Database communication error"
+    if settings.ENVIRONMENT.lower() == "production":
+        error_msg = f"An internal server error occurred. Reference ID: {error_id}"
+    else:
+        error_msg = str(exc)
+        # Sanitize sensitive database credentials/connection strings if present
+        if "postgresql" in error_msg.lower() or "password" in error_msg.lower():
+            error_msg = "Database communication error"
 
     headers = {"Access-Control-Allow-Origin": allowed_origin}
     if allowed_origin != "*":
@@ -174,7 +192,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     return JSONResponse(
         status_code=500,
-        content={"detail": error_msg},
+        content={"detail": error_msg, "error_id": error_id},
         headers=headers,
     )
 
@@ -196,6 +214,7 @@ app.include_router(simulate_router.router,   prefix=settings.API_V1_STR)
 # ── Health endpoint ───────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["health"])
+@app.get("/api/v1/health", tags=["health"])
 async def health_check() -> dict[str, Any]:
     """
     Real dependency health probe — checks DB, Redis, and RabbitMQ.

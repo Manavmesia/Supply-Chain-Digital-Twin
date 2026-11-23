@@ -22,7 +22,7 @@ dependencies = [
     "langchain-groq>=1.0.0",
     "langgraph>=0.2.0",
     "langchain-core>=0.2.0",
-    "python-jose[cryptography]>=3.3.0",
+    "pyjwt[crypto]>=2.8.0",
     "python-multipart>=0.0.9",
 ]
 

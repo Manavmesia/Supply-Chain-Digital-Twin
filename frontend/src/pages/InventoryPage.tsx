@@ -38,7 +38,7 @@ export const InventoryPage: React.FC = () => {
       const [invRes, sumRes, repRes] = await Promise.all([
         inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
         inventoryApi.getSummary(),
-        inventoryApi.getReplenishmentOrders({ limit: 50 }),
+        inventoryApi.getReplenishmentOrders({ limit: 50, status: 'in_transit' }),
       ]);
       if (isMountedRef.current) {
         setItems(invRes.items);
@@ -96,7 +96,7 @@ export const InventoryPage: React.FC = () => {
     Promise.all([
       inventoryApi.list({ limit: 100, low_stock_only: lowOnly }),
       inventoryApi.getSummary(),
-      inventoryApi.getReplenishmentOrders({ limit: 50 }),
+      inventoryApi.getReplenishmentOrders({ limit: 50, status: 'in_transit' }),
     ]).then(([invRes, sumRes, repRes]) => {
       if (!ignore && isMountedRef.current) {
         setItems(invRes.items);
@@ -164,7 +164,7 @@ export const InventoryPage: React.FC = () => {
             className="btn-primary"
           >
             <Sparkles size={13} className={isScanning ? 'animate-spin' : ''} />
-            {isScanning ? 'Scanning...' : 'Scan Stock Levels'}
+            {isScanning ? 'Scanning...' : 'Scan Stock'}
           </button>
           <button
             onClick={handleAutoHealAll}
@@ -173,7 +173,7 @@ export const InventoryPage: React.FC = () => {
             style={{ color: '#059669', borderColor: '#a7f3d0', background: '#ecfdf5', fontWeight: 600 }}
           >
             <CheckCircle2 size={14} className="text-emerald-600" />
-            Receive Inbound Stock
+            Receive Stock
           </button>
         </div>
       </div>
@@ -190,7 +190,7 @@ export const InventoryPage: React.FC = () => {
               className="btn-secondary"
               style={{ fontSize: '11px', padding: '3px 10px', height: '28px', whiteSpace: 'nowrap' }}
             >
-              {lowOnly ? 'View All SKUs' : 'Filter to Deficit SKUs'}
+              {lowOnly ? 'Show All' : 'Show Deficits'}
             </button>
             <button
               onClick={() => setScanMessage(null)}
@@ -309,39 +309,43 @@ export const InventoryPage: React.FC = () => {
                       <td>
                         <div>
                           <span style={{ fontWeight: 600 }}>{item.product_name}</span>
-                          <div className="tag" style={{ marginTop: '2px', fontSize: '0.7rem' }}>
+                          <div className="tag" style={{ marginTop: '2px', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
                             {item.sku}
                           </div>
                         </div>
                       </td>
                       <td>
                         <div>
-                          <span>{item.warehouse_name}</span>
-                          <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                          <span style={{ fontWeight: 500 }}>{item.warehouse_name}</span>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)' }}>
                             {item.warehouse_city}
                           </div>
                         </div>
                       </td>
-                      <td>{item.available_qty.toLocaleString()}</td>
-                      <td style={{ color: '#f59e0b' }}>{item.reserved_qty.toLocaleString()}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{item.available_qty.toLocaleString()}</td>
+                      <td style={{ color: 'var(--c-warning)', fontFamily: 'var(--font-mono)' }}>{item.reserved_qty.toLocaleString()}</td>
                       <td>
-                        <span style={{ color: item.net_available < item.safety_stock ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                        <span style={{ color: item.net_available < item.safety_stock ? 'var(--c-danger)' : 'var(--c-success)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
                           {item.net_available.toLocaleString()}
                         </span>
                       </td>
-                      <td style={{ color: '#64748b' }}>{item.safety_stock.toLocaleString()}</td>
+                      <td style={{ color: 'var(--c-text-muted)', fontFamily: 'var(--font-mono)' }}>{item.safety_stock.toLocaleString()}</td>
                       <td>
                         <span
                           style={{
-                            fontSize: '11px',
+                            fontSize: 'var(--text-xs)',
                             fontWeight: 600,
                             padding: '3px 10px',
-                            borderRadius: '9999px',
-                            background: `${sc.color}22`,
+                            borderRadius: 'var(--radius-full)',
+                            background: `${sc.color}18`,
                             color: sc.color,
                             border: `1px solid ${sc.color}44`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
                           }}
                         >
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: sc.color }} />
                           {sc.label}
                         </span>
                       </td>
@@ -386,12 +390,12 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
-              Inbound Replenishment & Purchase Orders
+              Inbound Replenishment
             </h3>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '3px 0 0 0' }}>
               {replenishmentOrders.length > 0
-                ? `${replenishmentOrders.length} inbound purchase order${replenishmentOrders.length > 1 ? 's' : ''} currently active to replenish safety stock buffers.`
-                : 'All warehouse locations are currently operating within target safety buffers.'}
+                ? `${replenishmentOrders.length} purchase order${replenishmentOrders.length > 1 ? 's' : ''} in transit.`
+                : 'All warehouses operating within safety buffers.'}
             </p>
           </div>
         </div>
@@ -408,7 +412,7 @@ export const InventoryPage: React.FC = () => {
             fontSize: '12px',
           }}
         >
-          <span>Manage Inbound POs in Procurement</span>
+          <span>View in Procurement</span>
           <ArrowRight size={13} />
         </Link>
       </div>

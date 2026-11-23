@@ -40,32 +40,32 @@ const getExceptionSummary = (ev: EventRecord): {
     case 'InventoryLow':
     case 'WarehouseStockout':
       return {
-        title: `Low Inventory Deficit: ${p.product_name || p.sku || 'SKU'}`,
-        details: `Available: ${p.available_qty ?? 0} units vs Safety Buffer: ${p.safety_stock ?? 0} units at ${p.warehouse_name || 'Warehouse'}`,
-        linkText: 'View in Inventory',
+        title: `Low Stock: ${p.product_name || p.sku || 'SKU'}`,
+        details: `Stock: ${p.available_qty ?? 0} / Buffer: ${p.safety_stock ?? 0} at ${p.warehouse_name || 'Warehouse'}`,
+        linkText: 'View Inventory',
         linkTo: '/inventory',
-        secondaryLinkText: 'Check Replenishment PO',
+        secondaryLinkText: 'View PO',
         secondaryLinkTo: '/procurement',
       };
     case 'DeliveryDelayed':
     case 'CarrierDelayed':
       return {
-        title: `Transit Bottleneck: ${p.location || 'Transit Corridor'}`,
-        details: typeof p.description === 'string' ? p.description : 'Shipment route experienced transit delay and dynamic rerouting is underway.',
-        linkText: 'Track Shipments',
+        title: `Delay: ${p.location || 'Corridor'}`,
+        details: typeof p.description === 'string' ? p.description : 'Shipment delayed; rerouting underway.',
+        linkText: 'Track Shipment',
         linkTo: '/shipments',
       };
     case 'QualityAlertRaised':
       return {
-        title: `Quality Defect: ${p.defect_type || 'Defect detected'}`,
-        details: typeof p.defect_type === 'string' ? `Lot inspection flagged: ${p.defect_type} on ${p.product_name || 'batch'}.` : `Lot inspection flagged for ${p.product_name || 'product batch'}.`,
+        title: `Quality Alert: ${p.defect_type || 'Defect'}`,
+        details: typeof p.defect_type === 'string' ? `Flagged: ${p.defect_type} on ${p.product_name || 'batch'}.` : `Inspection flagged for ${p.product_name || 'batch'}.`,
         linkText: 'View Orders',
         linkTo: '/orders',
       };
     default:
       return {
-        title: `${ev.event_type} Exception`,
-        details: typeof p.description === 'string' ? p.description : (typeof p.reason === 'string' ? p.reason : 'Operational bottleneck detected and placed under multi-agent mitigation.'),
+        title: `${ev.event_type}`,
+        details: typeof p.description === 'string' ? p.description : (typeof p.reason === 'string' ? p.reason : 'Exception reported.'),
       };
   }
 };
@@ -208,6 +208,14 @@ export const ControlTowerPage: React.FC = () => {
           </p>
         </div>
         <div className="page-actions">
+          <Link
+            to="/workflows?mode=events"
+            className="btn-secondary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Activity className="w-3.5 h-3.5 text-blue-500" />
+            Live Event Visualizer
+          </Link>
           <button
             onClick={handleAutonomousScan}
             disabled={isScanning}
@@ -271,14 +279,14 @@ export const ControlTowerPage: React.FC = () => {
                   fontWeight: 700,
                 }}
               >
-                {filterExceptionsOnly ? 'FILTERED ON' : 'CLICK TO FILTER'}
+                {filterExceptionsOnly ? 'Filtered' : 'Filter'}
               </span>
             )}
           </div>
           <div className="stat-value" style={{ color: exceptionCount > 0 ? '#dc2626' : '#059669' }}>
             {loading ? '—' : exceptionCount}
           </div>
-          <div className="stat-sub">{exceptionCount > 0 ? 'Bottlenecks under mitigation' : 'All lanes nominal'}</div>
+          <div className="stat-sub">{exceptionCount > 0 ? 'Active exceptions' : 'All lanes nominal'}</div>
         </div>
 
         <div className="stat-card">
@@ -286,15 +294,15 @@ export const ControlTowerPage: React.FC = () => {
           <div className="stat-value" style={{ color: '#059669' }}>
             {loading ? '—' : remediatedExceptions.length}
           </div>
-          <div className="stat-sub">Autonomous resolutions completed</div>
+          <div className="stat-sub">Resolved</div>
         </div>
 
         <div className="stat-card">
           <div className="stat-label">SUPERVISED NODES</div>
           <div className="stat-value" style={{ color: '#2563eb' }}>
-            {loading ? '—' : `${reportingNodes.length || 4} Active`}
+            {loading ? '—' : reportingNodes.length || 4}
           </div>
-          <div className="stat-sub">Live telemetry reporting sources</div>
+          <div className="stat-sub">Active sources</div>
         </div>
       </div>
 
@@ -314,7 +322,7 @@ export const ControlTowerPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertTriangle className="w-5 h-5 text-amber-600" />
               <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#92400e' }}>
-                Active Exceptions ({activeExceptions.length} Bottleneck{activeExceptions.length > 1 ? 's' : ''} Under Autonomous Mitigation)
+                Active Exceptions ({activeExceptions.length})
               </h3>
             </div>
             <button
@@ -337,40 +345,40 @@ export const ControlTowerPage: React.FC = () => {
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2-5)' }}>
             {activeExceptions.map((ex) => {
               const info = getExceptionSummary(ex);
               return (
                 <div
                   key={ex.event_id}
                   style={{
-                    background: '#ffffff',
-                    border: '1px solid #fef3c7',
-                    borderRadius: '6px',
-                    padding: '12px 16px',
+                    background: 'var(--c-bg-card)',
+                    border: '1px solid var(--c-warning-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-3) var(--space-4)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     flexWrap: 'wrap',
-                    gap: '12px',
+                    gap: 'var(--space-3)',
                   }}
                 >
                   <div style={{ flex: 1, minWidth: '240px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--c-text-primary)' }}>
                         {info.title}
                       </span>
-                      <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                      <span style={{ fontSize: 'var(--text-xs)', background: 'var(--c-warning-bg)', color: 'var(--c-warning)', border: '1px solid var(--c-warning-border)', padding: '1px 8px', borderRadius: 'var(--radius-full)', fontWeight: 600 }}>
                         Source: {ex.source_agent}
                       </span>
-                      <span style={{ fontSize: '11px', background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                      <span style={{ fontSize: 'var(--text-xs)', background: 'var(--c-success-bg)', color: 'var(--c-success)', border: '1px solid var(--c-success-border)', padding: '1px 8px', borderRadius: 'var(--radius-full)', fontWeight: 600 }}>
                         Mitigation Active
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--c-text-secondary)', marginTop: '4px' }}>
                       {info.details}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>
                       Event ID: {ex.event_id} • Reported {formatTimeAgo(ex.timestamp)}
                     </div>
                   </div>
@@ -379,8 +387,7 @@ export const ControlTowerPage: React.FC = () => {
                     {info.linkTo && (
                       <Link
                         to={info.linkTo}
-                        className="btn-secondary"
-                        style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        className="btn-secondary btn-sm"
                       >
                         <span>{info.linkText}</span>
                         <ArrowRight className="w-3 h-3" />
@@ -389,8 +396,7 @@ export const ControlTowerPage: React.FC = () => {
                     {info.secondaryLinkTo && (
                       <Link
                         to={info.secondaryLinkTo}
-                        className="btn-primary"
-                        style={{ fontSize: '11px', padding: '4px 10px', height: '28px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        className="btn-primary btn-sm"
                       >
                         <span>{info.secondaryLinkText}</span>
                         <ArrowRight className="w-3 h-3" />
@@ -405,11 +411,11 @@ export const ControlTowerPage: React.FC = () => {
       )}
 
       {/* Incident Stream & Telemetry Log */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="card" style={{ padding: 'var(--space-5)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <Activity className="w-4 h-4 text-emerald-600" />
-            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#0f172a' }}>
+            <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 600, margin: 0, color: 'var(--c-text-primary)', letterSpacing: 'var(--track-snug)' }}>
               Live Telemetry & Exception Stream
             </h2>
           </div>
@@ -558,13 +564,19 @@ export const ControlTowerPage: React.FC = () => {
 
       {/* Declare Exception Modal */}
       {showDeclareModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div
+          onClick={() => setShowDeclareModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+          >
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
-              Declare Supply Chain Exception
+              Declare Exception
             </h2>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 16px 0' }}>
-              Broadcasts an operational incident across fulfillment pipelines for immediate automated remediation.
+              Broadcast an operational incident for automated agent remediation.
             </p>
 
             <form onSubmit={handleDeclareSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

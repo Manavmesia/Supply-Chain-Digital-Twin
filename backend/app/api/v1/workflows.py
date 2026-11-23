@@ -27,6 +27,7 @@ from app.api.v1.auth import require_authenticated_role
 from app.core import persistence
 from app.core.catalog import BASELINE_CUSTOMERS, BASELINE_PRODUCTS
 from app.core.database import AsyncSessionLocal
+from app.core.execution_config import get_agent_delay, set_agent_delay
 from app.core.standby_session import create_standby_session, is_database_connected
 from app.events.dispatcher import dispatch_event
 from app.graph.state import SupplyChainState
@@ -59,6 +60,8 @@ def _save_workflow_state(
         _WORKFLOW_STORE.pop(oldest_key, None)
         _TRACE_STORE.pop(oldest_key, None)
     _WORKFLOW_STORE[wf_id] = state
+    if trace is not None:
+        _TRACE_STORE[wf_id] = trace
     try:
         current_trace = trace if trace is not None else _TRACE_STORE.get(wf_id)
         persistence.save_workflow(wf_id, state, current_trace)
@@ -124,6 +127,23 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
         trace = persistence.get_workflow_trace(workflow_id)
         _TRACE_STORE[workflow_id] = trace
 
+    effective_delay = getattr(request, "delay_seconds", None) if request else None
+
+    async def _on_step_update(agent_code: str, agent_name: str, status: str, state: dict, trace_entry: dict | None = None):
+        step_trace = list(trace)
+        if trace_entry and trace_entry not in step_trace:
+            step_trace.append(trace_entry)
+        _save_workflow_state(
+            workflow_id,
+            {
+                **state,
+                "workflow_status": "running",
+                "current_node": agent_code,
+                "active_agents": [agent_code] if status == "running" else [],
+            },
+            step_trace,
+        )
+
     try:
         config = {"configurable": {"thread_id": workflow_id}}
         final_state: dict[str, Any] = {}
@@ -138,6 +158,8 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
                     compiled = compile_workflow(
                         session_factory=_session_factory,
                         trace_collector=trace,
+                        delay_seconds=effective_delay,
+                        on_step_update=_on_step_update,
                     )
                     final_state = await compiled.ainvoke(initial_state, config=config)
 
@@ -172,18 +194,40 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
             compiled = compile_workflow(
                 session_factory=_standby_factory,
                 trace_collector=trace,
+                delay_seconds=effective_delay,
+                on_step_update=_on_step_update,
             )
             final_state = await compiled.ainvoke(fallback_initial_state, config=config)
+            is_escalated = (
+                bool(final_state.get("requires_human_approval"))
+                or final_state.get("workflow_status") == "escalated"
+                or (final_state.get("executive_decision") or {}).get("approval_tier") == "human_required"
+            )
             if not final_state.get("errors") and final_state.get("workflow_status") != "failed":
-                if final_state.get("workflow_status") != "escalated":
+                if is_escalated:
+                    final_state["workflow_status"] = "escalated"
+                    final_state["requires_human_approval"] = True
+                else:
                     final_state["workflow_status"] = "completed"
 
+        # Clear active agents and current node upon workflow completion
+        final_state["active_agents"] = []
+        final_state["current_node"] = None
         _save_workflow_state(workflow_id, final_state, trace)
 
         # Synchronize order and shipment database records to reflect final multi-agent decisions
         final_order = final_state.get("order") or {}
         order_id = final_order.get("order_id")
         order_status = final_order.get("status")
+        is_escalated = (
+            bool(final_state.get("requires_human_approval"))
+            or final_state.get("workflow_status") == "escalated"
+            or (final_state.get("executive_decision") or {}).get("approval_tier") == "human_required"
+        )
+        if is_escalated:
+            order_status = "pending"
+            final_order["status"] = "pending"
+            final_state["order"] = final_order
         if order_id and order_status:
             persistence.update_order_status(order_id, order_status)
 
@@ -191,10 +235,11 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
         if order_id and final_shipment:
             shp = persistence.get_shipment_by_order(order_id)
             if shp:
+                shipment_status = "pending" if is_escalated else final_shipment.get("status", "delivered")
                 persistence.update_shipment_status(
                     shp["shipment_id"],
-                    final_shipment.get("status", "delivered"),
-                    final_shipment.get("current_location") or "Destination Fulfilled",
+                    shipment_status,
+                    "Held at Distribution Center Pending Executive Sign-off" if is_escalated else (final_shipment.get("current_location") or "Destination Fulfilled"),
                 )
 
         logger.info(
@@ -209,8 +254,10 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
         _save_workflow_state(workflow_id, {
             **initial_state,
             "workflow_status": "failed",
+            "active_agents": [],
+            "current_node": None,
             "errors": [{"error": str(exc)}],
-        })
+        }, trace)
 
 
 
@@ -218,15 +265,63 @@ async def _run_workflow_inner(workflow_id: str, correlation_id: str, request: Or
 # Endpoints
 # ---------------------------------------------------------------------------
 
+class WorkflowConfigPayload(BaseModel):
+    delay_seconds: float = Field(ge=0.0, le=10.0, description="Delay in seconds between agent calls")
+
+
+@router.get("/config", summary="Get execution pacing and visual delay configuration")
+@router.get("/config/", include_in_schema=False)
+async def get_workflow_config() -> dict[str, Any]:
+    """Return the current visual execution delay (in seconds) between agent calls."""
+    return {
+        "delay_seconds": get_agent_delay(),
+        "status": "active",
+        "description": "Visual delay injected between multi-agent pipeline steps",
+    }
+
+
+@router.post("/config", summary="Set execution pacing and visual delay configuration")
+@router.post("/config/", include_in_schema=False)
+async def update_workflow_config(
+    payload: WorkflowConfigPayload,
+) -> dict[str, Any]:
+    """Update the global visual delay (in seconds) between agent calls."""
+    new_delay = set_agent_delay(payload.delay_seconds)
+    return {
+        "delay_seconds": new_delay,
+        "status": "updated",
+        "message": f"Agent execution delay set to {new_delay:.2f}s",
+    }
+
+
+@router.post(
+    "",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=WorkflowAcceptedResponse,
+    summary="Start a new order fulfilment workflow",
+)
+@router.post(
+    "/",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=WorkflowAcceptedResponse,
+    include_in_schema=False,
+)
 @router.post(
     "/orders",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=WorkflowAcceptedResponse,
     summary="Start a new order fulfilment workflow",
 )
+@router.post(
+    "/orders/",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=WorkflowAcceptedResponse,
+    include_in_schema=False,
+)
 async def start_order_workflow(
     request: OrderWorkflowRequest,
     background_tasks: BackgroundTasks,
+    current_user: Annotated[dict | None, Depends(require_authenticated_role("admin", "operator", "analyst"))] = None,
 ) -> WorkflowAcceptedResponse:
     """
     Accepts a customer order and starts the supply chain workflow.
@@ -553,8 +648,8 @@ class ExecutiveApprovalRequest(BaseModel):
 )
 async def approve_workflow(
     workflow_id: str,
+    background_tasks: BackgroundTasks,
     body: ExecutiveApprovalRequest | None = None,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     _user: Annotated[dict, Depends(require_authenticated_role("admin"))] = None,
 ) -> dict[str, Any]:
     """Approves an escalated workflow requiring human review and resumes execution."""
@@ -599,6 +694,17 @@ async def approve_workflow(
         "timestamp": now_iso,
     })
     state["event_history"] = events
+
+    order_id = (state.get("order") or {}).get("order_id")
+    if order_id:
+        persistence.update_order_status(order_id, "delivered")
+        shp = persistence.get_shipment_by_order(order_id)
+        if shp:
+            persistence.update_shipment_status(
+                shipment_id=shp["shipment_id"],
+                status="delivered",
+                current_location="Destination Fulfilled",
+            )
 
     _save_workflow_state(workflow_id, state)
 
@@ -667,7 +773,29 @@ async def reject_workflow(
     })
     state["event_history"] = events
 
+    order_id = (state.get("order") or {}).get("order_id")
+    if order_id:
+        persistence.update_order_status(order_id, "delivered")
+        shp = persistence.get_shipment_by_order(order_id)
+        if shp:
+            persistence.update_shipment_status(
+                shipment_id=shp["shipment_id"],
+                status="delivered",
+                current_location="Destination Fulfilled",
+            )
+
     _save_workflow_state(workflow_id, state)
+
+    order_id = (state.get("order") or {}).get("order_id")
+    if order_id:
+        persistence.update_order_status(order_id, "cancelled")
+        shp = persistence.get_shipment_by_order(order_id)
+        if shp:
+            persistence.update_shipment_status(
+                shipment_id=shp["shipment_id"],
+                status="cancelled",
+                current_location="Held / Cancelled at Dispatch Origin",
+            )
 
     return {
         "workflow_id": workflow_id,

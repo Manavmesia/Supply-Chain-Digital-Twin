@@ -72,13 +72,14 @@ const KPICard: React.FC<KPICardProps> = ({
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '3px',
-            fontSize: '11px',
+            gap: '4px',
+            fontSize: 'var(--text-xs)',
             fontWeight: 600,
-            color: trend.positive ? '#059669' : '#dc2626',
-            background: trend.positive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            color: trend.positive ? 'var(--c-success)' : 'var(--c-danger)',
+            background: trend.positive ? 'var(--c-success-bg)' : 'var(--c-danger-bg)',
+            border: `1px solid ${trend.positive ? 'var(--c-success-border)' : 'var(--c-danger-border)'}`,
             padding: '2px 8px',
-            borderRadius: '9999px',
+            borderRadius: 'var(--radius-full)',
           }}
         >
           {trend.positive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -89,13 +90,13 @@ const KPICard: React.FC<KPICardProps> = ({
       {badgeText && (
         <span
           style={{
-            fontSize: '11px',
+            fontSize: 'var(--text-xs)',
             fontWeight: 500,
             color: 'var(--c-text-muted)',
             background: 'var(--c-bg-subtle)',
             border: '1px solid var(--c-border)',
             padding: '2px 8px',
-            borderRadius: '9999px',
+            borderRadius: 'var(--radius-full)',
           }}
         >
           {badgeText}
@@ -106,12 +107,13 @@ const KPICard: React.FC<KPICardProps> = ({
     <div>
       <div
         style={{
-          fontSize: '22px',
+          fontSize: 'var(--text-2xl)',
           fontWeight: 700,
           color: 'var(--c-text-primary)',
-          letterSpacing: '-0.02em',
-          lineHeight: 1.1,
-          fontFamily: 'monospace',
+          letterSpacing: 'var(--track-tight)',
+          lineHeight: 1.15,
+          fontFamily: 'var(--font-mono)',
+          fontVariantNumeric: 'tabular-nums',
           marginBottom: '4px',
         }}
       >
@@ -119,17 +121,17 @@ const KPICard: React.FC<KPICardProps> = ({
       </div>
       <div
         style={{
-          fontSize: '11px',
+          fontSize: 'var(--text-xs)',
           fontWeight: 600,
           textTransform: 'uppercase',
-          letterSpacing: '0.05em',
+          letterSpacing: 'var(--track-wide)',
           color: 'var(--c-text-muted)',
           marginBottom: '2px',
         }}
       >
         {label}
       </div>
-      {sub && <div style={{ fontSize: '11px', color: 'var(--c-text-secondary)' }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-secondary)' }}>{sub}</div>}
     </div>
   </div>
   );
@@ -170,54 +172,54 @@ export const KPIGrid: React.FC<KPIGridProps> = ({ kpis, loading }) => {
 
   const cards: KPICardProps[] = [
     {
-      label: 'Commercial Orders',
+      label: 'Orders',
       value: kpis.total_orders.toLocaleString(),
-      sub: `${kpis.delivered_orders} fulfilled deliveries`,
+      sub: `${kpis.delivered_orders} delivered`,
       icon: <Package size={16} />,
     },
     {
-      label: 'Gross Revenue',
+      label: 'Revenue',
       value: revenue,
-      sub: 'Total contracted order value',
+      sub: 'Contracted value',
       icon: <DollarSign size={16} />,
     },
     {
-      label: 'OTIF Fill Rate',
+      label: 'Fill Rate',
       value: `${kpis.fill_rate_pct}%`,
-      sub: 'Service level target ≥ 98%',
+      sub: 'Target: ≥ 98%',
       icon: <Target size={16} />,
     },
     {
-      label: 'Active Agents',
-      value: `${kpis.total_agents} Online`,
-      sub: 'All operations supervised',
+      label: 'Agents',
+      value: kpis.total_agents,
+      sub: 'Supervised',
       icon: <Cpu size={16} />,
       link: '/agents',
-      badgeText: 'Roster →',
+      badgeText: 'View',
     },
     {
-      label: 'Tier-1 Suppliers',
+      label: 'Suppliers',
       value: kpis.active_suppliers,
-      sub: `Avg reliability: ${kpis.avg_supplier_reliability}%`,
+      sub: `Reliability: ${kpis.avg_supplier_reliability}%`,
       icon: <Building2 size={16} />,
     },
     {
-      label: 'Critical Stock Alerts',
+      label: 'Stock Alerts',
       value: kpis.low_stock_alerts,
-      sub: `${kpis.out_of_stock_alerts} stockouts detected`,
+      sub: `${kpis.out_of_stock_alerts} stockouts`,
       isAlert: kpis.low_stock_alerts > 0,
       icon: <AlertTriangle size={16} />,
     },
     {
-      label: 'SKU Availability',
+      label: 'Availability',
       value: `${kpis.sku_availability_pct ?? Math.max(0, Math.min(100, Math.round((1 - (kpis.out_of_stock_alerts || 0) / (kpis.total_inventory_locations || 30)) * 100)))}%`,
-      sub: 'Warehouse fulfillment rate',
+      sub: 'Warehouse buffer',
       icon: <Layers size={16} />,
     },
     {
-      label: 'System Health',
+      label: 'System',
       value: 'Optimal',
-      sub: 'Automated policy safeguards',
+      sub: 'Operational',
       badgeText: 'Live',
       icon: <ShieldCheck size={16} />,
     },

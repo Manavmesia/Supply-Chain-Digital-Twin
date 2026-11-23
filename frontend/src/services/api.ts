@@ -121,6 +121,20 @@ export const workflowApi = {
       return data;
     } catch (err) { return handleError(err); }
   },
+
+  getConfig: async (): Promise<{ delay_seconds: number; status: string; description: string }> => {
+    try {
+      const { data } = await apiClient.get<{ delay_seconds: number; status: string; description: string }>('/workflows/config');
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  setConfig: async (delay_seconds: number): Promise<{ delay_seconds: number; status: string; message: string }> => {
+    try {
+      const { data } = await apiClient.post<{ delay_seconds: number; status: string; message: string }>('/workflows/config', { delay_seconds });
+      return data;
+    } catch (err) { return handleError(err); }
+  },
 };
 
 // ── Analytics / Dashboard ─────────────────────────────────────────────────────
@@ -275,8 +289,12 @@ export const procurementApi = {
 
   createOrder: async (payload: {
     supplier_id: string;
+    supplier_name?: string;
     product_id: string;
+    product_name?: string;
+    sku?: string;
     warehouse_id: string;
+    warehouse_name?: string;
     quantity: number;
     unit_cost: number;
     lead_time_days?: number;
@@ -459,9 +477,26 @@ export const eventsApi = {
     } catch (err) { return handleError(err); }
   },
 
-  inject: async (payload: { event_type: string; source_agent?: string; payload?: Record<string, unknown>; workflow_id?: string }) => {
+  inject: async (payload: { event_type: string; source_agent?: string; payload?: Record<string, unknown>; workflow_id?: string; delay_seconds?: number }) => {
     try {
       const { data } = await apiClient.post('/events', payload);
+      return data;
+    } catch (err) { return handleError(err); }
+  },
+
+  getTrace: async (eventId: string) => {
+    try {
+      const { data } = await apiClient.get<{
+        event_id: string;
+        event_type: string;
+        source_agent: string;
+        status: string;
+        timestamp: string;
+        subscribers: string[];
+        remediation_summary: string;
+        autonomous_actions: Array<{ agent: string; action: string; details: string; timestamp: string }>;
+        remediation_trace: Array<any>;
+      }>(`/events/${eventId}/trace`);
       return data;
     } catch (err) { return handleError(err); }
   },

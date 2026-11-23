@@ -8,6 +8,7 @@ GET /api/v1/inventory/warehouse/{wh_id}  — all inventory in a warehouse
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import uuid
 from typing import Annotated, Any
 
@@ -20,6 +21,7 @@ from app.agents.base_agent import safe_uuid
 from app.api.v1.auth import require_authenticated_role
 
 from app.core import persistence
+from app.core.ai_optimization import calculate_optimal_reorder_quantity
 from app.core.database import get_db_session
 from app.events.dispatcher import dispatch_event_remediation
 from app.models.inventory import Inventory
@@ -255,7 +257,21 @@ async def run_autonomous_inventory_scan(
     created_orders = []
     remediation_actions = []
 
+    existing_in_transit_pos = persistence.list_purchase_orders(limit=100, status_filter="in_transit")
+    in_transit_by_prod = {p.get("product_id"): p for p in existing_in_transit_pos if p.get("product_id")}
+
     for breach in breaches:
+        prod_id = breach["product_id"]
+        if prod_id in in_transit_by_prod:
+            existing_po = in_transit_by_prod[prod_id]
+            remediation_actions.append({
+                "agent": "ADS-05",
+                "action": "Replenishment In Transit",
+                "details": f"Inbound replenishment PO {existing_po.get('po_id')} ({existing_po.get('quantity')} units from {existing_po.get('supplier_name')}) is currently in transit to restore safety stock.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            continue
+
         event_record = {
             "event_id": str(uuid.uuid4()),
             "event_type": "InventoryLow",
@@ -268,11 +284,19 @@ async def run_autonomous_inventory_scan(
                 "warehouse_name": breach["warehouse_name"],
                 "available_qty": breach["available_qty"],
                 "safety_stock": breach["safety_stock"],
-                "quantity": max(breach["safety_stock"] * 2, 100),
+                "quantity": calculate_optimal_reorder_quantity(
+                    annual_demand=max(120.0, float(breach["safety_stock"] * 12)),
+                    min_batch=max(breach["safety_stock"] * 2, 100),
+                ),
             },
-            "status": "injected",
+            "status": "pending",
         }
+        persistence.save_event(event_record)
         rem = await dispatch_event_remediation(event_record)
+        event_record["remediation_summary"] = rem.get("remediation_summary", "")
+        event_record["autonomous_actions"] = rem.get("autonomous_actions", [])
+        event_record["subscribers"] = rem.get("subscribers", ["ADS-03", "ADS-05"])
+        persistence.save_event(event_record)
         remediation_actions.extend(rem.get("autonomous_actions", []))
 
     # Retrieve all recent active purchase orders
@@ -292,9 +316,9 @@ async def run_autonomous_inventory_scan(
 
     if breaches:
         first_names = ", ".join(f"{b.get('product_name')} ({b.get('available_qty')}/{b.get('safety_stock')} at {b.get('warehouse_name')})" for b in breaches[:2])
-        msg = f"Autonomous scan complete. {len(breaches)} deficit{'s' if len(breaches) != 1 else ''} detected & remediated by ADS-03 & ADS-05: {first_names}."
+        msg = f"Scan complete. {len(breaches)} deficit{'s' if len(breaches) != 1 else ''} identified: {first_names}."
     else:
-        msg = "Autonomous scan complete. All warehouse locations are operating within target safety buffers."
+        msg = "Scan complete. All warehouse locations are operating within target safety buffers."
 
     return {
         "status": "completed",
@@ -324,12 +348,17 @@ async def auto_heal_all_replenishment(
             received.append(res)
 
     summary_after = persistence.get_inventory_summary()
+    msg = (
+        f"Successfully received {len(received)} replenishment orders into warehouse inventory."
+        if received
+        else "No pending in-transit purchase orders to receive. Run 'Scan Stock Levels' to autonomously draft replenishment purchase orders first."
+    )
     return {
         "status": "completed",
         "orders_received_count": len(received),
         "replenished_orders": received,
         "inventory_summary": summary_after,
-        "message": f"Successfully received {len(received)} replenishment orders into warehouse inventory.",
+        "message": msg,
     }
 
 

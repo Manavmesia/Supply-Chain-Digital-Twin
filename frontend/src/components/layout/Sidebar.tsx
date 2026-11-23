@@ -11,10 +11,12 @@ import {
   Truck,
   Building2,
   ShieldAlert,
+  GitFork,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/',             label: 'Dashboard',       icon: LayoutDashboard },
+  { path: '/workflows',     label: 'Live Visualizer', icon: GitFork },
   { path: '/orders',        label: 'Orders',          icon: ShoppingCart },
   { path: '/shipments',     label: 'Logistics',       icon: Truck },
   { path: '/procurement',   label: 'Procurement',     icon: Building2 },
@@ -36,19 +38,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
     <aside
       className="sidebar"
       style={{
-        width: collapsed ? '68px' : '240px',
-        transition: 'width 0.2s ease',
+        width: collapsed ? '68px' : '248px',
+        transition: 'width 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
       }}
     >
       {/* Brand Header */}
-      <div className="sidebar-logo" style={{ padding: '1.25rem 1rem' }}>
+      <div className="sidebar-logo">
         <div className="sidebar-logo-icon">
-          <Activity size={18} color="#2563eb" />
+          <Activity size={18} color="var(--c-brand-accent)" />
         </div>
         {!collapsed && (
           <div className="sidebar-logo-text">
-            <span className="sidebar-logo-title">Digital Twin</span>
-            <span className="sidebar-logo-sub">Supply Chain Portal</span>
+            <span className="sidebar-logo-title">Atelier Twin</span>
+            <span className="sidebar-logo-sub">Enterprise Fashion Platform</span>
           </div>
         )}
         <button
@@ -67,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-nav" style={{ padding: '1rem 0.75rem', gap: '4px' }}>
+      <nav className="sidebar-nav">
         {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
           const isActive = path === '/'
             ? location.pathname === '/'
@@ -79,12 +81,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
               to={path}
               className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
               title={collapsed ? label : undefined}
-              style={{
-                padding: '0.65rem 0.85rem',
-                fontSize: '0.85rem',
-                borderRadius: '8px',
-                marginBottom: '2px',
-              }}
             >
               <Icon size={18} />
               {!collapsed && <span className="sidebar-nav-label">{label}</span>}
@@ -95,18 +91,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ systemOnline }) => {
 
       {/* Clean System Status in Footer */}
       {!collapsed && (
-        <div style={{ marginTop: 'auto', padding: '1rem', borderTop: '1px solid #f1f5f9' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#64748b' }}>
+        <div className="sidebar-footer">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', padding: '0 var(--space-2)' }}>
             <span
               style={{
-                width: 7,
-                height: 7,
+                width: 6,
+                height: 6,
                 borderRadius: '50%',
-                background: systemOnline ? '#10b981' : '#ef4444',
+                background: systemOnline ? 'var(--c-success)' : 'var(--c-danger)',
                 display: 'inline-block',
               }}
             />
-            <span>{systemOnline ? 'System Operational' : 'Connecting...'}</span>
+            <span>{systemOnline ? 'Telemetry Active' : 'Connecting...'}</span>
           </div>
         </div>
       )}

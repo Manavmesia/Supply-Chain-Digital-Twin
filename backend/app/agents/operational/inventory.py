@@ -19,6 +19,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base_agent import BaseAgent, safe_uuid
+from app.core.ai_optimization import calculate_dynamic_safety_stock, calculate_optimal_reorder_quantity
 from app.graph.state import SupplyChainState
 from app.models.inventory import Inventory
 from app.models.warehouse import Warehouse
@@ -128,13 +129,20 @@ class InventoryAgent(BaseAgent):
             inv_data = availability.get(pid, {})
             safety_stock = int(inv_data.get("safety_stock", 200))
             net_avail = int(inv_data.get("net_available_after", 0))
-            reorder_qty = max(safety_stock * 2 - net_avail, 100)
+            # AI Economic Order Quantity (EOQ) replenishment optimization
+            annual_est = max(120.0, float(safety_stock * 12))
+            min_need = max(safety_stock * 2 - net_avail, 100)
+            reorder_qty = calculate_optimal_reorder_quantity(
+                annual_demand=annual_est,
+                min_batch=min_need,
+            )
             wh_target = inv_data.get("warehouse_id") or selected_warehouse_id
             replenishment_requests.append({
                 "product_id": pid,
                 "warehouse_id": wh_target,
                 "quantity": reorder_qty,
                 "reason": "safety_stock_breach",
+                "optimization": "eoq_optimized",
             })
             payload = {
                 "product_id": pid,
@@ -148,12 +156,16 @@ class InventoryAgent(BaseAgent):
 
         for pid in out_of_stock_products:
             needed = int(availability.get(pid, {}).get("needed", 50))
-            reorder_qty = max(needed * 2, 100)
+            reorder_qty = calculate_optimal_reorder_quantity(
+                annual_demand=max(200.0, float(needed * 12)),
+                min_batch=max(needed * 2, 100),
+            )
             replenishment_requests.append({
                 "product_id": pid,
                 "warehouse_id": selected_warehouse_id,
                 "quantity": reorder_qty,
                 "reason": "out_of_stock",
+                "optimization": "eoq_optimized",
             })
 
         if replenishment_requests:

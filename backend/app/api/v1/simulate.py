@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from app.api.v1.auth import require_authenticated_role
 from app.core import persistence
+from app.core.ai_optimization import run_monte_carlo_resilience_assessment
 from app.core.database import AsyncSessionLocal
 from app.core.standby_session import create_standby_session, is_database_connected
 from app.graph.state import SupplyChainState
@@ -164,6 +166,19 @@ async def _run_simulation_inner(
 
     trace: list[dict[str, Any]] = []
 
+    async def _on_sim_step(agent_code: str, agent_name: str, status: str, state: dict, trace_entry: dict | None = None):
+        step_trace = list(trace)
+        if trace_entry and trace_entry not in step_trace:
+            step_trace.append(trace_entry)
+        _save_sim_state(simulation_id, {
+            "status": "running",
+            "scenario_type": scenario.scenario_type,
+            "description": _SCENARIO_DESCRIPTIONS.get(scenario.scenario_type, ""),
+            "current_agent": agent_code,
+            "agents_executed": len(step_trace),
+            "trace": step_trace,
+        })
+
     try:
         initial_state = _build_initial_state(simulation_id, scenario)
         config = {"configurable": {"thread_id": simulation_id}}
@@ -179,6 +194,7 @@ async def _run_simulation_inner(
                     compiled = compile_workflow(
                         session_factory=_session_factory,
                         trace_collector=trace,
+                        on_step_update=_on_sim_step,
                     )
                     final_state = await compiled.ainvoke(initial_state, config=config)
                     await session.rollback()
@@ -207,6 +223,7 @@ async def _run_simulation_inner(
             compiled = compile_workflow(
                 session_factory=_standby_factory,
                 trace_collector=trace,
+                on_step_update=_on_sim_step,
             )
             final_state = await compiled.ainvoke(fallback_initial_state, config=config)
 
@@ -216,6 +233,17 @@ async def _run_simulation_inner(
         elif final_state.get("workflow_status") != "escalated":
             final_state["workflow_status"] = "completed"
 
+        # AI Stochastic Monte Carlo Resilience Assessment
+        order_val = float((final_state.get("order") or {}).get("total_amount") or 12000.0)
+        margin_val = float((final_state.get("finance") or {}).get("gross_margin_pct") or 22.0)
+        mc_assessment = run_monte_carlo_resilience_assessment(
+            num_trials=500,
+            base_order_value=order_val,
+            supplier_disruption_prob=0.18 if scenario.scenario_type == "supplier_outage" else 0.06,
+            carrier_delay_prob=0.22 if scenario.scenario_type == "logistics_delay" else 0.08,
+            margin_pct=margin_val,
+        )
+
         _save_sim_state(simulation_id, {
             "simulation_id": simulation_id,
             "scenario_type": scenario.scenario_type,
@@ -224,6 +252,7 @@ async def _run_simulation_inner(
             "final_state": final_state,
             "trace": trace,
             "agents_executed": len(trace),
+            "monte_carlo_resilience": mc_assessment,
         })
 
         logger.info(
@@ -259,6 +288,7 @@ async def _run_simulation_inner(
 async def start_simulation(
     scenario: SimulationScenario,
     background_tasks: BackgroundTasks,
+    current_user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst"))] = None,
 ) -> SimulationAccepted:
     """
     Run a what-if simulation through the full 18-agent workflow.
@@ -387,4 +417,44 @@ async def get_simulation(simulation_id: str) -> dict[str, Any]:
     if sim.get("error"):
         response["error"] = sim["error"]
 
+    if sim.get("monte_carlo_resilience"):
+        response["monte_carlo_resilience"] = sim["monte_carlo_resilience"]
+
     return response
+
+
+class MonteCarloRequest(BaseModel):
+    num_trials: int = Field(500, ge=100, le=2000, description="Number of stochastic simulation trials")
+    base_order_value: float = Field(15000.0, ge=100.0, description="Baseline order financial value")
+    supplier_disruption_prob: float = Field(0.08, ge=0.0, le=1.0, description="Probability of supplier outage")
+    carrier_delay_prob: float = Field(0.10, ge=0.0, le=1.0, description="Probability of carrier transit delay")
+    margin_pct: float = Field(22.0, ge=-50.0, le=100.0, description="Target gross margin percentage")
+
+
+@router.post(
+    "/monte-carlo",
+    summary="Execute stochastic Monte Carlo supply chain resilience simulation",
+)
+async def run_monte_carlo_simulation(
+    req: MonteCarloRequest,
+    current_user: Annotated[dict, Depends(require_authenticated_role("admin", "analyst", "viewer"))] = None,
+) -> dict[str, Any]:
+    """
+    Run 500-2,000 parallel stochastic Monte Carlo simulation trials to quantify:
+    - Value-at-Risk (VaR at 95% confidence): Worst expected financial loss
+    - Expected Shortfall (CVaR): Average loss in the worst 5% tail
+    - Network Resilience Index (0-100): Probability of meeting SLA under concurrent disruptions
+    """
+    results = run_monte_carlo_resilience_assessment(
+        num_trials=req.num_trials,
+        base_order_value=req.base_order_value,
+        supplier_disruption_prob=req.supplier_disruption_prob,
+        carrier_delay_prob=req.carrier_delay_prob,
+        margin_pct=req.margin_pct,
+    )
+    return {
+        "status": "completed",
+        "simulation_type": "monte_carlo_stochastic",
+        "parameters": req.model_dump(),
+        "metrics": results,
+    }

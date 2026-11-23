@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.base_agent import safe_uuid
 from app.api.v1.auth import require_authenticated_role
 from app.core import persistence
 from app.core.database import get_db_session
@@ -111,7 +112,31 @@ async def list_shipments(
                 "current_location": "En Route - Regional Transit Hub" if s.status == "in_transit" else "Origin Hub",
                 "created_at": s.created_at.isoformat() if s.created_at else None,
             })
-        return {"items": items, "total": cnt, "skip": skip, "limit": limit}
+
+        # Harmonize with SQLite persistence so newly created records are unified
+        try:
+            persisted_items, _ = persistence.list_shipments(
+                skip=0,
+                limit=200,
+                status_filter=shipment_status,
+                freight_mode=freight_mode,
+            )
+            persisted_map = {pi["shipment_id"]: pi for pi in persisted_items}
+            for i in items:
+                if i["shipment_id"] in persisted_map:
+                    i["status"] = persisted_map[i["shipment_id"]].get("status", i["status"])
+                    if "current_location" in persisted_map[i["shipment_id"]]:
+                        i["current_location"] = persisted_map[i["shipment_id"]]["current_location"]
+            seen_ids = {i["shipment_id"] for i in items}
+            for pi in persisted_items:
+                if pi["shipment_id"] not in seen_ids:
+                    items.append(pi)
+                    seen_ids.add(pi["shipment_id"])
+            cnt = max(cnt, len(items))
+        except Exception:
+            pass
+
+        return {"items": items[skip : skip + limit] if skip > 0 else items[:limit], "total": cnt, "skip": skip, "limit": limit}
     except Exception as exc:
         logger.warning("DB query failed in list_shipments, falling back to SQLite persistence", error=str(exc))
         items, total = persistence.list_shipments(
@@ -159,6 +184,7 @@ async def get_shipment(shipment_id: str) -> dict[str, Any]:
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Create/dispatch a shipment")
 async def create_shipment(
     payload: CreateShipmentRequest,
+    session: AsyncSession = Depends(get_db_session),
     current_user: dict[str, Any] = Depends(require_authenticated_role(["admin", "operator", "viewer"])),
 ) -> dict[str, Any]:
     """Dispatch a new shipment across the supply chain network."""
@@ -180,6 +206,31 @@ async def create_shipment(
         "created_at": now_iso,
     }
     shp_id = persistence.save_shipment(shipment_dict)
+
+    # Also persist to PostgreSQL session if active
+    try:
+        ord_uuid = safe_uuid(payload.order_id) if payload.order_id else uuid.uuid4()
+        wh_uuid = safe_uuid(payload.warehouse_id) if payload.warehouse_id else None
+        shp_uuid = safe_uuid(shp_id)
+        pg_shipment = Shipment(
+            shipment_id=shp_uuid,
+            order_id=ord_uuid,
+            warehouse_id=wh_uuid,
+            carrier=payload.carrier,
+            carrier_tracking_id=tracking_code,
+            route=f"{payload.origin} -> {payload.destination}",
+            freight_mode=payload.freight_mode,
+            status="in_transit",
+        )
+        session.add(pg_shipment)
+        await session.flush()
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        logger.warning("Could not persist shipment to PostgreSQL ORM", error=str(exc))
+
     return {"shipment_id": shp_id, "status": "in_transit", "tracking_number": tracking_code}
 
 

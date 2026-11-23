@@ -1,0 +1,119 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 3 0 R >>
+endobj
+2 0 obj
+<< /Type /Outlines /Count 0 >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Length 3347 >>
+stream
+BT
+/F1 16 Tf
+50 780 Td
+(AI Supply Chain Digital Twin - Audit & Remediation) Tj
+/F2 10 Tf
+0 -22 Td
+(Global System Audit Remediation Report - V3.2 | All 12 Findings Remediated & Verified) Tj
+/F2 8.5 Tf
+0 -18 Td
+(Date: 2026-11-18 | Assessed Commit: 3a6944b | Low-Tier Sequential Execution: Verified) Tj
+0 -25 Td
+([F-001] \(Critical\) Unauthenticated Remote Access to Order Fulfillment Workflows & 18) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f001_auth_workflows.py) Tj
+0 -14 Td
+(   Result: 4 passed in 1.05s, exit code 0) Tj
+0 -14 Td
+([F-002] \(Critical\) Architectural Dual-Storage Split-Brain and Data Desynchronization) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f002_dual_storage_sync.py) Tj
+0 -14 Td
+(   Result: 2 passed in 0.52s, exit code 0) Tj
+0 -14 Td
+([F-003] \(High\) Production Authentication Lockout Due to In-Memory User Store Emp) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f003_production_auth.py) Tj
+0 -14 Td
+(   Result: 2 passed in 0.48s, exit code 0) Tj
+0 -14 Td
+([F-004] \(High\) Production Frontend Build and Containerization Failure from Stric) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: frontend production build) Tj
+0 -14 Td
+(   Result: tsc -b && vite build completed with 0 errors in 198ms, exit code 0) Tj
+0 -14 Td
+([F-005] \(High\) Alembic Database Migration Failure via Unparameterized Host-Depen) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f005_alembic_migration.py) Tj
+0 -14 Td
+(   Result: 3 passed in 0.46s, exit code 0) Tj
+0 -14 Td
+([F-006] \(High\) Plaintext API Secrets and Passwords Committed in Historical Git R) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f006_secrets_exposure.py) Tj
+0 -14 Td
+(   Result: 4 passed in 0.03s, exit code 0) Tj
+0 -14 Td
+([F-007] \(Medium\) Information Disclosure via Raw Exception Strings in Global Except) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f007_error_disclosure.py) Tj
+0 -14 Td
+(   Result: 3 passed in 0.44s, exit code 0) Tj
+0 -14 Td
+([F-008] \(Medium\) Missing Lifespan Initialization of Shared RabbitMQ Event Publishe) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f008_rabbitmq_lifespan.py) Tj
+0 -14 Td
+(   Result: 3 passed in 0.48s, exit code 0) Tj
+0 -14 Td
+([F-009] \(Medium\) Complete Absence of Client-Side Authentication Flow and Login Int) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f009_frontend_auth.py) Tj
+0 -14 Td
+(   Result: 4 passed in 2.14s, exit code 0) Tj
+0 -14 Td
+([F-010] \(Low\) Unhandled ValidationError in Commercial Order Intake Handler Retu) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f010_duplicate_order_items.py) Tj
+0 -14 Td
+(   Result: 3 passed in 0.62s, exit code 0) Tj
+0 -14 Td
+([F-011] \(Low\) Use of Unmaintained and Vulnerable `python-jose` Cryptographic Li) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f011_pyjwt_migration.py) Tj
+0 -14 Td
+(   Result: 5 passed in 0.44s, exit code 0) Tj
+0 -14 Td
+([F-012] \(Informational\) Deprecated Logging API and Non-Standard BackgroundTasks Default P) Tj
+0 -14 Td
+(   Status: VERIFIED RESOLVED | Suite: backend/tests/test_f012_deprecation_and_patterns.py) Tj
+0 -14 Td
+(   Result: 3 passed in 0.46s, exit code 0) Tj
+0 -14 Td
+ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000104 00000 n 
+0000000161 00000 n 
+0000000400 00000 n 
+0000000470 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3869
+%%EOF

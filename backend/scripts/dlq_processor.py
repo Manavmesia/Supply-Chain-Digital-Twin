@@ -47,7 +47,7 @@ async def process_dlq_message(message: aio_pika.abc.AbstractIncomingMessage) -> 
             queue = death_info.get("queue", "unknown")
             time_death = death_info.get("time", "unknown")
 
-            logger.warn(
+            logger.warning(
                 "DLQ Message Detected",
                 event_type=event_type,
                 reason=reason,

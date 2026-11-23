@@ -53,6 +53,18 @@ class CEOAgent(BaseAgent):
         def _fallback_ceo() -> CEODecisionSchema:
             wf_st = state.get("workflow_status") if state.get("workflow_status") in {"escalated", "failed"} else "completed"
             req_h = bool(state.get("requires_human_approval"))
+            exec_dec = state.get("executive_decision") or {}
+
+            # If human executive approval has already been granted, complete the sign-off
+            if exec_dec.get("approved") and exec_dec.get("approval_tier") == "human_executive":
+                return CEODecisionSchema(
+                    approved=True,
+                    approval_tier="human_executive",
+                    requires_human_approval=False,
+                    workflow_status="completed",
+                    rationale=f"Executive board approval confirmed: {exec_dec.get('rationale') or 'Approved by Human Executive'}",
+                )
+
             if risk_score > 85.0:
                 return CEODecisionSchema(
                     approved=False,
@@ -71,17 +83,17 @@ class CEOAgent(BaseAgent):
                 )
             elif total_amount >= Decimal("500000.00"):
                 return CEODecisionSchema(
-                    approved=True,
+                    approved=False,
                     approval_tier="human_required",
                     requires_human_approval=True,
-                    workflow_status=wf_st,
+                    workflow_status="escalated",
                     rationale=f"CEO executive escalation: Capital tier order of ${total_amount:,.2f} for {cust_name} flagged for executive board sign-off.",
                 )
             elif (wf_st == "escalated" or req_h) and not (
                 state.get("planning", {}).get("remanufacture_required") and "ADS-07" in (state.get("active_agents") or [])
             ):
                 return CEODecisionSchema(
-                    approved=True,
+                    approved=False,
                     approval_tier="human_required",
                     requires_human_approval=True,
                     workflow_status="escalated",
@@ -114,9 +126,10 @@ class CEOAgent(BaseAgent):
             "workflow_status": state.get("workflow_status"),
         }
         ceo_rules = [
+            "If executive_decision in state has approved True and approval_tier 'human_executive': approved must be True, approval_tier must be 'human_executive', requires_human_approval must be False, workflow_status must be 'completed'.",
             "If risk_score > 85.0: approved must be False, approval_tier must be 'risk_denied', workflow_status must be 'failed'.",
             "If errors exist and priority is not 'critical': approved must be False, approval_tier must be 'error_denied', workflow_status must be 'failed'.",
-            "If total_amount >= 500000.00: approved must be True, approval_tier must be 'human_required', requires_human_approval must be True.",
+            "If total_amount >= 500000.00: approved must be False, approval_tier must be 'human_required', requires_human_approval must be True, workflow_status must be 'escalated'.",
             "If total_amount >= 10000.00: approved must be True, approval_tier must be 'finance_review', workflow_status must be 'completed'.",
             "Otherwise: approved must be True, approval_tier must be 'auto', workflow_status must be 'completed'.",
             "Rationale must clearly justify the approval tier based on order value, risk, and error constraints.",
@@ -138,7 +151,10 @@ class CEOAgent(BaseAgent):
         rationale = llm_ceo_dec.rationale
         order_status = str(order.get("status") or "")
 
-        if approved:
+        if requires_human_approval or approval_tier == "human_required" or workflow_status == "escalated":
+            order_status = "pending"
+            workflow_status = "escalated"
+        elif approved:
             order_status = "delivered" if order_status not in {"delivered", "cancelled", "failed"} else order_status
         elif order_status not in {"delivered", "cancelled", "failed"}:
             order_status = "cancelled"

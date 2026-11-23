@@ -12,12 +12,13 @@ import {
   Cpu,
   FileText,
   Truck,
+  Activity,
 } from 'lucide-react';
 import { formatCurrency, CATALOG_PRODUCTS } from '../utils/formatters';
 import { OrderDecisionTrail } from '../components/orders/OrderDecisionTrail';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  pending:    { label: 'Evaluating', bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
+  pending:    { label: 'Pending Approval', bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
   processing: { label: 'Processing', bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
   in_transit: { label: 'In Transit', bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
   delivered:  { label: 'Delivered', bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
@@ -40,8 +41,9 @@ const BASELINE_CUSTOMERS = [
 
 
 export const OrdersPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlOrderId = searchParams.get('order_id') || searchParams.get('id');
+  const urlProcessedRef = useRef<string | null>(null);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -112,15 +114,30 @@ export const OrdersPage: React.FC = () => {
 
   useEffect(() => {
     if (urlOrderId && orders.length > 0) {
-      const match = orders.find(o => o.order_id === urlOrderId);
-      if (match) {
-        setSelectedOrder(match);
-        if (searchParams.get('tab') === 'decision') {
-          setDrawerTab('decision-trail');
+      if (urlProcessedRef.current !== urlOrderId) {
+        urlProcessedRef.current = urlOrderId;
+        const match = orders.find(o => o.order_id === urlOrderId);
+        if (match) {
+          setSelectedOrder(match);
+          if (searchParams.get('tab') === 'decision') {
+            setDrawerTab('decision-trail');
+          }
         }
       }
     }
   }, [urlOrderId, orders, searchParams]);
+
+  const handleCloseDrawer = () => {
+    setSelectedOrder(null);
+    urlProcessedRef.current = 'dismissed';
+    if (searchParams.has('order_id') || searchParams.has('id') || searchParams.has('tab')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('order_id');
+      next.delete('id');
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const handleCreateOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,7 +148,7 @@ export const OrdersPage: React.FC = () => {
         items: orderItems,
       });
       setShowCreateModal(false);
-      setActionMessage(`Commercial Order ${res.order_id} booked! Autonomous decision pipeline initiated (Audit Ref: ${res.workflow_id ? res.workflow_id.slice(0, 8) : 'ACT-' + res.order_id.slice(0, 8)}).`);
+      setActionMessage(`Order ${res.order_id} created successfully.`);
       await loadData(true);
     } catch (err: any) {
       setActionMessage(`Order creation failed: ${err.message}`);
@@ -270,17 +287,17 @@ export const OrdersPage: React.FC = () => {
       </div>
 
       {/* Orders Table */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <div className="table-wrapper">
+        <table>
           <thead>
-            <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left', background: '#f8fafc' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>ORDER ID</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>CUSTOMER</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>PRIORITY</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>ORDER VALUE</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>STATUS</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>DECISION AUDIT</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>ACTION</th>
+            <tr>
+              <th>ORDER ID</th>
+              <th>CUSTOMER</th>
+              <th>PRIORITY</th>
+              <th>ORDER VALUE</th>
+              <th>STATUS</th>
+              <th>DECISION AUDIT</th>
+              <th style={{ textAlign: 'right' }}>ACTION</th>
             </tr>
           </thead>
           <tbody>
@@ -291,53 +308,58 @@ export const OrdersPage: React.FC = () => {
               return (
                 <tr
                   key={ord.order_id}
-                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
+                  style={{ cursor: 'pointer' }}
                   onClick={() => {
                     setSelectedOrder(ord);
                     setDrawerTab('overview');
                   }}
                 >
-                  <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--c-text-primary)' }}>
                     {ord.order_id.slice(0, 16)}...
                   </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <div style={{ color: '#0f172a', fontWeight: 500 }}>
+                  <td>
+                    <div style={{ color: 'var(--c-text-primary)', fontWeight: 500 }}>
                       {ord.customer?.name || (ord as any).customer_name || 'Enterprise Client'}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)' }}>
                       {ord.customer?.email || 'contact@client.com'}
                     </div>
                   </td>
-                  <td style={{ padding: '14px 16px' }}>
+                  <td>
                     <span
                       style={{
-                        fontSize: '11px',
+                        fontSize: 'var(--text-xs)',
                         fontWeight: 600,
                         padding: '3px 8px',
-                        borderRadius: '9999px',
+                        borderRadius: 'var(--radius-full)',
                         background: priBadge.bg,
                         color: priBadge.text,
                         textTransform: 'uppercase',
+                        letterSpacing: 'var(--track-wide)',
                       }}
                     >
                       {ord.priority}
                     </span>
                   </td>
-                  <td style={{ padding: '14px 16px', fontWeight: 600, color: '#059669' }}>
+                  <td style={{ fontWeight: 600, color: 'var(--c-success)', fontFamily: 'var(--font-mono)' }}>
                     {formatCurrency(parseFloat(ord.total_amount))}
                   </td>
-                  <td style={{ padding: '14px 16px' }}>
+                  <td>
                     <span
                       style={{
-                        fontSize: '11px',
+                        fontSize: 'var(--text-xs)',
                         fontWeight: 600,
                         padding: '3px 10px',
-                        borderRadius: '9999px',
+                        borderRadius: 'var(--radius-full)',
                         background: badge.bg,
                         color: badge.text,
                         border: `1px solid ${badge.border}`,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
                       }}
                     >
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: badge.text }} />
                       {badge.label}
                     </span>
                   </td>
@@ -349,7 +371,7 @@ export const OrdersPage: React.FC = () => {
                           setSelectedOrder(ord);
                           setDrawerTab('decision-trail');
                         }}
-                        title="Open Autonomous Multi-Agent Decision Trail"
+                        title="Decision Audit"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -366,10 +388,10 @@ export const OrdersPage: React.FC = () => {
                         }}
                       >
                         <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Decision Audit</span>
+                        <span>Audit</span>
                       </button>
                     ) : (
-                      <span style={{ color: '#94a3b8', fontSize: '11px', fontStyle: 'italic' }}>Direct Ingestion</span>
+                      <span style={{ color: '#94a3b8', fontSize: '11px', fontStyle: 'italic' }}>Direct</span>
                     )}
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
@@ -380,7 +402,7 @@ export const OrdersPage: React.FC = () => {
                           setSelectedOrder(ord);
                           setDrawerTab('overview');
                         }}
-                        title="View Order Specification & Line Items"
+                        title="Order Details"
                         style={{
                           background: '#ffffff',
                           border: '1px solid #cbd5e1',
@@ -397,12 +419,12 @@ export const OrdersPage: React.FC = () => {
                         }}
                       >
                         <FileText className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Order Details</span>
+                        <span>Details</span>
                       </button>
                       <Link
                         to={`/shipments?search=${ord.order_id}`}
                         onClick={(e) => e.stopPropagation()}
-                        title="Track Connected Logistics Shipment"
+                        title="Track Shipment"
                         style={{
                           background: '#eff6ff',
                           border: '1px solid #bfdbfe',
@@ -436,20 +458,41 @@ export const OrdersPage: React.FC = () => {
 
       {/* Order Detail Drawer */}
       {selectedOrder && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', zIndex: 110 }}>
-          <div style={{ width: '600px', maxWidth: '100%', background: '#ffffff', height: '100%', padding: '24px', borderLeft: '1px solid #e2e8f0', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)', overflowY: 'auto' }}>
+        <div
+          onClick={handleCloseDrawer}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', zIndex: 110 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '600px', maxWidth: '100%', background: '#ffffff', height: '100%', padding: '24px', borderLeft: '1px solid #e2e8f0', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)', overflowY: 'auto' }}
+          >
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  Commercial Order File
-                </h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                    Order Details
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: 'var(--radius-full)',
+                      background: (STATUS_CONFIG[selectedOrder.status] || STATUS_CONFIG.pending).bg,
+                      color: (STATUS_CONFIG[selectedOrder.status] || STATUS_CONFIG.pending).text,
+                      border: `1px solid ${(STATUS_CONFIG[selectedOrder.status] || STATUS_CONFIG.pending).border}`,
+                    }}
+                  >
+                    {(STATUS_CONFIG[selectedOrder.status] || STATUS_CONFIG.pending).label}
+                  </span>
+                </div>
                 <div style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748b', marginTop: '2px' }}>
                   {selectedOrder.order_id}
                 </div>
               </div>
               <button
-                onClick={() => setSelectedOrder(null)}
+                onClick={handleCloseDrawer}
                 style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}
               >
                 <X className="w-5 h-5" />
@@ -475,7 +518,7 @@ export const OrdersPage: React.FC = () => {
                 }}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Order Summary & Items</span>
+                <span>Overview</span>
               </button>
 
               <button
@@ -495,7 +538,7 @@ export const OrdersPage: React.FC = () => {
                 }}
               >
                 <Cpu className="w-3.5 h-3.5" />
-                <span>Autonomous Decision Trail</span>
+                <span>Decision Trail</span>
                 {selectedOrder.workflow_id && (
                   <span style={{ fontSize: '10px', background: '#dbeafe', color: '#1d4ed8', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
                     Active
@@ -595,11 +638,34 @@ export const OrdersPage: React.FC = () => {
             ) : (
               <div>
                 {selectedOrder.workflow_id ? (
-                  <OrderDecisionTrail
-                    workflowId={selectedOrder.workflow_id}
-                    orderId={selectedOrder.order_id}
-                    onRefresh={loadData}
-                  />
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                      <Link
+                        to={`/workflows?workflow_id=${selectedOrder.workflow_id}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          background: 'rgba(37,99,235,0.08)',
+                          color: '#2563eb',
+                          border: '1px solid rgba(37,99,235,0.25)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <Activity size={13} />
+                        <span>View in Live Visualizer</span>
+                      </Link>
+                    </div>
+                    <OrderDecisionTrail
+                      workflowId={selectedOrder.workflow_id}
+                      orderId={selectedOrder.order_id}
+                      onRefresh={loadData}
+                    />
+                  </div>
                 ) : (
                   <div style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
                     No multi-agent execution pipeline recorded for this direct order.
@@ -613,10 +679,16 @@ export const OrdersPage: React.FC = () => {
 
       {/* Create Order Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '560px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div
+          onClick={() => setShowCreateModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '560px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+          >
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>
-              Create Commercial Order (OMS)
+              Create Order
             </h2>
             <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>

@@ -22,6 +22,7 @@ from typing import Any
 import structlog
 
 from app.agents.base_agent import BaseAgent
+from app.core.semantic_search import query_contract_clauses
 from app.graph.state import SupplyChainState
 
 logger = structlog.get_logger(__name__)
@@ -150,6 +151,14 @@ class NegotiationAgent(BaseAgent):
                 rationale=f"Negotiation complete: strategy={strat}, discount={round(disc*100, 1)}%",
             )
 
+        # Zero-Cost Semantic Document RAG retrieval for contractual terms
+        customer_name = order.get("customer_name", "Enterprise Customer")
+        retrieved_clauses = query_contract_clauses(
+            f"{customer_name} SLA penalties delivery delays volume discounts",
+            top_k=2,
+        )
+        clause_snippets = [f"[{c.get('title')}]: {c.get('content')}" for c in retrieved_clauses]
+
         neg_context = {
             "order_id": order.get("order_id"),
             "order_qty": order_qty,
@@ -158,11 +167,13 @@ class NegotiationAgent(BaseAgent):
             "procurement_strategy": procurement_strategy,
             "supplier_reliability_score": reliability_score,
             "reorder_urgency": reorder_urgency,
+            "retrieved_contract_clauses": clause_snippets,
         }
         neg_rules = [
             f"If order_qty >= min_order_qty * {_VOLUME_DISCOUNT_MULTIPLIER}: volume discount between 5% and 12% is applied.",
             "If procurement_strategy == 'bulk' and discount is 0: 5% strategic reorder discount is applied.",
             f"If supplier_reliability_score < {_LOW_RELIABILITY_THRESHOLD}: an SLA delay penalty clause ({_PENALTY_RATE_PCT}%/day) must strictly be added.",
+            "Ground proposed terms in the retrieved_contract_clauses when applicable.",
             "final_unit_cost must equal original_unit_cost * (1 - discount_pct) rounded to 2 decimals.",
             "Rationale must detail the discounts and contractual terms negotiated.",
         ]

@@ -28,6 +28,7 @@ from app.models.support_ticket import SupportTicket
 from app.models.sustainability_metric import SustainabilityMetric
 from app.models.transportation_route import TransportationRoute
 from app.models.warehouse import Warehouse
+from app.models.user import User
 
 __all__ = [
     "AgentRuntime",
@@ -60,4 +61,5 @@ __all__ = [
     "SustainabilityMetric",
     "TransportationRoute",
     "Warehouse",
+    "User",
 ]

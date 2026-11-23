@@ -20,9 +20,11 @@ from typing import Annotated, Any, Callable
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 from pydantic import BaseModel
 
+from app.core import persistence
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -81,6 +83,21 @@ _DEV_USERS: dict[str, dict[str, Any]] = (
     if settings.ENVIRONMENT.lower() == "development"
     else {}
 )
+
+
+def get_user_record(username: str) -> dict[str, Any] | None:
+    """Resolve user from persistent database storage or fallback dev store."""
+    if not username:
+        return None
+    try:
+        user = persistence.get_user(username)
+        if user:
+            return user
+    except Exception:
+        pass
+    if settings.ENVIRONMENT.lower() == "development":
+        return _DEV_USERS.get(username)
+    return None
 
 # ---------------------------------------------------------------------------
 # Rate limiting for brute-force protection
@@ -155,13 +172,14 @@ def _decode_token(token: str) -> dict[str, Any]:
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict[str, Any]:
     payload = _decode_token(token)
     username: str | None = payload.get("sub")
-    if username is None or username not in _DEV_USERS:
+    user = get_user_record(username) if username else None
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return _DEV_USERS[username]
+    return user
 
 
 async def get_optional_current_user(
@@ -173,8 +191,8 @@ async def get_optional_current_user(
     try:
         payload = _decode_token(token)
         username: str | None = payload.get("sub")
-        if username and username in _DEV_USERS:
-            return _DEV_USERS[username]
+        if username:
+            return get_user_record(username)
     except Exception:
         return None
     return None
@@ -215,10 +233,11 @@ def require_authenticated_role(*roles: str | list[str]) -> Callable:
     ) -> dict[str, Any]:
         if user is None:
             if settings.ENVIRONMENT.lower() == "development":
-                user = _DEV_USERS.get(
-                    "admin",
-                    {"username": "admin", "role": "admin", "full_name": "Development Admin"},
-                )
+                user = get_user_record("admin") or {
+                    "username": "admin",
+                    "role": "admin",
+                    "full_name": "Development Admin",
+                }
             else:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -277,7 +296,7 @@ async def login(
 
     _check_login_rate_limit(client_key)
 
-    user = _DEV_USERS.get(form.username)
+    user = get_user_record(form.username)
     stored_hash = user.get("password_hash") or user.get("password", "") if user else ""
     if user is None or not verify_password(form.password, stored_hash):
         _record_failed_attempt(client_key)

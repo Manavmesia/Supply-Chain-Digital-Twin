@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { shipmentsApi } from '../services/api';
 import type { Shipment, ShipmentStats } from '../types';
 import {
@@ -26,15 +27,16 @@ const MODE_ICONS: Record<string, React.ReactNode> = {
 const STATUS_BADGES: Record<string, { label: string; bg: string; text: string; border: string }> = {
   in_transit: { label: 'In Transit', bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
   delivered: { label: 'Delivered', bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
-  delayed: { label: 'Delayed / Exception', bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
-  pending: { label: 'Pending Dispatch', bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
+  delayed: { label: 'Delayed', bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
+  pending: { label: 'Pending', bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
 };
 
 export const ShipmentsPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [stats, setStats] = useState<ShipmentStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [modeFilter, setModeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [reroutingId, setReroutingId] = useState<string | null>(null);
@@ -164,7 +166,8 @@ export const ShipmentsPage: React.FC = () => {
       const matchOrigin = s.origin?.toLowerCase().includes(q);
       const matchDest = s.destination?.toLowerCase().includes(q);
       const matchId = s.shipment_id?.toLowerCase().includes(q);
-      return matchTrack || matchCarrier || matchOrigin || matchDest || matchId;
+      const matchOrder = s.order_id?.toLowerCase().includes(q);
+      return matchTrack || matchCarrier || matchOrigin || matchDest || matchId || matchOrder;
     }
     return true;
   });
@@ -273,41 +276,45 @@ export const ShipmentsPage: React.FC = () => {
             <div
               key={shipment.shipment_id}
               style={{
-                background: '#ffffff',
-                border: isDelayed ? '1px solid #fecaca' : '1px solid #e2e8f0',
+                background: 'var(--c-bg-card)',
+                border: isDelayed ? '1px solid var(--c-danger-border)' : '1px solid var(--c-border)',
                 borderRadius: 'var(--radius-lg)',
-                padding: '20px 24px',
-                boxShadow: isDelayed ? '0 2px 8px rgba(239, 68, 68, 0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
+                padding: 'var(--space-5) var(--space-6)',
+                boxShadow: isDelayed ? '0 2px 8px rgba(225, 29, 72, 0.08)' : 'var(--shadow-card)',
                 transition: 'all 0.15s ease',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ padding: '8px', background: '#f8fafc', borderRadius: 'var(--radius-md)', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                  <div style={{ padding: '8px', background: 'var(--c-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--c-border)' }}>
                     {MODE_ICONS[shipment.freight_mode] || <Truck className="w-4 h-4 text-slate-600" />}
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--c-text-primary)' }}>
                         {shipment.carrier_tracking_id}
                       </span>
                       <span
                         style={{
-                          fontSize: '11px',
+                          fontSize: 'var(--text-xs)',
                           fontWeight: 600,
                           padding: '3px 10px',
-                          borderRadius: '9999px',
+                          borderRadius: 'var(--radius-full)',
                           background: badge.bg,
                           color: badge.text,
                           border: `1px solid ${badge.border}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
                         }}
                       >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: badge.text }} />
                         {badge.label}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                      Carrier: <strong style={{ color: '#0f172a' }}>{shipment.carrier}</strong> &bull; Freight:{' '}
-                      <span style={{ textTransform: 'uppercase', color: '#2563eb', fontWeight: 600 }}>{shipment.freight_mode}</span>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', marginTop: '2px' }}>
+                      Carrier: <strong style={{ color: 'var(--c-text-primary)' }}>{shipment.carrier}</strong> &bull; Freight:{' '}
+                      <span style={{ textTransform: 'uppercase', color: 'var(--c-brand-accent)', fontWeight: 600 }}>{shipment.freight_mode}</span>
                     </div>
                   </div>
                 </div>
@@ -317,11 +324,10 @@ export const ShipmentsPage: React.FC = () => {
                     <button
                       onClick={() => handleRerouteAir(shipment)}
                       disabled={reroutingId === shipment.shipment_id}
-                      className="btn-primary"
-                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                      className="btn-primary btn-sm"
                     >
                       <Zap className="w-3.5 h-3.5 text-white" />
-                      {reroutingId === shipment.shipment_id ? 'Rerouting...' : 'Autonomous Air Reroute'}
+                      {reroutingId === shipment.shipment_id ? 'Rerouting...' : 'Reroute to Air'}
                     </button>
                   )}
                   <button
@@ -331,10 +337,9 @@ export const ShipmentsPage: React.FC = () => {
                       setUpdateLocationVal(shipment.current_location || '');
                       setUpdateReasonVal(shipment.delay_reason || '');
                     }}
-                    className="btn-secondary"
-                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                    className="btn-secondary btn-sm"
                   >
-                    Update Waypoint
+                    Update Status
                   </button>
                 </div>
               </div>
@@ -344,11 +349,11 @@ export const ShipmentsPage: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--c-bg-subtle)',
                   padding: '12px 16px',
                   borderRadius: 'var(--radius-md)',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '12px',
+                  border: '1px solid var(--c-border)',
+                  fontSize: 'var(--text-xs)',
                   gap: '12px',
                 }}
               >
@@ -401,9 +406,15 @@ export const ShipmentsPage: React.FC = () => {
 
       {/* Dispatch Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>Dispatch New Freight Consignment</h2>
+        <div
+          onClick={() => setShowCreateModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '480px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+          >
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>Dispatch Shipment</h2>
             <form onSubmit={handleCreateShipment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: '#475569', marginBottom: '4px', fontWeight: 500 }}>Origin Hub</label>
@@ -476,13 +487,19 @@ export const ShipmentsPage: React.FC = () => {
 
       {/* Update Waypoint Modal */}
       {showStatusModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '460px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div
+          onClick={() => setShowStatusModal(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '460px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+          >
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
-              Update Waypoint: {showStatusModal.carrier_tracking_id}
+              Update Status: {showStatusModal.carrier_tracking_id}
             </h2>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 16px 0' }}>
-              Record GPS checkpoint telemetry or report bottleneck exception.
+              Record checkpoint location or report exception.
             </p>
             <form onSubmit={handleUpdateStatusSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>

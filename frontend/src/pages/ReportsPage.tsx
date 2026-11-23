@@ -27,6 +27,11 @@ export const ReportsPage: React.FC = () => {
       if (isMountedRef.current) {
         setReports(res.items);
         setTotal(res.total);
+        setSelected((prev) => {
+          if (!prev) return null;
+          const match = res.items.find((item) => item.report_id === prev.report_id);
+          return match || prev;
+        });
       }
     } catch (err) {
       console.error('Reports load error:', err);
@@ -45,6 +50,11 @@ export const ReportsPage: React.FC = () => {
       if (!ignore && isMountedRef.current) {
         setReports(res.items);
         setTotal(res.total);
+        setSelected((prev) => {
+          if (!prev) return null;
+          const match = res.items.find((item) => item.report_id === prev.report_id);
+          return match || prev;
+        });
         setLoading(false);
       }
     }).catch((err) => {
@@ -134,36 +144,37 @@ export const ReportsPage: React.FC = () => {
                     className={`report-item ${isSelected ? 'selected' : ''}`}
                     onClick={() => setSelected(isSelected ? null : r)}
                     style={{
-                      borderLeft: isSelected ? `4px solid ${sc.color}` : '4px solid #e2e8f0',
-                      background: isSelected ? '#eff6ff' : '#f8fafc',
+                      borderLeft: isSelected ? `4px solid ${sc.color}` : '4px solid var(--c-border)',
+                      background: isSelected ? 'var(--c-brand-subtle)' : 'var(--c-bg-subtle)',
                       borderRadius: 'var(--radius-md)',
-                      padding: '12px 16px',
+                      padding: 'var(--space-3) var(--space-4)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
-                      borderTop: '1px solid #e2e8f0',
-                      borderRight: '1px solid #e2e8f0',
-                      borderBottom: '1px solid #e2e8f0',
+                      borderTop: '1px solid var(--c-border)',
+                      borderRight: '1px solid var(--c-border)',
+                      borderBottom: '1px solid var(--c-border)',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{r.title}</span>
+                      <span style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--c-text-primary)' }}>{r.title}</span>
                       <span
                         style={{
-                          fontSize: '11px',
+                          fontSize: 'var(--text-xs)',
                           fontWeight: 600,
                           padding: '2px 8px',
-                          borderRadius: '9999px',
-                          background: `${sc.color}22`,
+                          borderRadius: 'var(--radius-full)',
+                          background: `${sc.color}18`,
                           color: sc.color,
+                          border: `1px solid ${sc.color}44`,
                           textTransform: 'capitalize',
                         }}
                       >
                         {r.status}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '11px', color: '#64748b' }}>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Tag size={12} /> {r.report_type}</span>
-                      {r.workflow_id && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'monospace' }}><Zap size={12} /> {formatWorkflowId(r.workflow_id)}</span>}
+                      {r.workflow_id && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-mono)' }}><Zap size={12} /> {formatWorkflowId(r.workflow_id)}</span>}
                       {r.created_at && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> {new Date(r.created_at).toLocaleString()}</span>
                       )}
@@ -177,9 +188,9 @@ export const ReportsPage: React.FC = () => {
 
         {/* Report detail */}
         <div className="card">
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--c-text-primary)', letterSpacing: 'var(--track-snug)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <FileSearch size={16} className="text-slate-400" />
-            <span>Executive Findings & Audit Details</span>
+            <span>Report Details</span>
           </h3>
           {!selected ? (
             <div className="empty-state">
@@ -214,7 +225,7 @@ export const ReportsPage: React.FC = () => {
 
               {selected.workflow_id && (
                 <div style={{ marginBottom: '12px' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Execution Audit Ref</p>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Audit Ref</p>
                   <code style={{ fontSize: '12px', fontFamily: 'monospace', color: '#2563eb', padding: '2px 6px', background: '#eff6ff', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
                     {formatWorkflowId(selected.workflow_id)}
                   </code>
@@ -234,7 +245,7 @@ export const ReportsPage: React.FC = () => {
 
               {selected.payload_summary && (
                 <div style={{ marginTop: '16px' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Executive Metrics & Key Findings</p>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>Key Metrics</p>
                   <div style={{ marginTop: '6px' }}>
                     <BusinessDataView data={selected.payload_summary} layout="grid" />
                   </div>

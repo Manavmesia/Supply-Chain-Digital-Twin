@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,20 +79,43 @@ async def list_orders(
         count_result = await session.execute(count_query)
         total = count_result.scalar() or 0
 
+        items = [
+            {
+                "order_id": str(o.order_id),
+                "customer_id": str(o.customer_id),
+                "status": o.status,
+                "priority": o.priority,
+                "total_amount": str(o.total_amount),
+                "currency": o.currency,
+                "workflow_id": str(o.workflow_id) if o.workflow_id else None,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+            }
+            for o in orders
+        ]
+
+        # Harmonize with SQLite persistence so newly created records are unified
+        try:
+            persisted_items, _ = persistence.list_orders(
+                skip=0,
+                limit=200,
+                status_filter=order_status,
+                priority_filter=priority,
+            )
+            persisted_map = {pi["order_id"]: pi for pi in persisted_items}
+            for i in items:
+                if i["order_id"] in persisted_map:
+                    i["status"] = persisted_map[i["order_id"]].get("status", i["status"])
+            seen_ids = {i["order_id"] for i in items}
+            for pi in persisted_items:
+                if pi["order_id"] not in seen_ids:
+                    items.append(pi)
+                    seen_ids.add(pi["order_id"])
+            total = max(total, len(items))
+        except Exception:
+            pass
+
         return {
-            "items": [
-                {
-                    "order_id": str(o.order_id),
-                    "customer_id": str(o.customer_id),
-                    "status": o.status,
-                    "priority": o.priority,
-                    "total_amount": str(o.total_amount),
-                    "currency": o.currency,
-                    "workflow_id": str(o.workflow_id) if o.workflow_id else None,
-                    "created_at": o.created_at.isoformat() if o.created_at else None,
-                }
-                for o in orders
-            ],
+            "items": items[skip : skip + limit] if skip > 0 else items[:limit],
             "total": total,
             "skip": skip,
             "limit": limit,
@@ -269,6 +292,17 @@ class CreateCommercialOrderPayload(BaseModel):
     priority: Literal["low", "standard", "high", "critical"] = "standard"
     notes: str | None = None
 
+    @field_validator("items")
+    @classmethod
+    def validate_unique_products(cls, items: list[CommercialOrderItemInput]) -> list[CommercialOrderItemInput]:
+        seen: set[str] = set()
+        for item in items:
+            pid = str(item.product_id).strip().lower()
+            if pid in seen:
+                raise ValueError(f"Duplicate product_id '{item.product_id}' in order items")
+            seen.add(pid)
+        return items
+
 
 class UpdateOrderStatusPayload(BaseModel):
     status: Literal["pending", "processing", "in_transit", "delivered", "cancelled"]
@@ -278,6 +312,7 @@ class UpdateOrderStatusPayload(BaseModel):
 async def create_commercial_order(
     payload: CreateCommercialOrderPayload,
     background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
     current_user: dict[str, Any] = Depends(require_authenticated_role(["admin", "operator", "viewer"])),
 ) -> dict[str, Any]:
     """Create a real commercial customer order, run LangGraph 18-agent autonomous fulfillment, and dispatch shipment."""
@@ -346,6 +381,40 @@ async def create_commercial_order(
         "current_location": "Order Processing & Staging",
         "workflow_id": workflow_id,
     })
+
+    # Also persist to PostgreSQL session if active
+    try:
+        from decimal import Decimal
+        ord_uuid = _safe_uuid(order_id)
+        cust_uuid = _safe_uuid(cust_id_str)
+        wf_uuid = _safe_uuid(workflow_id)
+
+        pg_order = Order(
+            order_id=ord_uuid,
+            customer_id=cust_uuid,
+            status="pending",
+            priority=payload.priority,
+            total_amount=Decimal(f"{total_val:.2f}"),
+            currency="USD",
+            workflow_id=wf_uuid,
+        )
+        session.add(pg_order)
+        for it in order_items_records:
+            pg_item = OrderItem(
+                order_item_id=_safe_uuid(it["order_item_id"]),
+                order_id=ord_uuid,
+                product_id=_safe_uuid(it["product_id"]),
+                quantity=it["quantity"],
+                unit_price=Decimal(str(it["unit_price"])),
+            )
+            session.add(pg_item)
+        await session.flush()
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        logger.warning("Could not persist commercial order to PostgreSQL session", error=str(exc))
 
     # Trigger 18-agent LangGraph workflow
     wf_request = OrderWorkflowRequest(

@@ -207,11 +207,11 @@ class TestCoreAgentCommunicationAndDataAccuracy:
         # 2. Supplier Agent receives state and creates PurchaseOrder with correct quantity
         supplier = MagicMock(
             supplier_id=uuid.uuid4(),
-            name="Global Chips Ltd",
             lead_time_days=4,
             reliability_score=Decimal("96.0"),
             status="active",
         )
+        supplier.name = "Global Chips Ltd."
         supplier_prod = MagicMock(
             supplier_id=supplier.supplier_id,
             product_id=product_id,

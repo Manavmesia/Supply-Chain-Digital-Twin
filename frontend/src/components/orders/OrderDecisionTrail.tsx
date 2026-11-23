@@ -120,14 +120,14 @@ export const OrderDecisionTrail: React.FC<OrderDecisionTrailProps> = ({
     return (
       <div style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b' }}>
         <RefreshCw className="w-5 h-5 animate-spin" style={{ margin: '0 auto 8px', display: 'block' }} />
-        <span style={{ fontSize: '13px' }}>Loading autonomous decision trail...</span>
+        <span style={{ fontSize: '13px' }}>Loading decision trail...</span>
       </div>
     );
   }
 
-  const isCompleted = status?.workflow_status === 'completed';
-  const isFailed = status?.workflow_status === 'failed';
   const requiresApproval = Boolean(status?.requires_human_approval);
+  const isCompleted = status?.workflow_status === 'completed' && !requiresApproval;
+  const isFailed = status?.workflow_status === 'failed';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -145,20 +145,24 @@ export const OrderDecisionTrail: React.FC<OrderDecisionTrailProps> = ({
       >
         <div>
           <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>
-            Decision Pipeline State
+            Status
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-            {isCompleted ? (
+            {requiresApproval ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#d97706', fontWeight: 600, fontSize: '13px' }}>
+                <Clock className="w-4 h-4" /> Pending Executive Sign-off
+              </span>
+            ) : isCompleted ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#059669', fontWeight: 600, fontSize: '13px' }}>
-                <CheckCircle2 className="w-4 h-4" /> Autonomous Processing Complete
+                <CheckCircle2 className="w-4 h-4" /> Completed
               </span>
             ) : isFailed ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#dc2626', fontWeight: 600, fontSize: '13px' }}>
-                <AlertTriangle className="w-4 h-4" /> Processing Exception
+                <AlertTriangle className="w-4 h-4" /> Exception
               </span>
             ) : (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563eb', fontWeight: 600, fontSize: '13px' }}>
-                <Clock className="w-4 h-4" /> Active Execution
+                <Clock className="w-4 h-4" /> In Progress
               </span>
             )}
           </div>
@@ -296,11 +300,11 @@ export const OrderDecisionTrail: React.FC<OrderDecisionTrailProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Cpu className="w-4 h-4 text-blue-600" />
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
-              Multi-Agent Decision Chain ({traces.length} Agents)
+              Decision Chain ({traces.length})
             </span>
           </div>
           <span style={{ fontSize: '11px', color: '#64748b' }}>
-            Chronological Audit Log
+            Audit Log
           </span>
         </div>
 

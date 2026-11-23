@@ -8,6 +8,7 @@ export interface WorkflowItem {
 export interface WorkflowRequest {
   customer_id: string;
   items: WorkflowItem[];
+  delay_seconds?: number;
 }
 
 export interface WorkflowAccepted {
@@ -279,6 +280,19 @@ export interface SimulationResult {
   error?: string;
 }
 
+export interface EventRemediationStep {
+  step: number;
+  agent_code: string;
+  agent_name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  action: string;
+  details: string;
+  downstream_event?: string | null;
+}
+
 // Events
 export interface EventRecord {
   event_id: string;
@@ -297,6 +311,7 @@ export interface EventRecord {
     details: string;
     timestamp: string;
   }>;
+  remediation_trace?: EventRemediationStep[];
 }
 
 // Auth

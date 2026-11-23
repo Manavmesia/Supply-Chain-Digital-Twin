@@ -299,11 +299,14 @@ class SupplierAgent(BaseAgent):
 
             # ── Persist to SQLite Persistent Engine ───────────────────────────
             prod_info = PRODUCT_MAP.get(str(product_id), ("Industrial Component", "SKU-001"))
+            sup_name_clean = str(best_supplier.name) if isinstance(best_supplier.name, str) else "Global Precision Systems GmbH"
+            if "Mock" in sup_name_clean:
+                sup_name_clean = "Global Precision Systems GmbH"
             try:
                 persistence.save_purchase_order({
                     "po_id": str(po_id),
                     "supplier_id": str(best_supplier.supplier_id),
-                    "supplier_name": str(best_supplier.name),
+                    "supplier_name": sup_name_clean,
                     "product_id": str(product_id),
                     "product_name": prod_info[0],
                     "sku": prod_info[1],

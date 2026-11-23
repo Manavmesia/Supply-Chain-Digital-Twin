@@ -14,8 +14,8 @@ import { formatCurrency, CATALOG_PRODUCTS } from '../utils/formatters';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
   in_transit: { label: 'In Transit', bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
-  received:   { label: 'Received (Stock Added)', bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
-  draft:      { label: 'Drafted', bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
+  received:   { label: 'Received', bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
+  draft:      { label: 'Draft', bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
   cancelled:  { label: 'Cancelled', bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
 };
 
@@ -48,7 +48,12 @@ export const ProcurementPage: React.FC = () => {
       ]);
       if (isMountedRef.current) {
         setOrders(ordRes.items || []);
-        setSuppliers(supRes.items || []);
+        const sups = supRes.items || [];
+        setSuppliers(sups);
+        setSelectedSupplierId((prev) => {
+          if (sups.some((s: SupplierScorecard) => s.supplier_id === prev)) return prev;
+          return sups[0]?.supplier_id || prev;
+        });
         setStats(statRes);
       }
     } catch (err) {
@@ -100,15 +105,17 @@ export const ProcurementPage: React.FC = () => {
   const handleCreatePoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const matchedSupplier = suppliers.find((s) => s.supplier_id === selectedSupplierId);
       await procurementApi.createOrder({
         supplier_id: selectedSupplierId,
+        supplier_name: matchedSupplier?.name,
         product_id: selectedProductId,
         warehouse_id: selectedWarehouseId,
         quantity: poQty,
         unit_cost: poUnitCost,
       });
       setShowCreateModal(false);
-      setActionMessage(`Purchase order successfully issued! Replenishment consignment dispatched.`);
+      setActionMessage(`Purchase order successfully issued to ${matchedSupplier?.name || 'supplier'}! Replenishment consignment dispatched.`);
       await loadData(true);
     } catch (err: any) {
       setActionMessage(`PO creation failed: ${err.message}`);
@@ -162,99 +169,100 @@ export const ProcurementPage: React.FC = () => {
       {/* KPI Cards */}
       <div className="stat-grid">
         <div className="stat-card">
-          <div className="stat-label">TOTAL INBOUND SPEND</div>
+          <div className="stat-label">INBOUND SPEND</div>
           <div className="stat-value">
             {formatCurrency(stats?.total_spend ?? 0)}
           </div>
-          <div className="stat-sub">{stats?.total_po_count ?? orders.length} procurement orders issued</div>
+          <div className="stat-sub">{stats?.total_po_count ?? orders.length} orders issued</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">IN-TRANSIT REPLENISHMENT</div>
+          <div className="stat-label">IN TRANSIT</div>
           <div className="stat-value" style={{ color: '#2563eb' }}>
             {formatCurrency(stats?.in_transit_spend ?? 0)}
           </div>
-          <div className="stat-sub">{stats?.in_transit_count ?? 0} consignments en route</div>
+          <div className="stat-sub">{stats?.in_transit_count ?? 0} active consignments</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">RECEIVED AT DOCK</div>
+          <div className="stat-label">RECEIVED</div>
           <div className="stat-value" style={{ color: '#059669' }}>
             {stats?.received_count ?? 0}
           </div>
-          <div className="stat-sub">Directly added to warehouse stock</div>
+          <div className="stat-sub">Added to warehouse inventory</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">ACTIVE TIER-1 SUPPLIERS</div>
+          <div className="stat-label">SUPPLIERS</div>
           <div className="stat-value" style={{ color: '#7c3aed' }}>
             {suppliers.length}
           </div>
-          <div className="stat-sub">Global supply network scorecards</div>
+          <div className="stat-sub">Active supply partners</div>
         </div>
       </div>
 
       {/* Supplier Scorecards Section */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <Building2 className="w-4 h-4 text-emerald-600" />
-            <h2 style={{ fontSize: '14px', fontWeight: 600, margin: 0, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 600, margin: 0, color: 'var(--c-text-primary)', letterSpacing: 'var(--track-snug)' }}>
               Tier-1 Supplier Scorecard & Resilience Ranking
             </h2>
           </div>
-          <span style={{ fontSize: '12px', color: '#64748b' }}>Automated Supplier Risk & Resilience Auditing</span>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)' }}>Automated Supplier Risk & Resilience Auditing</span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
           {suppliers.map((s) => {
-            const riskColor = s.risk_tier === 'low' ? '#059669' : s.risk_tier === 'medium' ? '#d97706' : '#dc2626';
-            const riskBg = s.risk_tier === 'low' ? '#ecfdf5' : s.risk_tier === 'medium' ? '#fffbeb' : '#fef2f2';
-            const riskBorder = s.risk_tier === 'low' ? '#a7f3d0' : s.risk_tier === 'medium' ? '#fde68a' : '#fecaca';
+            const riskColor = s.risk_tier === 'low' ? 'var(--c-success)' : s.risk_tier === 'medium' ? 'var(--c-warning)' : 'var(--c-danger)';
+            const riskBg = s.risk_tier === 'low' ? 'var(--c-success-bg)' : s.risk_tier === 'medium' ? 'var(--c-warning-bg)' : 'var(--c-danger-bg)';
+            const riskBorder = s.risk_tier === 'low' ? 'var(--c-success-border)' : s.risk_tier === 'medium' ? 'var(--c-warning-border)' : 'var(--c-danger-border)';
 
             return (
               <div
                 key={s.supplier_id}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--c-bg-subtle)',
+                  border: '1px solid var(--c-border)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '16px',
+                  padding: 'var(--space-4)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{s.name}</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>Country: {s.country} &bull; Lead Time: {s.lead_time_days}d</div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--c-text-primary)' }}>{s.name}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)' }}>{s.country} &bull; {s.lead_time_days}d lead time</div>
                   </div>
                   <span
                     style={{
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: '9999px',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: 'var(--radius-full)',
                       background: riskBg,
                       color: riskColor,
                       border: `1px solid ${riskBorder}`,
                       textTransform: 'uppercase',
+                      letterSpacing: 'var(--track-wide)',
                     }}
                   >
-                    {s.risk_tier} Risk
+                    {s.risk_tier}
                   </span>
                 </div>
 
                 <div style={{ marginTop: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
-                    <span>Reliability Score</span>
-                    <strong style={{ color: '#0f172a' }}>{s.reliability_score}%</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', marginBottom: '4px' }}>
+                    <span>Reliability</span>
+                    <strong style={{ color: 'var(--c-text-primary)' }}>{s.reliability_score}%</strong>
                   </div>
-                  <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${s.reliability_score}%`, background: riskColor, borderRadius: '9999px' }} />
+                  <div style={{ height: '6px', background: 'var(--c-border)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${s.reliability_score}%`, background: riskColor, borderRadius: 'var(--radius-full)' }} />
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '11px', color: '#64748b' }}>
-                  <span>Rating: {s.rating} / 5.0</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)' }}>
+                  <span>Rating: {s.rating}</span>
                   <span>Open POs: {s.open_purchase_orders}</span>
                 </div>
               </div>
@@ -264,11 +272,11 @@ export const ProcurementPage: React.FC = () => {
       </div>
 
       {/* Inbound Purchase Orders Section */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <Package className="w-4 h-4 text-emerald-600" />
-            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#0f172a' }}>
+            <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 600, margin: 0, color: 'var(--c-text-primary)', letterSpacing: 'var(--track-snug)' }}>
               Inbound Replenishment Consignments
             </h2>
           </div>
@@ -301,18 +309,18 @@ export const ProcurementPage: React.FC = () => {
         </div>
 
         {/* PO Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <div className="table-wrapper">
+          <table>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                <th style={{ padding: '10px 12px' }}>PO NUMBER</th>
-                <th style={{ padding: '10px 12px' }}>SUPPLIER</th>
-                <th style={{ padding: '10px 12px' }}>PRODUCT & SKU</th>
-                <th style={{ padding: '10px 12px' }}>DESTINATION WAREHOUSE</th>
-                <th style={{ padding: '10px 12px' }}>QUANTITY</th>
-                <th style={{ padding: '10px 12px' }}>TOTAL VALUE</th>
-                <th style={{ padding: '10px 12px' }}>STATUS</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>DOCK ACTIONS</th>
+              <tr>
+                <th>PO NUMBER</th>
+                <th>SUPPLIER</th>
+                <th>PRODUCT & SKU</th>
+                <th>DESTINATION WAREHOUSE</th>
+                <th>QUANTITY</th>
+                <th>TOTAL VALUE</th>
+                <th>STATUS</th>
+                <th style={{ textAlign: 'right' }}>DOCK ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -321,34 +329,38 @@ export const ProcurementPage: React.FC = () => {
                 const canReceive = po.status === 'in_transit' || po.status === 'draft';
 
                 return (
-                  <tr key={po.po_id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}>
-                    <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
+                  <tr key={po.po_id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--c-text-primary)' }}>
                       {po.po_id.slice(0, 16)}...
                     </td>
-                    <td style={{ padding: '12px', color: '#475569' }}>{po.supplier_name}</td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ color: '#0f172a', fontWeight: 600 }}>{po.product_name}</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>{po.sku}</div>
+                    <td>{po.supplier_name}</td>
+                    <td>
+                      <div style={{ color: 'var(--c-text-primary)', fontWeight: 600 }}>{po.product_name}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)', fontFamily: 'var(--font-mono)' }}>{po.sku}</div>
                     </td>
-                    <td style={{ padding: '12px', color: '#64748b' }}>{po.warehouse_name}</td>
-                    <td style={{ padding: '12px', color: '#0f172a', fontWeight: 600 }}>{po.quantity.toLocaleString()} units</td>
-                    <td style={{ padding: '12px', color: '#059669', fontWeight: 600 }}>{formatCurrency(po.total_cost)}</td>
-                    <td style={{ padding: '12px' }}>
+                    <td style={{ color: 'var(--c-text-muted)' }}>{po.warehouse_name}</td>
+                    <td style={{ color: 'var(--c-text-primary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{po.quantity.toLocaleString()} units</td>
+                    <td style={{ color: 'var(--c-success)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{formatCurrency(po.total_cost)}</td>
+                    <td>
                       <span
                         style={{
-                          fontSize: '11px',
+                          fontSize: 'var(--text-xs)',
                           fontWeight: 600,
                           padding: '3px 10px',
-                          borderRadius: '9999px',
+                          borderRadius: 'var(--radius-full)',
                           background: badge.bg,
                           color: badge.text,
                           border: `1px solid ${badge.border}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
                         }}
                       >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: badge.text }} />
                         {badge.label}
                       </span>
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right' }}>
                       {canReceive ? (
                         <button
                           onClick={() => handleReceiveStock(po)}
@@ -368,10 +380,10 @@ export const ProcurementPage: React.FC = () => {
                           }}
                         >
                           <ArrowDownLeft className="w-3.5 h-3.5" />
-                          {receivingId === po.po_id ? 'Receiving...' : '1-Click Dock Receipt'}
+                          {receivingId === po.po_id ? 'Receiving...' : 'Receive'}
                         </button>
                       ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '11px' }}>Processed</span>
+                        <span style={{ color: '#94a3b8', fontSize: '11px' }}>Received</span>
                       )}
                     </td>
                   </tr>
@@ -392,10 +404,16 @@ export const ProcurementPage: React.FC = () => {
 
       {/* Create PO Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '500px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div
+          onClick={() => setShowCreateModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-lg)', padding: '24px', width: '500px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+          >
             <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>
-              Issue Inbound Replenishment Purchase Order
+              Issue Purchase Order
             </h2>
             <form onSubmit={handleCreatePoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
@@ -405,10 +423,14 @@ export const ProcurementPage: React.FC = () => {
                   onChange={(e) => setSelectedSupplierId(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 'var(--radius-md)', color: '#0f172a', fontSize: '13px' }}
                 >
-                  <option value="sup00000-0000-0000-0000-000000000001">Apex Microelectronics Inc. (Japan - 96.5% Rel)</option>
-                  <option value="sup00000-0000-0000-0000-000000000002">Global Precision Systems GmbH (Germany - 91.2% Rel)</option>
-                  <option value="sup00000-0000-0000-0000-000000000003">Nexus Advanced Circuits (USA - 88.0% Rel)</option>
-                  <option value="sup00000-0000-0000-0000-000000000004">Pacific Freight Logistics Ltd. (Taiwan - 82.3% Rel)</option>
+                  {suppliers.map((s) => (
+                    <option key={s.supplier_id} value={s.supplier_id}>
+                      {s.name} ({s.country} — {s.reliability_score}% Rel)
+                    </option>
+                  ))}
+                  {suppliers.length === 0 && (
+                    <option value="33333333-0000-0000-0000-000000000001">Apex Microelectronics Inc. (Japan — 96.5% Rel)</option>
+                  )}
                 </select>
               </div>
 

@@ -230,10 +230,37 @@ def init_db() -> None:
                 created_at TEXT,
                 updated_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT,
+                role TEXT,
+                full_name TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT
+            );
             """
         )
 
         now_iso = datetime.now(timezone.utc).isoformat()
+
+        # Seed users if empty
+        if conn.execute("SELECT COUNT(*) as count FROM users").fetchone()["count"] == 0:
+            import hashlib
+            def _h(pwd: str) -> str:
+                salt = b"\x10\x20\x30\x40\x50\x60\x70\x80\x90\xa0\xb0\xc0\xd0\xe0\xf0\x00"
+                dk = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), salt, 100_000)
+                return f"{salt.hex()}:{dk.hex()}"
+
+            conn.executemany(
+                "INSERT OR IGNORE INTO users (username, password_hash, role, full_name, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)",
+                [
+                    ("admin", _h("admin123"), "admin", "System Administrator", now_iso),
+                    ("operator", _h("operator123"), "operator", "Supply Chain Operator", now_iso),
+                    ("analyst", _h("analyst123"), "analyst", "Supply Chain Analyst", now_iso),
+                    ("viewer", _h("viewer123"), "viewer", "Dashboard Viewer", now_iso),
+                ],
+            )
 
         # Seed customers if empty
         if conn.execute("SELECT COUNT(*) as count FROM customers").fetchone()["count"] == 0:
@@ -1005,6 +1032,8 @@ def save_event(event: dict[str, Any]) -> None:
         payload["_remediation_summary"] = event["remediation_summary"]
     if "autonomous_actions" in event and "_autonomous_actions" not in payload:
         payload["_autonomous_actions"] = event["autonomous_actions"]
+    if "remediation_trace" in event and "_remediation_trace" not in payload:
+        payload["_remediation_trace"] = event["remediation_trace"]
 
     payload_str = json.dumps(payload, default=str)
     ts = str(event.get("timestamp") or datetime.now(timezone.utc).isoformat())
@@ -1058,6 +1087,7 @@ def list_events(limit: int = 100, event_type: str | None = None) -> list[dict[st
             subscribers = payload.pop("_subscribers", None)
             remediation_summary = payload.pop("_remediation_summary", None)
             autonomous_actions = payload.pop("_autonomous_actions", None)
+            remediation_trace = payload.pop("_remediation_trace", None)
             items.append({
                 "event_id": r["event_id"],
                 "event_type": r["event_type"],
@@ -1069,8 +1099,49 @@ def list_events(limit: int = 100, event_type: str | None = None) -> list[dict[st
                 "subscribers": subscribers or [],
                 "remediation_summary": remediation_summary or "",
                 "autonomous_actions": autonomous_actions or [],
+                "remediation_trace": remediation_trace or [],
             })
         return items
+
+
+def get_event(event_id: str) -> dict[str, Any] | None:
+    """Retrieve an individual event record with full payload and remediation trace."""
+    with _get_connection() as conn:
+        r = conn.execute(
+            """
+            SELECT event_id, event_type, source_agent, workflow_id, payload_json, timestamp, status
+            FROM events
+            WHERE event_id = ?
+            LIMIT 1
+            """,
+            (event_id,),
+        ).fetchone()
+        if not r:
+            return None
+        payload = {}
+        if r["payload_json"]:
+            try:
+                payload = json.loads(r["payload_json"])
+            except Exception:
+                pass
+        subscribers = payload.pop("_subscribers", None)
+        remediation_summary = payload.pop("_remediation_summary", None)
+        autonomous_actions = payload.pop("_autonomous_actions", None)
+        remediation_trace = payload.pop("_remediation_trace", None)
+        return {
+            "event_id": r["event_id"],
+            "event_type": r["event_type"],
+            "source_agent": r["source_agent"],
+            "workflow_id": r["workflow_id"],
+            "payload": payload,
+            "timestamp": r["timestamp"],
+            "status": r["status"],
+            "subscribers": subscribers or [],
+            "remediation_summary": remediation_summary or "",
+            "autonomous_actions": autonomous_actions or [],
+            "remediation_trace": remediation_trace or [],
+        }
+
 
 
 # ── Orders Persistence ─────────────────────────────────────────────────────────
@@ -1416,6 +1487,12 @@ def get_report(report_id: str) -> dict[str, Any] | None:
 def save_purchase_order(po_dict: dict[str, Any]) -> None:
     """Save or update an autonomous inbound replenishment Purchase Order."""
     now_iso = datetime.now(timezone.utc).isoformat()
+    raw_sname = str(po_dict.get("supplier_name", "Primary Supplier"))
+    if "Mock" in raw_sname:
+        raw_sname = "Global Precision Systems GmbH"
+    raw_sid = str(po_dict.get("supplier_id", ""))
+    if "Mock" in raw_sid or not raw_sid:
+        raw_sid = "33333333-0000-0000-0000-000000000001"
     with _get_connection() as conn:
         conn.execute(
             """
@@ -1427,8 +1504,8 @@ def save_purchase_order(po_dict: dict[str, Any]) -> None:
             """,
             (
                 str(po_dict.get("po_id", uuid.uuid4())),
-                str(po_dict.get("supplier_id", "")),
-                str(po_dict.get("supplier_name", "Primary Supplier")),
+                raw_sid,
+                raw_sname,
                 str(po_dict.get("product_id", "")),
                 str(po_dict.get("product_name", "Component")),
                 str(po_dict.get("sku", "SKU-001")),
@@ -1655,6 +1732,25 @@ def update_shipment_status(
             (status, loc, del_reason, actual_del, now_iso, shipment_id),
         )
 
+        # Synchronize linked order status when shipment updates
+        if row["order_id"] and status in ("delivered", "in_transit", "cancelled"):
+            conn.execute(
+                "UPDATE orders SET status = ? WHERE order_id = ?",
+                (status, row["order_id"]),
+            )
+
+        if status == "delivered":
+            conn.execute(
+                """
+                UPDATE events
+                SET status = 'remediated'
+                WHERE event_type IN ('DeliveryDelayed', 'CarrierDelayed', 'LogisticsDisruption')
+                  AND status != 'remediated'
+                  AND payload_json LIKE ?
+                """,
+                (f'%"{shipment_id}"%',),
+            )
+
         updated_row = conn.execute(
             "SELECT * FROM shipments WHERE shipment_id = ?",
             (shipment_id,),
@@ -1687,6 +1783,16 @@ def reroute_shipment(
             WHERE shipment_id = ?
             """,
             (new_mode, carrier_name, note, now_iso, shipment_id),
+        )
+        conn.execute(
+            """
+            UPDATE events
+            SET status = 'remediated'
+            WHERE event_type IN ('DeliveryDelayed', 'CarrierDelayed', 'LogisticsDisruption')
+              AND status != 'remediated'
+              AND payload_json LIKE ?
+            """,
+            (f'%"{shipment_id}"%',),
         )
         updated = conn.execute(
             "SELECT * FROM shipments WHERE shipment_id = ?",
@@ -1761,11 +1867,80 @@ def save_order_with_items(
 
 
 def update_order_status(order_id: str, new_status: str) -> bool:
-    """Transition commercial order status (e.g. pending -> processing -> in_transit -> delivered)."""
+    """Transition commercial order status (e.g. pending -> processing -> in_transit -> delivered -> cancelled)."""
     with _get_connection() as conn:
         cur = conn.execute(
             "UPDATE orders SET status = ? WHERE order_id = ?",
             (new_status, order_id),
         )
+        if new_status in ("delivered", "in_transit", "cancelled"):
+            cur_shp = conn.execute(
+                "SELECT shipment_id FROM shipments WHERE order_id = ?",
+                (order_id,),
+            ).fetchone()
+            if cur_shp:
+                conn.execute(
+                    "UPDATE shipments SET status = ? WHERE shipment_id = ?",
+                    (new_status, cur_shp["shipment_id"]),
+                )
         return cur.rowcount > 0
+
+
+def list_suppliers(limit: int = 100) -> list[dict[str, Any]]:
+    """List all registered suppliers with reliability scores from persistent storage."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT supplier_id, name, country, lead_time_days, reliability_score, rating, status
+            FROM suppliers
+            ORDER BY reliability_score DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_user(username: str) -> dict[str, Any] | None:
+    """Retrieve user record from persistent storage."""
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT username, password_hash, role, full_name, is_active FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_user(user_dict: dict[str, Any]) -> None:
+    """Save or update user record in persistent storage."""
+    with _get_connection() as conn:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            """
+            INSERT INTO users (username, password_hash, role, full_name, is_active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                password_hash=excluded.password_hash,
+                role=excluded.role,
+                full_name=excluded.full_name,
+                is_active=excluded.is_active
+            """,
+            (
+                user_dict["username"],
+                user_dict["password_hash"],
+                user_dict.get("role", "viewer"),
+                user_dict.get("full_name", user_dict["username"]),
+                1 if user_dict.get("is_active", True) else 0,
+                user_dict.get("created_at", now_iso),
+            ),
+        )
+
+
+def list_users() -> list[dict[str, Any]]:
+    """List all users from persistent storage."""
+    with _get_connection() as conn:
+        rows = conn.execute("SELECT username, role, full_name, is_active FROM users ORDER BY username").fetchall()
+        return [dict(r) for r in rows]
+
+
 

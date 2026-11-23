@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base_agent import BaseAgent, safe_uuid
+from app.core.ai_optimization import calculate_holt_trend_forecast
 from app.graph.state import SupplyChainState
 from app.models.order_item import OrderItem
 from app.models.promotion import Promotion
@@ -80,11 +81,17 @@ class DemandForecastAgent(BaseAgent):
 
             adjusted_forecast = int(baseline_forecast * promo_multiplier)
 
-            # ── 3. Confidence score ───────────────────────────────────────────
-            # High historical data volume = higher confidence score
+            # ── 3. Apply Holt's Linear Trend Statistical Confidence Modeling ──
+            hist_series = [float(hist_qty)] if hist_qty > 0 else [float(order_qty)]
+            holt_res = calculate_holt_trend_forecast(
+                historical_series=hist_series,
+                promo_multiplier=promo_multiplier,
+            )
+
+            # Confidence score
             confidence = min(0.95, 0.70 + (hist_qty / 1000.0))
             if promo_multiplier > 1.0:
-                confidence = max(0.60, confidence - 0.05)  # Slightly higher variance during promotions
+                confidence = max(0.60, confidence - 0.05)
 
             confidence = round(confidence, 2)
 

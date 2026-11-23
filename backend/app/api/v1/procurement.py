@@ -90,6 +90,12 @@ async def create_purchase_order(
     # Resolve names if not provided
     s_name = payload.supplier_name
     if not s_name:
+        suppliers_db = persistence.list_suppliers(limit=100)
+        for s in suppliers_db:
+            if s["supplier_id"] == payload.supplier_id:
+                s_name = s["name"]
+                break
+    if not s_name:
         for s in BASELINE_SUPPLIERS:
             if s[0] == payload.supplier_id:
                 s_name = s[1]
@@ -190,18 +196,34 @@ async def get_supplier_scorecard() -> dict[str, Any]:
         if s_id:
             supplier_orders[s_id] = supplier_orders.get(s_id, 0) + 1
 
+    suppliers_db = persistence.list_suppliers(limit=100)
     scorecards = []
-    for s in BASELINE_SUPPLIERS[:4]:
-        scorecards.append({
-            "supplier_id": s[0],
-            "name": s[1],
-            "country": s[2],
-            "lead_time_days": s[3],
-            "reliability_score": s[4],
-            "rating": s[5],
-            "status": s[6],
-            "risk_tier": "low" if s[4] >= 90 else ("medium" if s[4] >= 80 else "high"),
-            "open_purchase_orders": supplier_orders.get(s[0], 0),
-        })
+    if suppliers_db:
+        for s in suppliers_db:
+            rel = float(s.get("reliability_score") or 85.0)
+            scorecards.append({
+                "supplier_id": s["supplier_id"],
+                "name": s["name"],
+                "country": s.get("country", "Global"),
+                "lead_time_days": int(s.get("lead_time_days", 5)),
+                "reliability_score": rel,
+                "rating": float(s.get("rating", 4.5)) if s.get("rating") is not None else 4.5,
+                "status": s.get("status", "active"),
+                "risk_tier": "low" if rel >= 90 else ("medium" if rel >= 80 else "high"),
+                "open_purchase_orders": supplier_orders.get(s["supplier_id"], 0),
+            })
+    else:
+        for s in BASELINE_SUPPLIERS[:4]:
+            scorecards.append({
+                "supplier_id": s[0],
+                "name": s[1],
+                "country": s[2],
+                "lead_time_days": s[3],
+                "reliability_score": s[4],
+                "rating": s[5],
+                "status": s[6],
+                "risk_tier": "low" if s[4] >= 90 else ("medium" if s[4] >= 80 else "high"),
+                "open_purchase_orders": supplier_orders.get(s[0], 0),
+            })
 
     return {"items": scorecards, "total": len(scorecards)}

@@ -10,8 +10,40 @@ import { InventoryPage } from './pages/InventoryPage';
 import { ControlTowerPage } from './pages/ControlTowerPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { WorkflowVisualizerPage } from './pages/WorkflowVisualizerPage';
+import { LoginPage } from './pages/LoginPage';
+import { AuthProvider } from './context/AuthContext';
+import { AuthGuard } from './components/common/AuthGuard';
 import { healthApi } from './services/api';
 import './App.css';
+
+const MainLayout: React.FC<{ systemOnline: boolean }> = ({ systemOnline }) => {
+  return (
+    <div className="layout">
+      <Sidebar systemOnline={systemOnline} />
+      <div className="main-content">
+        <TopBar />
+        <main>
+          <Routes>
+            <Route path="/"              element={<DashboardPage />} />
+            <Route path="/orders"        element={<OrdersPage />} />
+            <Route path="/shipments"     element={<ShipmentsPage />} />
+            <Route path="/procurement"   element={<ProcurementPage />} />
+            <Route path="/inventory"     element={<InventoryPage />} />
+            <Route path="/control-tower" element={<ControlTowerPage />} />
+            <Route path="/events"        element={<Navigate to="/control-tower" replace />} />
+            <Route path="/simulate"      element={<Navigate to="/control-tower" replace />} />
+            <Route path="/workflows"     element={<WorkflowVisualizerPage />} />
+            <Route path="/workflow"      element={<WorkflowVisualizerPage />} />
+            <Route path="/visualizer"    element={<WorkflowVisualizerPage />} />
+            <Route path="/agents"        element={<AgentsPage />} />
+            <Route path="/reports"       element={<ReportsPage />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [systemOnline, setSystemOnline] = useState(false);
@@ -27,30 +59,21 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <BrowserRouter>
-      <div className="layout">
-        <Sidebar systemOnline={systemOnline} />
-        <div className="main-content">
-          <TopBar />
-          <main>
-            <Routes>
-              <Route path="/"              element={<DashboardPage />} />
-              <Route path="/orders"        element={<OrdersPage />} />
-              <Route path="/shipments"     element={<ShipmentsPage />} />
-              <Route path="/procurement"   element={<ProcurementPage />} />
-              <Route path="/inventory"     element={<InventoryPage />} />
-              <Route path="/control-tower" element={<ControlTowerPage />} />
-              <Route path="/events"        element={<Navigate to="/control-tower" replace />} />
-              <Route path="/simulate"      element={<Navigate to="/control-tower" replace />} />
-              <Route path="/workflows"     element={<Navigate to="/orders" replace />} />
-              <Route path="/workflow"      element={<Navigate to="/orders" replace />} />
-              <Route path="/agents"        element={<AgentsPage />} />
-              <Route path="/reports"       element={<ReportsPage />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/*"
+            element={
+              <AuthGuard>
+                <MainLayout systemOnline={systemOnline} />
+              </AuthGuard>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 };
 

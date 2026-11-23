@@ -1,495 +1,400 @@
 # AI Supply Chain Digital Twin
 
-> An autonomous, event-driven multi-agent system that mirrors, predicts, and optimizes enterprise supply chain operations in real time using LangGraph, FastAPI, and PostgreSQL.
+> An enterprise-grade, autonomous, event-driven multi-agent system that mirrors, predicts, and optimizes global supply chain operations in real time using **LangGraph**, **FastAPI**, **PostgreSQL**, and **React (TypeScript)**.
 
-[![Python](https://img.shields.io/badge/Python-3.12+-blue?logo=python)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green?logo=fastapi)](https://fastapi.tiangolo.com)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Orchestration-orange)](https://langchain-ai.github.io/langgraph/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)](https://www.postgresql.org)
+[![Python](https://img.shields.io/badge/Python-3.12%2B%20%7C%203.13-blue?logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-green?logo=fastapi)](https://fastapi.tiangolo.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-18_Agent_Mesh-orange)](https://langchain-ai.github.io/langgraph/)
+[![React](https://img.shields.io/badge/React-19_TypeScript-61dafb?logo=react)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite)](https://vitejs.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-blue?logo=postgresql)](https://www.postgresql.org)
 [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Event_Bus-orange?logo=rabbitmq)](https://www.rabbitmq.com)
-[![React](https://img.shields.io/badge/React-TypeScript-blue?logo=react)](https://react.dev)
-[![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)](https://www.docker.com)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://www.docker.com)
 
 ---
 
 ## Table of Contents
 
-- [What Is This?](#what-is-this)
-- [Architecture Overview](#architecture-overview)
-- [Agent Catalogue](#agent-catalogue)
-- [Technology Stack](#technology-stack)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Documentation](#documentation)
-- [Development Phases](#development-phases)
-- [Key Design Principles](#key-design-principles)
-- [API Reference](#api-reference)
-- [Environment Variables](#environment-variables)
-- [Contributing](#contributing)
+- [Overview & Capabilities](#overview--capabilities)
+- [System Architecture](#system-architecture)
+- [18-Agent Catalogue](#18-agent-catalogue)
+- [System Requirements](#system-requirements)
+- [Environment Configuration](#environment-configuration)
+- [Project Setup & Installation](#project-setup--installation)
+  - [Option A: Local Development Setup (Quickest, No Docker Needed)](#option-a-local-development-setup-quickest-no-docker-needed)
+  - [Option B: Containerized Setup (Docker Compose)](#option-b-containerized-setup-docker-compose)
+- [Running the Application](#running-the-application)
+- [Default Demo Credentials](#default-demo-credentials)
+- [Database Migrations & Data Seeding](#database-migrations--data-seeding)
+- [Running the Test Suites](#running-the-test-suites)
+- [Core API Reference](#core-api-reference)
+- [Troubleshooting & Common FAQs](#troubleshooting--common-faqs)
+- [License](#license)
 
 ---
 
-## What Is This?
+## Overview & Capabilities
 
-This project is a **production-grade AI Supply Chain Digital Twin** — a virtual, continuously updating replica of a real-world enterprise supply chain. Unlike traditional workflow systems, this platform is composed of **18 specialized AI agents** that autonomously cooperate, negotiate, and make decisions based on a shared world state.
+The **AI Supply Chain Digital Twin** is an autonomous multi-agent simulation and operations platform. Unlike rigid rule-based systems or monolithic LLM wrappers, it deploys **18 specialized AI agents** organized across three functional tiers to collaboratively govern procurement, warehouse inventory, freight transportation, dynamic pricing, risk mitigation, and executive decision-making.
 
-### Core Capabilities
+### Key Capabilities
 
-| Capability | Description |
-|---|---|
-| **Mirror** | Continuously reflects real supply chain state |
-| **React** | Responds autonomously to disruption events |
-| **Simulate** | Runs what-if scenarios without affecting production |
-| **Explain** | Every AI decision is fully auditable and explainable |
-| **Optimize** | Continuously improves routes, suppliers, inventory, pricing |
-| **Coordinate** | 18 agents collaborate, negotiate, and reach consensus |
+* **Autonomous Fulfillment & Routing:** Validates orders, allocates warehouse inventory across multi-echelon hubs, selects optimal freight corridors, and applies dynamic volume discounts.
+* **Closed-Loop Disruption Remediation:** Ingests live operational disruption events (carrier delays, supplier outages, quality failures, safety stock breaches) and initiates autonomous multi-agent healing protocols.
+* **Decentralized Multi-Agent Consensus:** Employs an agent negotiation protocol and shared blackboard memory to reconcile conflicting domain goals (e.g., Sustainability vs. Expedited Air Freight vs. Gross Margins).
+* **Human-in-the-Loop Governance:** Enforces strict executive threshold policies (e.g., CEO approval sign-off for orders exceeding $50,000 or significant CapEx exceptions).
+* **What-If Scenario Simulation:** Simulates extreme stress scenarios (e.g., 2.5× demand surges, 100% lot quarantines) without contaminating production databases.
 
 ---
 
-## Architecture Overview
+## System Architecture
 
 ```
-                      React Dashboard (TypeScript)
-                               │
-                               ▼
-                         FastAPI Gateway
-                               │
-                               ▼
-                    LangGraph Orchestrator
-                               │
-   ┌───────────────────────────┼───────────────────────────┐
-   │                           │                           │
-Operational Layer       Business Layer          Coordination Layer
-(8 Agents)              (6 Agents)              (4 Agents)
-   │                           │                           │
-   └───────────────────────────┼───────────────────────────┘
-                               ▼
-                  Shared State / Memory Layer
-              PostgreSQL + Redis + pgvector
-                               │
-                               ▼
-                    RabbitMQ Event Bus
-                               │
-                               ▼
-                   Simulation Engine / Analytics
+                    React 19 + TypeScript Control Tower (Vite)
+                     [ http://localhost:5173  /  Port 5173 ]
+                                        │
+                                        ▼ (REST API / JWT Auth)
+                        FastAPI Production Gateway
+                     [ http://localhost:8000  /  Port 8000 ]
+                                        │
+                                        ▼
+                       LangGraph 18-Agent State Graph
+                                        │
+   ┌────────────────────────────────────┼────────────────────────────────────┐
+   │                                    │                                    │
+   ▼                                    ▼                                    ▼
+Operational Layer              Business Intelligence Layer           Coordination Layer
+(8 Specialist Agents)          (6 Optimization Agents)               (4 Governance Agents)
+   │                                    │                                    │
+   └────────────────────────────────────┼────────────────────────────────────┘
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             ▼                                                     ▼
+Primary State & Vector Memory                      Event Bus & Async Messaging
+PostgreSQL 16 (pgvector) / SQLite WAL              RabbitMQ 3 (Topic Exchanges & DLQ)
++ Redis 7 (Checkpoints & Caching)
 ```
 
-**Three-Layer Agent Model:**
-- **Operational Layer** — Day-to-day execution (orders, inventory, shipping, manufacturing)
-- **Business Intelligence Layer** — Analysis and optimization (finance, risk, pricing, sustainability)
-- **Coordination Layer** — Governance and consensus (planning, negotiation, CEO approval, reporting)
+---
+
+## 18-Agent Catalogue
+
+| Layer | Agent ID | Agent Role | Core Domain & Responsibilities |
+| :--- | :--- | :--- | :--- |
+| **Operational** | **ADS-01** | Order Management | Validates line items, enforces priority queues, ingests orders |
+| **Operational** | **ADS-03** | Inventory Management | Stock reservation, multi-echelon allocation, deficit detection |
+| **Operational** | **ADS-04** | Warehouse Operations | Warehouse facility selection, staging schedules, fulfillment rules |
+| **Operational** | **ADS-05** | Supplier & Sourcing | Supplier reliability scoring, automated replenishment PO issuance |
+| **Operational** | **ADS-06** | Transportation Agent | Carrier TMS selection, freight corridor routing, transit ETA |
+| **Operational** | **ADS-07** | Manufacturing Agent | Assembly line scheduling, emergency remanufacturing batches |
+| **Operational** | **ADS-08** | Customer Service | Client SLA monitoring, proactive notifications, issue escalation |
+| **Business** | **ADS-02** | Demand Forecast | Statistical predictive modeling, market surge detection |
+| **Business** | **ADS-09** | Finance & Margins | Gross margin calculation, budget thresholds, CapEx checks |
+| **Business** | **ADS-10** | Supply Chain Risk | Disruption risk scoring, geopolitical hazard assessment |
+| **Business** | **ADS-11** | Dynamic Pricing | Elasticity-based volume discounts, promotional pricing matrices |
+| **Business** | **ADS-12** | Procurement Strategy | Strategic vendor diversification, contract terms compliance |
+| **Business** | **ADS-13** | Sustainability & ESG | Carbon footprint telemetry (kg CO₂e), clean corridor incentives |
+| **Business** | **ADS-14** | Quality Assurance | Batch inspection, lot quarantine management, defect audits |
+| **Coordination** | **ADS-15** | Dynamic Planner | Master production scheduling, buffer replanning, SLA safeguarding |
+| **Coordination** | **ADS-16** | Negotiation Protocol | Multi-agent trade-off mediation, blackboard consensus voting |
+| **Coordination** | **ADS-17** | CEO Governance | Strategic alignment, threshold escalation (orders > $50,000) |
+| **Coordination** | **ADS-18** | BI & Audit Reporting | Final state audit logging, executive explainability reports |
 
 ---
 
-## Agent Catalogue
+## System Requirements
 
-### Operational Agents (8)
+### Hardware Requirements
+* **RAM:** Minimum 8 GB (16 GB recommended when running Docker Compose)
+* **Storage:** 5 GB free disk space
+* **OS:** macOS (Apple Silicon or Intel), Ubuntu / Debian Linux, Windows 10/11 (via WSL2)
 
-| ID | Agent | Responsibility |
-|---|---|---|
-| ADS-01 | Order Management | Validate, prioritize, and trigger order workflows |
-| ADS-02 | Demand Forecast | Predict demand, detect anomalies and spikes |
-| ADS-03 | Inventory | Prevent stock-outs, allocate and trigger replenishment |
-| ADS-04 | Warehouse | Select optimal fulfillment warehouse |
-| ADS-05 | Supplier | Evaluate and select best supplier per order |
-| ADS-06 | Transportation | Route optimization, carrier selection, ETA |
-| ADS-07 | Manufacturing | Production scheduling and capacity management |
-| ADS-08 | Customer Service | Proactive notifications, issue resolution, escalation |
+### Required Software
+Ensure the following base runtimes are installed on your host machine:
 
-### Business Intelligence Agents (6)
+| Software | Minimum Version | Installation Link / Command |
+| :--- | :--- | :--- |
+| **Python** | `3.12+` (3.12, 3.13 tested) | [python.org](https://www.python.org/downloads/) |
+| **Node.js** | `20.x` or higher | [nodejs.org](https://nodejs.org/) (`node -v`) |
+| **npm** | `10.x` or higher | Bundled with Node.js (`npm -v`) |
+| **Git** | `2.x` | [git-scm.com](https://git-scm.com/) |
 
-| ID | Agent | Responsibility |
-|---|---|---|
-| ADS-09 | Finance | Budget evaluation, cost analysis, approval |
-| ADS-10 | Risk | Multi-signal risk scoring and mitigation planning |
-| ADS-11 | Pricing | Dynamic pricing based on demand and market data |
-| ADS-12 | Procurement Strategy | Long-term sourcing strategy and supplier diversification |
-| ADS-13 | Sustainability | Carbon footprint tracking and ESG compliance |
-| ADS-14 | Quality Assurance | Defect detection, corrective actions, supplier quality |
+### Optional Software (for Containerized Setup)
+* **Docker Desktop** (version 4.x or higher) with Docker Compose v2.
 
-### Coordination Agents (4)
-
-| ID | Agent | Responsibility |
-|---|---|---|
-| ADS-15 | Planner | Enterprise execution planning and task orchestration |
-| ADS-16 | Negotiation | Conflict resolution and multi-agent trade-off analysis |
-| ADS-17 | CEO | Strategic governance, policy enforcement, final approvals |
-| ADS-18 | Reporting | Executive dashboards, explainability reports, audit |
+### Optional LLM Providers (for Live AI Reasoning)
+The system operates seamlessly in deterministic offline mode using simulated heuristics. To activate live LLM intelligence:
+* **Groq API Key** (Recommended: ultra-fast inference with `llama-3.3-70b-versatile` or `openai/gpt-oss-20b`)
+* **OpenAI API Key** or **Anthropic API Key** (Alternative fallbacks)
 
 ---
 
-## Technology Stack
+## Environment Configuration
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| Frontend | React + TypeScript + Vite | Dashboard and visualization |
-| Charts | Apache ECharts | Supply chain maps, KPI charts |
-| Backend API | FastAPI (Python 3.12) | REST API gateway |
-| Agent Orchestration | LangGraph | Multi-agent workflow engine |
-| LLM Providers | Groq / Anthropic / Gemini | Reasoning, negotiation, explanation |
-| Relational Database | PostgreSQL 16 + pgvector | Source of truth + semantic memory |
-| Cache / Checkpoints | Redis 7 | Active workflow state, LangGraph checkpoints |
-| Event Bus | **RabbitMQ 3** | Async agent-to-agent communication |
-| Background Jobs | Celery | Archival jobs, scheduled tasks |
-| Observability | LangSmith + OpenTelemetry | LLM tracing + distributed tracing |
-| Metrics | Prometheus + Grafana | System health and KPI dashboards |
-| Authentication | JWT + RBAC | API security |
-| Containers | Docker + Docker Compose | Local development |
-| Production | Kubernetes | Autoscaling, managed cloud services |
-
-> **Event Bus Decision:** RabbitMQ was chosen over Kafka because this system requires flexible per-agent routing (topic exchange + routing keys), low-to-medium throughput (< 10k events/sec), built-in Dead Letter Queue support, and simpler operational overhead for an initial enterprise deployment. See [`md_files/DECISION_Event_Bus.md`](md_files/DECISION_Event_Bus.md) for the full decision record.
-
----
-
-## Prerequisites
-
-Ensure the following are installed:
-
-| Tool | Minimum Version | Installation |
-|---|---|---|
-| Docker Desktop | 4.x | https://www.docker.com/products/docker-desktop |
-| Docker Compose | 2.x | Bundled with Docker Desktop |
-| Python | 3.12+ | https://python.org |
-| Node.js | 20+ | https://nodejs.org |
-| Git | 2.x | https://git-scm.com |
-
-Optional (for LLM features):
-- Groq API Key, Anthropic API Key, or Google Gemini API Key
-- LangSmith API Key (for LLM tracing)
-
----
-
-## Quick Start
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd multi-agent-system
-```
-
-### 2. Configure Environment Variables
+Create your local `.env` configuration file in the project root:
 
 ```bash
 cp .env.example .env
-# Edit .env with your API keys and database credentials
 ```
 
-### 3. Start All Services
+Key environment settings:
 
-```bash
-docker compose up --build
-```
-
-This starts:
-- **FastAPI** at `http://localhost:8000`
-- **React Dashboard** at `http://localhost:3000`
-- **PostgreSQL** at `localhost:5432`
-- **Redis** at `localhost:6379`
-- **RabbitMQ** at `localhost:5672` (Management UI: `http://localhost:15672`)
-
-### 4. Run Database Migrations
-
-```bash
-docker compose exec api alembic upgrade head
-```
-
-### 5. Seed Development Data
-
-```bash
-docker compose exec api python -m scripts.seed
-```
-
-### 6. Verify Installation
-
-```bash
-curl http://localhost:8000/health
-# Expected: {"status": "ok", "version": "0.1.0", "db": "connected", "redis": "connected", "mq": "connected"}
-```
-
----
-
-## Project Structure
-
-```
-multi-agent-system/
-├── backend/
-│   ├── app/
-│   │   ├── agents/                  # All 18 agent implementations
-│   │   │   ├── operational/         # ADS-01 to ADS-08
-│   │   │   ├── business/            # ADS-09 to ADS-14
-│   │   │   └── coordination/        # ADS-15 to ADS-18
-│   │   ├── api/                     # FastAPI routers
-│   │   │   ├── orders.py
-│   │   │   ├── inventory.py
-│   │   │   ├── simulate.py
-│   │   │   ├── reports.py
-│   │   │   └── events.py
-│   │   ├── core/                    # Shared infrastructure
-│   │   │   ├── config.py            # Environment configuration
-│   │   │   ├── database.py          # SQLAlchemy engine
-│   │   │   ├── redis_client.py      # Redis connection
-│   │   │   ├── rabbitmq.py          # RabbitMQ publisher/consumer
-│   │   │   ├── security.py          # JWT + RBAC
-│   │   │   └── logging.py           # Structured logging
-│   │   ├── graph/                   # LangGraph orchestration
-│   │   │   ├── state.py             # SupplyChainState TypedDict
-│   │   │   ├── main_graph.py        # Main workflow graph
-│   │   │   ├── routing.py           # Conditional routing functions
-│   │   │   ├── retry.py             # Retry logic and circuit breakers
-│   │   │   └── subgraphs/           # 5 subgraph implementations
-│   │   ├── models/                  # SQLAlchemy ORM models
-│   │   ├── repositories/            # Repository pattern (data access)
-│   │   ├── schemas/                 # Pydantic schemas and event models
-│   │   └── services/                # Business services
-│   ├── alembic/                     # Database migrations
-│   │   ├── versions/
-│   │   └── alembic.ini
-│   ├── scripts/
-│   │   ├── seed.py                  # Development seed data
-│   │   └── dlq_processor.py         # Dead Letter Queue processor
-│   └── tests/
-│       ├── unit/
-│       ├── integration/
-│       └── simulation/
-├── frontend/
-│   ├── src/
-│   │   ├── components/              # Dashboard modules (10)
-│   │   ├── pages/
-│   │   ├── services/                # API clients
-│   │   └── hooks/
-│   ├── package.json
-│   └── vite.config.ts
-├── md_files/                        # Architecture documentation
-│   ├── AI_Supply_Chain_Digital_Twin_Complete_Architecture.md
-│   ├── AI_Supply_Chain_Digital_Twin_Database_Design_Document.md
-│   ├── AI_Supply_Chain_Digital_Twin_Development_Roadmap.md
-│   ├── AI_Supply_Chain_Digital_Twin_LangGraph_Workflow_Document.md
-│   ├── AI_Supply_Chain_Digital_Twin_System_Flow.md
-│   ├── AI_Supply_Chain_Digital_Twin_System_Rules.md
-│   ├── DECISION_Event_Bus.md        # Architectural decision: RabbitMQ
-│   └── Agent Specification Document/
-│       ├── AI_Supply_Chain_Digital_Twin_ADS_Volume_0.md
-│       ├── AI_Supply_Chain_Digital_Twin_ADS_Volume_1_Operational_Agents.md
-│       ├── AI_Supply_Chain_Digital_Twin_ADS_Volume_2_Business_Intelligence_Agents.md
-│       └── AI_Supply_Chain_Digital_Twin_ADS_Volume_3_Coordination_Agents.md
-├── sql/
-│   ├── 01_schema.sql                # Full DDL — all tables, constraints, indexes
-│   ├── 02_indexes.sql               # Composite, GIN, and vector indexes
-│   └── 03_seed.sql                  # Reference/seed data
-├── docker-compose.yml
-├── .env.example
-├── pyproject.toml
-└── README.md
-```
-
----
-
-## Documentation
-
-All architecture documentation lives in [`md_files/`](md_files/):
-
-| Document | Description |
-|---|---|
-| [Complete Architecture](md_files/AI_Supply_Chain_Digital_Twin_Complete_Architecture.md) | Master blueprint — vision, agent catalogue, tech stack, guiding principles |
-| [Database Design](md_files/AI_Supply_Chain_Digital_Twin_Database_Design_Document.md) | Full schema, relationships, indexes, event contracts |
-| [LangGraph Workflow](md_files/AI_Supply_Chain_Digital_Twin_LangGraph_Workflow_Document.md) | Graph topology, state, routing, checkpoints, retry, subgraphs |
-| [System Flow](md_files/AI_Supply_Chain_Digital_Twin_System_Flow.md) | End-to-end order and disruption flows |
-| [System Rules](md_files/AI_Supply_Chain_Digital_Twin_System_Rules.md) | Mandatory design rules every agent must follow |
-| [Development Roadmap](md_files/AI_Supply_Chain_Digital_Twin_Development_Roadmap.md) | 10-phase incremental build strategy |
-| [ADS Volume 0](md_files/Agent%20Specification%20Document/AI_Supply_Chain_Digital_Twin_ADS_Volume_0.md) | Common agent standards and template |
-| [ADS Volume 1 — Operational](md_files/Agent%20Specification%20Document/AI_Supply_Chain_Digital_Twin_ADS_Volume_1_Operational_Agents.md) | Specifications for ADS-01 to ADS-08 |
-| [ADS Volume 2 — Business Intelligence](md_files/Agent%20Specification%20Document/AI_Supply_Chain_Digital_Twin_ADS_Volume_2_Business_Intelligence_Agents.md) | Specifications for ADS-09 to ADS-14 |
-| [ADS Volume 3 — Coordination](md_files/Agent%20Specification%20Document/AI_Supply_Chain_Digital_Twin_ADS_Volume_3_Coordination_Agents.md) | Specifications for ADS-15 to ADS-18 |
-| [Event Bus Decision](md_files/DECISION_Event_Bus.md) | Architectural decision record: RabbitMQ |
-
----
-
-## Development Phases
-
-| Phase | Goal | Agents Added |
-|---|---|---|
-| **Phase 0** | Planning & Design ✅ | — |
-| **Phase 1** | Project Foundation | — |
-| **Phase 2** | Shared Infrastructure (DB, Redis, RabbitMQ, Auth) | — |
-| **Phase 3** | Core Supply Chain MVP | Order Mgmt, Inventory, Warehouse, Supplier, Transport, CEO |
-| **Phase 4** | Business Intelligence | Finance, Risk, Demand Forecast, Reporting |
-| **Phase 5** | Multi-Agent Coordination | Planner, Negotiation |
-| **Phase 6** | Simulation Engine | All 18 agents in simulation mode |
-| **Phase 7** | Dashboard & Visualization | — |
-| **Phase 8** | Optimization & Performance | — |
-| **Phase 9** | Production Deployment | — |
-
-> **Rule:** The system must remain fully runnable at the end of every phase. Never build all 18 agents simultaneously.
-
----
-
-## Key Design Principles
-
-1. **One responsibility per agent** — Agents never duplicate each other's domain.
-2. **Deterministic first** — Use algorithms for math; LLMs only for reasoning, negotiation, and explanations.
-3. **Event-driven** — Every business action is triggered by an event; no synchronous coupling between agents.
-4. **Explainable** — Every decision answers: What? Why? What data? What alternatives? What outcome?
-5. **Auditable by default** — Every action produces an immutable audit log entry.
-6. **State centralized** — PostgreSQL is the single source of truth; Redis for transient state only.
-7. **Safe degradation** — Retry → fallback → escalate → human. System never silently fails.
-8. **Correctness over speed** — Safety > Compliance > Policy > Data > Customer > Financial > Operational > Speed.
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/auth/token` | Issue JWT token |
-| `POST` | `/orders` | Submit a new customer order |
-| `GET` | `/orders/{id}` | Get order status and decision trail |
-| `GET` | `/inventory` | Query current inventory levels |
-| `GET` | `/suppliers` | List suppliers with health scores |
-| `POST` | `/simulate` | Trigger a what-if simulation scenario |
-| `GET` | `/simulation/{id}` | Get simulation results and KPIs |
-| `POST` | `/events` | Inject a manual event into the system |
-| `GET` | `/dashboard` | Aggregated dashboard data |
-| `GET` | `/reports` | Generate or retrieve decision reports |
-| `POST` | `/events/{id}/replay` | Replay a failed event from the DLQ |
-| `POST` | `/workflows/{id}/approve` | Human approval for interrupted workflows |
-| `POST` | `/workflows/{id}/reject` | Human rejection for interrupted workflows |
-| `GET` | `/health` | System health check (DB, Redis, RabbitMQ) |
-| `GET` | `/metrics` | Prometheus metrics endpoint |
-
-Full interactive API documentation available at `http://localhost:8000/docs` (Swagger UI) when running locally.
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and fill in the values:
-
-```env
-# Application
+```ini
+# Application Mode & Security
+ENVIRONMENT=development
 APP_ENV=development
-APP_VERSION=0.1.0
-SECRET_KEY=your-jwt-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=60
+APP_VERSION=1.0.0
+SECRET_KEY=dev-secret-key-change-in-production-must-be-32-chars-min
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
-# Database
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/supply_chain
-DATABASE_POOL_SIZE=10
+# Database Configuration (PostgreSQL / SQLite Dual Storage)
+# When PostgreSQL is offline, system automatically falls back to SQLite WAL: backend/.storage/digital_twin.db
+POSTGRES_SERVER=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=supply_chain
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/supply_chain
 
-# Redis
-REDIS_URL=redis://redis:6379/0
+# Caching & Message Queue
+REDIS_URL=redis://localhost:6379/0
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 
-# RabbitMQ
-RABBITMQ_URL=amqp://guest:guest@mq:5672/
-RABBITMQ_DLQ_THRESHOLD=50
-
-# LLM Providers (set at least one)
-GROQ_API_KEY=gsk_...
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=...
-
-# LLM Configuration
+# LLM Providers (Optional for live LLM intelligence)
+GROQ_API_KEY=gsk_your_groq_api_key_here
 LLM_PROVIDER=groq
 LLM_MODEL=llama-3.3-70b-versatile
 
-# LangSmith (optional but recommended)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=ls__...
-LANGCHAIN_PROJECT=supply-chain-digital-twin
-
-# Finance Thresholds
-FINANCE_APPROVAL_THRESHOLD=50000
-RISK_SCORE_THRESHOLD=70
-SAFETY_STOCK_OVERRIDE_REQUIRES_CEO=true
-
-# Performance
-AGENT_RESPONSE_TIMEOUT_SECONDS=10
-EVENT_PROCESSING_TIMEOUT_SECONDS=30
+# Governance Thresholds
+FINANCE_APPROVAL_THRESHOLD=50000.0
+RISK_SCORE_THRESHOLD=70.0
 ```
 
 ---
 
-## Contributing
+## Project Setup & Installation
 
-### Branch Strategy
+You can set up and run the system using either of the two methods below:
 
-| Branch | Purpose |
-|---|---|
-| `main` | Production-ready code only |
-| `develop` | Integration branch |
-| `feature/phase-N-description` | Feature work per phase |
-| `fix/description` | Bug fixes |
+### Option A: Local Development Setup (Quickest, No Docker Needed)
 
-### Development Workflow
+The backend includes a resilient local SQLite WAL persistence layer (`backend/.storage/digital_twin.db`). You can run both backend and frontend directly on your host machine without launching Docker, Postgres, or RabbitMQ.
+
+#### 1. Setup Backend Environment
 
 ```bash
-# 1. Create a feature branch
-git checkout -b feature/phase-3-inventory-agent
+# Navigate to the backend directory
+cd backend
 
-# 2. Install dependencies
+# Create a Python virtual environment
+python3 -m venv .venv
+
+# Activate the virtual environment
+# On macOS / Linux:
+source .venv/bin/activate
+# On Windows (Command Prompt):
+# .venv\Scripts\activate.bat
+# On Windows (PowerShell):
+# .venv\Scripts\Activate.ps1
+
+# Upgrade pip and install all backend dependencies
+pip install --upgrade pip
 pip install -e ".[dev]"
+```
 
-# 3. Run pre-commit hooks
-pre-commit install
-pre-commit run --all-files
+#### 2. Setup Frontend Environment
 
-# 4. Run tests
+```bash
+# Open a new terminal and navigate to the frontend directory
+cd frontend
+
+# Install all NPM dependencies
+npm install
+```
+
+---
+
+### Option B: Containerized Setup (Docker Compose)
+
+To spin up the entire enterprise ecosystem (PostgreSQL 16 with pgvector, Redis 7, RabbitMQ 3, FastAPI backend, and React frontend):
+
+```bash
+# From the project root directory
+docker compose up --build -d
+```
+
+To view container status:
+```bash
+docker compose ps
+```
+
+---
+
+## Running the Application
+
+### If Using Local Setup (Option A)
+
+#### Step 1: Start the Backend Service
+From the `backend` directory (with virtual environment activated):
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+The backend API will start at:
+* **API Server:** `http://localhost:8000`
+* **Interactive Swagger UI:** `http://localhost:8000/docs`
+* **ReDoc Documentation:** `http://localhost:8000/redoc`
+* **Health Endpoint:** `http://localhost:8000/health`
+
+#### Step 2: Start the Frontend Application
+From the `frontend` directory:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend web console will start at:
+* **Web UI Dashboard:** `http://localhost:5173`
+
+---
+
+### If Using Docker Compose (Option B)
+
+Services are automatically started and mapped to the following host endpoints:
+
+| Service | Host URL | Description |
+| :--- | :--- | :--- |
+| **React Frontend** | `http://localhost:5173` (or `3000`) | Executive Control Tower & Visualizer |
+| **FastAPI Backend** | `http://localhost:8000` | REST API Gateway |
+| **API Docs (Swagger)** | `http://localhost:8000/docs` | Interactive API documentation |
+| **RabbitMQ Management** | `http://localhost:15672` | Management console (`guest` / `guest`) |
+| **PostgreSQL Database** | `localhost:5432` | Primary database (`postgres` / `postgres`) |
+| **Redis Cache** | `localhost:6379` | Workflow checkpoints & state cache |
+
+---
+
+## Default Demo Credentials
+
+The platform includes built-in role-based access control (RBAC) supporting PBKDF2 hashing:
+
+| Username | Password | Role | Access Permissions |
+| :--- | :--- | :--- | :--- |
+| **`admin`** | `admin123` | **`admin`** | Full access to execute workflows, simulate disruptions, approve orders, and manage stock |
+| **`analyst`** | `analyst123` | **`analyst`** | Access to run scans, view analytics, inspect decision traces, and view audit reports |
+| **`viewer`** | `viewer123` | **`viewer`** | Read-only access to dashboard metrics and order status |
+
+---
+
+## Database Migrations & Data Seeding
+
+### Seeding Rich Development Data
+To populate the database with realistic products, warehouses, multi-tier suppliers, orders, and initial inventory:
+
+**Local Setup:**
+```bash
+cd backend
+source .venv/bin/activate
+python -m scripts.seed_rich
+```
+
+**Docker Setup:**
+```bash
+docker compose exec backend python -m scripts.seed_rich
+```
+
+### Running Alembic Migrations (PostgreSQL)
+To apply relational DDL migrations to a running PostgreSQL instance:
+
+```bash
+cd backend
+source .venv/bin/activate
+alembic upgrade head
+```
+
+---
+
+## Running the Test Suites
+
+### Backend Unit & Integration Tests
+The backend test suite covers authentication, 18-agent execution, dual-storage synchronization, order item integrity, and event bus routing:
+
+```bash
+cd backend
+source .venv/bin/activate
 pytest tests/ -v
-
-# 5. Commit with conventional commits
-git commit -m "feat(inventory): implement ADS-03 stock allocation logic"
 ```
 
-### Definition of Done (Per Story)
+To run a specific test suite:
+```bash
+# Test 18-agent autonomous loop
+pytest tests/test_autonomous_agentic_loop.py -v
 
-Before merging any pull request:
-- [ ] Code reviewed by at least one other developer
-- [ ] Unit tests written and passing
-- [ ] Integration tests updated if workflow changed
-- [ ] API documentation updated
-- [ ] Structured logging added for all important actions
-- [ ] Audit log entries produced for all agent decisions
-- [ ] Error handling covers all documented failure scenarios
-- [ ] Existing functionality still works (no regressions)
-- [ ] Database migrations run cleanly
+# Test business intelligence agents
+pytest tests/test_bi_agents.py -v
 
-### Commit Convention
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
+# Test authentication and RBAC workflows
+pytest tests/test_f001_auth_workflows.py -v
 ```
-feat(agent):    New agent capability
-fix(inventory): Bug fix in stock calculation
-refactor(graph): Restructure LangGraph routing
-test(supplier): Add unit tests for blacklist logic
-docs(readme):   Update setup instructions
-chore(deps):    Update dependencies
+
+### Frontend Typecheck & Production Build
+To verify frontend TypeScript types and compile the production bundle:
+
+```bash
+cd frontend
+npm run build
 ```
 
 ---
 
-## Business KPIs
+## Core API Reference
 
-| KPI | Target |
-|---|---|
-| Fill Rate | > 98% |
-| Inventory Turnover | Optimized per product category |
-| Order Cycle Time | < 24 hours (standard) |
-| Perfect Order Rate | > 95% |
-| On-Time Delivery | > 97% |
-| Customer Satisfaction | > 4.5 / 5.0 |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/login` | Authenticate with username and password; returns JWT Bearer token |
+| `GET` | `/api/v1/analytics/dashboard` | Get real-time KPIs, inventory distribution, and recent commercial orders |
+| `GET` | `/api/v1/inventory` | List warehouse stock levels (with `low_stock_only` filter) |
+| `POST` | `/api/v1/inventory/autonomous-scan` | Trigger agentic stock scan; dispatches ADS-03 & ADS-05 replenishment |
+| `POST` | `/api/v1/inventory/replenish/auto-heal` | Autonomously check in in-transit purchase orders and replenish warehouse stock |
+| `POST` | `/api/v1/orders` | Submit a commercial order to trigger the full 18-agent LangGraph workflow |
+| `GET` | `/api/v1/orders/{order_id}` | Fetch order details, logistics status, and full multi-agent decision audit trail |
+| `GET` | `/api/v1/workflows/{id}/trace` | Retrieve execution timeline, inputs, decisions, and outputs for all 18 agents |
+| `POST` | `/api/v1/workflows/{id}/approve` | Executive approval sign-off for orders requiring governance review |
+| `POST` | `/api/v1/workflows/{id}/reject` | Executive rejection of orders violating policy or budget limits |
+| `POST` | `/api/v1/events/inject` | Inject operational disruption event (e.g. `DeliveryDelayed`, `SupplierUnavailable`) |
+| `POST` | `/api/v1/simulate` | Execute what-if disruptive scenario simulations |
+| `GET` | `/health` | Live system health check probing DB, Redis, and RabbitMQ dependencies |
 
-## Technical SLAs
-
-| Metric | Target |
-|---|---|
-| Agent response time | < 2 seconds (excluding LLM latency) |
-| Event processing latency | < 5 seconds |
-| Dashboard refresh | < 2 seconds |
-| API availability | > 99.9% |
-| LLM call timeout | 30 seconds (with fallback model) |
+Full schema specifications and live request testing are available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ---
 
-*Built with LangGraph · FastAPI · PostgreSQL · RabbitMQ · React*
+## Troubleshooting & Common FAQs
+
+### 1. "Port 8000 or 5173 is already in use"
+Check and terminate any conflicting processes:
+```bash
+# On macOS / Linux:
+lsof -i :8000 -i :5173
+kill -9 <PID>
+```
+
+### 2. "RabbitMQ / Redis connection error in `/health`"
+If you are running in local mode (Option A) without Docker, this is completely normal. The application logs an offline warning and automatically utilizes SQLite WAL persistence (`backend/.storage/digital_twin.db`) and in-memory event dispatching so that all agent workflows execute without external services.
+
+### 3. "Net Available shows a negative number in the Inventory tab"
+`Net Available = Available Qty - Reserved Qty`. A negative number indicates that customer sales orders exceed current physical shelf stock (backorder). 
+* The system automatically generates inbound replenishment purchase orders (`in_transit`).
+* To simulate the arrival of those goods and check them into warehouse stock, click **"Receive Stock"** in the Inventory page header or click **"Receive"** in the Procurement tab.
+
+### 4. "Groq API rate limit or missing API key"
+If no `GROQ_API_KEY` is provided, the system seamlessly uses deterministic heuristic decision engines across all 18 agents. No external API key is required to explore and evaluate the platform.
+
+---
+
+## License
+
+This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.

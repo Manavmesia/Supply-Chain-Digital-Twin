@@ -13,6 +13,8 @@ SupplierDisrupted, QualityFailed, DemandSpike), the dispatcher:
 
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -27,20 +29,43 @@ from app.core.catalog import (
     BASELINE_WAREHOUSES,
     PRODUCT_MAP,
 )
+from app.core.execution_config import get_agent_delay
 from app.events.registry import CANONICAL_EVENTS
 
 logger = structlog.get_logger(__name__)
 
+AGENT_NAMES: dict[str, str] = {
+    "ADS-01": "Order Management Agent",
+    "ADS-02": "Demand Forecast Agent",
+    "ADS-03": "Inventory Management Agent",
+    "ADS-04": "Warehouse Operations Agent",
+    "ADS-05": "Supplier & Procurement Agent",
+    "ADS-06": "Transportation & Logistics Agent",
+    "ADS-07": "Manufacturing & Production Agent",
+    "ADS-08": "Customer Service Agent",
+    "ADS-09": "Finance & Margins Agent",
+    "ADS-10": "Supply Chain Risk Agent",
+    "ADS-11": "Dynamic Pricing Agent",
+    "ADS-12": "Procurement Strategy Agent",
+    "ADS-13": "Sustainability & ESG Agent",
+    "ADS-14": "Quality Assurance Agent",
+    "ADS-15": "Dynamic Planner Agent",
+    "ADS-16": "Agent Negotiation Protocol",
+    "ADS-17": "CEO Executive Governance",
+    "ADS-18": "Audit & BI Reporting Agent",
+}
 
-async def dispatch_event_remediation(event_record: dict[str, Any]) -> dict[str, Any]:
+
+async def dispatch_event_remediation(event_record: dict[str, Any], delay_seconds: float | None = None) -> dict[str, Any]:
     """
     Asynchronously dispatches an event to its subscribed agents and executes
-    closed-loop autonomous remediation.
+    closed-loop autonomous remediation with step-by-step visual tracing.
     """
     event_type = event_record.get("event_type", "")
     payload = event_record.get("payload") or {}
     meta = CANONICAL_EVENTS.get(event_type, {})
     subscribers = list(meta.get("subscribers", []))
+    effective_delay = delay_seconds if delay_seconds is not None else get_agent_delay()
 
     now_iso = datetime.now(timezone.utc).isoformat()
     autonomous_actions: list[dict[str, Any]] = []
@@ -320,6 +345,34 @@ async def dispatch_event_remediation(event_record: dict[str, Any]) -> dict[str, 
         ]
         remediation_summary = f"Event acknowledged and processed by subscribed agents: {', '.join(subscribers) if subscribers else 'Core System'}."
 
+    remediation_trace: list[dict[str, Any]] = []
+    for idx, act in enumerate(autonomous_actions):
+        agent_code = str(act.get("agent") or "ADS-01")
+        agent_name = AGENT_NAMES.get(agent_code, f"Agent {agent_code}")
+        t0 = time.perf_counter()
+        step_start_iso = datetime.now(timezone.utc).isoformat()
+
+        if effective_delay > 0:
+            await asyncio.sleep(effective_delay)
+
+        step_finish_iso = datetime.now(timezone.utc).isoformat()
+        dur_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+        downstream = downstream_events[idx].get("event_type") if idx < len(downstream_events) else None
+
+        remediation_trace.append({
+            "step": idx + 1,
+            "agent_code": agent_code,
+            "agent_name": agent_name,
+            "status": "completed",
+            "started_at": step_start_iso,
+            "finished_at": step_finish_iso,
+            "duration_ms": dur_ms,
+            "action": act.get("action", ""),
+            "details": act.get("details", ""),
+            "downstream_event": downstream,
+        })
+
     return {
         "event_id": event_record.get("event_id"),
         "event_type": event_type,
@@ -327,6 +380,7 @@ async def dispatch_event_remediation(event_record: dict[str, Any]) -> dict[str, 
         "remediation_status": "remediated",
         "remediation_summary": remediation_summary,
         "autonomous_actions": autonomous_actions,
+        "remediation_trace": remediation_trace,
         "downstream_events_count": len(downstream_events),
         "timestamp": now_iso,
     }
@@ -337,6 +391,7 @@ async def dispatch_event(
     source_agent: str,
     payload: dict[str, Any],
     workflow_id: str | None = None,
+    delay_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Persist and execute closed-loop autonomous multi-agent event remediation."""
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -351,11 +406,12 @@ async def dispatch_event(
         "status": "pending",
     }
     persistence.save_event(event_record)
-    result = await dispatch_event_remediation(event_record)
+    result = await dispatch_event_remediation(event_record, delay_seconds=delay_seconds)
     event_record["status"] = "remediated"
     event_record["subscribers"] = result.get("subscribers", [])
     event_record["remediation_summary"] = result.get("remediation_summary", "")
     event_record["autonomous_actions"] = result.get("autonomous_actions", [])
+    event_record["remediation_trace"] = result.get("remediation_trace", [])
     persistence.save_event(event_record)
     return {
         "event_id": event_id,
